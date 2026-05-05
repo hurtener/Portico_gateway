@@ -4,7 +4,8 @@
 // committing a real keypair.
 //
 // Usage:
-//   go run ./scripts/internal/gen_jwks/ > testdata/jwks-test.json
+//
+//	go run ./scripts/internal/gen_jwks/ > testdata/jwks-test.json
 package main
 
 import (

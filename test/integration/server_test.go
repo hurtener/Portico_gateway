@@ -194,7 +194,7 @@ func TestServer_DevMode_AuditEndpoint_NoAuthRequired(t *testing.T) {
 		t.Fatalf("status = %d, body=%s", resp.StatusCode, body)
 	}
 	var got struct {
-		Events []any  `json:"events"`
+		Events []any `json:"events"`
 	}
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("body not JSON: %s", body)

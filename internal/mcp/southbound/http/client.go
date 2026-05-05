@@ -281,7 +281,7 @@ type transportError struct {
 }
 
 func (e *transportError) Error() string { return fmt.Sprintf("upstream %s: %v", e.server, e.err) }
-func (e *transportError) Unwrap() error  { return e.err }
+func (e *transportError) Unwrap() error { return e.err }
 
 // AsProtocolError converts a southbound error into a JSON-RPC *protocol.Error
 // suitable for echoing to the northbound client.

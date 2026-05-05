@@ -52,7 +52,7 @@ type StorageConfig struct {
 type TenantConfig struct {
 	ID             string            `yaml:"id"`
 	DisplayName    string            `yaml:"display_name"`
-	Plan           string            `yaml:"plan"`            // free | pro | enterprise (or operator-defined)
+	Plan           string            `yaml:"plan"` // free | pro | enterprise (or operator-defined)
 	CredentialsRef string            `yaml:"credentials_ref,omitempty"`
 	Entitlements   Entitlements      `yaml:"entitlements"`
 	Metadata       map[string]string `yaml:"metadata,omitempty"`
@@ -60,7 +60,7 @@ type TenantConfig struct {
 
 // Entitlements gates skills + capacity at the tenant level.
 type Entitlements struct {
-	Skills      []string `yaml:"skills"`       // glob patterns: "github.*", "*"
+	Skills      []string `yaml:"skills"` // glob patterns: "github.*", "*"
 	MaxSessions int      `yaml:"max_sessions"`
 }
 
@@ -85,12 +85,12 @@ type LoggingConfig struct {
 // minimum needed to instantiate stdio/http southbound clients; Phase 2 layers
 // per-runtime-mode lifecycle, hot reload, and dynamic CRUD on top.
 type ServerSpec struct {
-	ID          string        `yaml:"id"`
-	DisplayName string        `yaml:"display_name,omitempty"`
-	Transport   string        `yaml:"transport"` // stdio | http
-	RuntimeMode string        `yaml:"runtime_mode,omitempty"`
-	Stdio       *StdioSpec    `yaml:"stdio,omitempty"`
-	HTTP        *HTTPSpec     `yaml:"http,omitempty"`
+	ID          string     `yaml:"id"`
+	DisplayName string     `yaml:"display_name,omitempty"`
+	Transport   string     `yaml:"transport"` // stdio | http
+	RuntimeMode string     `yaml:"runtime_mode,omitempty"`
+	Stdio       *StdioSpec `yaml:"stdio,omitempty"`
+	HTTP        *HTTPSpec  `yaml:"http,omitempty"`
 	// StartTimeout is the southbound-handshake budget (initialize round-trip).
 	StartTimeout time.Duration `yaml:"start_timeout,omitempty"`
 }

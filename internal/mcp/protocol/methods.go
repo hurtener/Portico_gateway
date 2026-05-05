@@ -14,10 +14,10 @@ const (
 	MethodPromptsList            = "prompts/list"
 	MethodPromptsGet             = "prompts/get"
 
-	NotifCancelled              = "notifications/cancelled"
-	NotifProgress               = "notifications/progress"
-	NotifToolsListChanged       = "notifications/tools/list_changed"
-	NotifResourcesListChanged   = "notifications/resources/list_changed"
-	NotifResourcesUpdated       = "notifications/resources/updated"
-	NotifPromptsListChanged     = "notifications/prompts/list_changed"
+	NotifCancelled            = "notifications/cancelled"
+	NotifProgress             = "notifications/progress"
+	NotifToolsListChanged     = "notifications/tools/list_changed"
+	NotifResourcesListChanged = "notifications/resources/list_changed"
+	NotifResourcesUpdated     = "notifications/resources/updated"
+	NotifPromptsListChanged   = "notifications/prompts/list_changed"
 )

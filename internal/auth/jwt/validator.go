@@ -43,10 +43,10 @@ type Claims struct {
 
 // Validator validates a Bearer token.
 type Validator struct {
-	cfg     config.JWTConfig
-	keyset  KeySet
-	parser  *jwtv5.Parser
-	skew    time.Duration
+	cfg    config.JWTConfig
+	keyset KeySet
+	parser *jwtv5.Parser
+	skew   time.Duration
 }
 
 // NewValidator builds a Validator wired to either a static or remote JWKS.

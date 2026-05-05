@@ -30,3 +30,22 @@ MD026:
 # Allow ordered list non-1 numbering for grouped sequences.
 MD029:
   style: ordered
+
+# Fenced code blocks need not declare a language — RFC and plan docs include
+# many freeform / shell-output snippets where forcing a tag is noise.
+MD040: false
+
+# Allow fenced code blocks without surrounding blank lines (lots of nested
+# code blocks inside numbered lists).
+MD031: false
+
+# Allow lists without surrounding blank lines (matches our doc style for
+# tightly-packed enumerations).
+MD032: false
+
+# Allow inline code without surrounding blanks; the heuristic flags too many
+# legitimate prose-with-symbols lines.
+MD038: false
+
+# Allow trailing punctuation in headings — we use ":" and "." in some.
+MD036: false

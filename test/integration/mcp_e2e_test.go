@@ -454,4 +454,3 @@ func TestE2E_HTTPDownstream(t *testing.T) {
 		t.Errorf("call result = %+v", callResult)
 	}
 }
-

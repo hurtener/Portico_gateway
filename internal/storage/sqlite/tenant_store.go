@@ -89,8 +89,8 @@ type rowScanner interface {
 
 func scanTenant(rs rowScanner) (*ifaces.Tenant, error) {
 	var (
-		t                       ifaces.Tenant
-		createdAt, updatedAt    string
+		t                    ifaces.Tenant
+		createdAt, updatedAt string
 	)
 	if err := rs.Scan(&t.ID, &t.DisplayName, &t.Plan, &createdAt, &updatedAt); err != nil {
 		return nil, err

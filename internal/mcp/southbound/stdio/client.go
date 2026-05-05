@@ -48,17 +48,17 @@ type Client struct {
 	closeCh chan struct{}
 
 	// JSON-RPC bookkeeping
-	idCounter atomic.Int64
-	pendingMu sync.Mutex
-	pending   map[string]chan *protocol.Response
+	idCounter  atomic.Int64
+	pendingMu  sync.Mutex
+	pending    map[string]chan *protocol.Response
 	progressMu sync.Mutex
 	progressCB map[string]southbound.ProgressCallback // keyed on progress token (raw JSON string)
 
 	// init state
-	initOnce  sync.Once
-	initErr   error
-	initDone  atomic.Bool
-	initRes   *protocol.InitializeResult
+	initOnce sync.Once
+	initErr  error
+	initDone atomic.Bool
+	initRes  *protocol.InitializeResult
 
 	writeMu sync.Mutex
 }

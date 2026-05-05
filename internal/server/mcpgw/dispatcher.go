@@ -21,9 +21,9 @@ type Dispatcher struct {
 	manager *southboundmgr.Manager
 	log     *slog.Logger
 
-	cacheMu      sync.Mutex
-	toolsCache   map[string]toolsCacheEntry // sessionID -> tools
-	cacheTTL     time.Duration
+	cacheMu          sync.Mutex
+	toolsCache       map[string]toolsCacheEntry // sessionID -> tools
+	cacheTTL         time.Duration
 	listToolsTimeout time.Duration
 }
 

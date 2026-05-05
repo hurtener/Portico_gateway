@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.22"
+  GO_VERSION: "1.25"
   CGO_ENABLED: "0"
 
 jobs:
@@ -143,7 +143,7 @@ jobs:
           cache: true
       - uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.61
+          version: v1.64
           args: --timeout=5m
 
   go-test:
@@ -162,6 +162,9 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
       - name: Test with race detector
+        env:
+          # -race requires cgo; this overrides the workflow-level CGO_ENABLED=0.
+          CGO_ENABLED: "1"
         run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
       - name: Coverage report
         if: matrix.os == 'ubuntu-latest'
@@ -368,7 +371,16 @@ jobs:
               exit 1
             fi
           done
-          for r in "${{ needs.go-fmt.result }}" "${{ needs.go-vet.result }}" "${{ needs.go-lint.result }}" "${{ needs.go-test.result }}" "${{ needs.go-build.result }}" "${{ needs.govulncheck.result }}" "${{ needs.frontend.result }}"; do
+          go_results=(
+            "${{ needs.go-fmt.result }}"
+            "${{ needs.go-vet.result }}"
+            "${{ needs.go-lint.result }}"
+            "${{ needs.go-test.result }}"
+            "${{ needs.go-build.result }}"
+            "${{ needs.govulncheck.result }}"
+            "${{ needs.frontend.result }}"
+          )
+          for r in "${go_results[@]}"; do
             if [ "$r" = "failure" ]; then
               echo "::error::Required Go/frontend job failed"
               exit 1

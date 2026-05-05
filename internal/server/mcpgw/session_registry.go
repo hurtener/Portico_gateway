@@ -16,13 +16,13 @@ import (
 
 // Session is the per-connection state tracked by the gateway.
 type Session struct {
-	ID          string
-	TenantID    string
-	UserID      string
-	ClientCaps  protocol.ClientCapsRecord
-	InitParams  protocol.InitializeParams
-	CreatedAt   time.Time
-	LastSeenAt  atomic.Int64 // unix nanos
+	ID         string
+	TenantID   string
+	UserID     string
+	ClientCaps protocol.ClientCapsRecord
+	InitParams protocol.InitializeParams
+	CreatedAt  time.Time
+	LastSeenAt atomic.Int64 // unix nanos
 
 	// notifCh is the outbound notification channel served to the long-lived
 	// SSE GET /mcp stream (and in Phase 5 to the server-initiated request
