@@ -24,6 +24,8 @@ Thanks for contributing to Portico. Before opening this PR, please skim AGENTS.m
 - [ ] Tests added/updated; named per the relevant phase plan if applicable.
 - [ ] `go test -race ./...` passes locally.
 - [ ] `golangci-lint run` passes locally (or notes the disabled lints in the description).
+- [ ] **`make preflight` passes locally** — build, boot, HTTP smoke against the impacted/new endpoints. (Same gate the pre-commit hook and CI run.)
+- [ ] If a new HTTP endpoint or MCP method was added, the relevant `scripts/smoke/phase-N.sh` was extended to cover it.
 - [ ] If this changes a multi-tenant boundary, an integration test asserts cross-tenant isolation.
 - [ ] If this introduces a new MCP message or REST endpoint, both are documented in the RFC or the relevant plan.
 - [ ] If this changes `portico.yaml` schema, the change is backward-compatible OR the RFC is updated.

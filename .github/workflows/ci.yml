@@ -266,6 +266,26 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  preflight:
+    name: Preflight (build + boot + HTTP smoke)
+    needs: [detect, go-build]
+    if: always() && needs.detect.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        if: needs.detect.outputs.has_go == 'true'
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Install jq
+        run: |
+          if ! command -v jq >/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y jq
+          fi
+      - name: make preflight
+        run: make preflight
+
   ci-summary:
     name: CI summary
     needs:
@@ -278,6 +298,7 @@ jobs:
       - go-build
       - govulncheck
       - gitleaks
+      - preflight
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -293,10 +314,11 @@ jobs:
           echo "  go-build:     ${{ needs.go-build.result }}"
           echo "  govulncheck:  ${{ needs.govulncheck.result }}"
           echo "  gitleaks:     ${{ needs.gitleaks.result }}"
+          echo "  preflight:    ${{ needs.preflight.result }}"
           # Skipped is acceptable for go-* jobs while pre-Go-code; failure is not.
-          for r in "${{ needs.docs.result }}" "${{ needs.yaml.result }}" "${{ needs.gitleaks.result }}"; do
+          for r in "${{ needs.docs.result }}" "${{ needs.yaml.result }}" "${{ needs.gitleaks.result }}" "${{ needs.preflight.result }}"; do
             if [ "$r" = "failure" ]; then
-              echo "::error::Required job failed (docs/yaml/gitleaks)"
+              echo "::error::Required job failed (docs/yaml/gitleaks/preflight)"
               exit 1
             fi
           done

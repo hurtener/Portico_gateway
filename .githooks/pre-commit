@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Portico pre-commit hook: enforce the live preflight gate.
+#
+# This hook does the heavy lifting: build the binary, boot the dev server,
+# run smoke tests against the impacted/new HTTP surfaces, tear it down.
+# CI runs the same gate.
+#
+# To install: bash scripts/install-hooks.sh
+# To bypass (emergency only): PORTICO_PREFLIGHT_SKIP=1 git commit ...
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# 1. AGENTS.md / CLAUDE.md verbatim invariant — fast, run first.
+if ! diff -q AGENTS.md CLAUDE.md >/dev/null 2>&1; then
+  echo "ERROR (pre-commit): AGENTS.md and CLAUDE.md must be verbatim identical."
+  diff -u AGENTS.md CLAUDE.md || true
+  echo
+  echo "Resolve and re-stage. Both files must mirror; CI also enforces this."
+  exit 1
+fi
+
+# 2. Reject commits that touch only AGENTS.md without mirroring CLAUDE.md
+#    (or vice versa). Belt-and-suspenders for the diff above.
+STAGED="$(git diff --cached --name-only)"
+echo "$STAGED" | grep -qx 'AGENTS.md'  && AGENT_STAGED=1 || AGENT_STAGED=0
+echo "$STAGED" | grep -qx 'CLAUDE.md'  && CLAUDE_STAGED=1 || CLAUDE_STAGED=0
+if [ "$AGENT_STAGED" -ne "$CLAUDE_STAGED" ]; then
+  echo "ERROR (pre-commit): only one of AGENTS.md / CLAUDE.md is staged."
+  echo "Stage both (verbatim copies)."
+  exit 1
+fi
+
+# 3. Live preflight: build, boot, smoke-test the running server.
+#    Skips gracefully when there is no Go code yet.
+if [ "${PORTICO_PREFLIGHT_SKIP:-}" = "1" ]; then
+  echo "WARN (pre-commit): PORTICO_PREFLIGHT_SKIP=1 — skipping preflight."
+  echo "       Justify this in the commit message."
+  exit 0
+fi
+
+if [ ! -x scripts/preflight.sh ]; then
+  chmod +x scripts/preflight.sh
+fi
+
+bash scripts/preflight.sh

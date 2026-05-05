@@ -95,7 +95,14 @@ make test
 
 # Static analysis
 make vet
-make lint           # requires golangci-lint v1.61+
+make lint            # requires golangci-lint v1.61+
+
+# Live preflight: build, boot dev server, run HTTP smoke tests, tear down.
+# This is the SAME gate the pre-commit hook and CI enforce.
+make preflight
+
+# Install the git hooks (one-time, per-clone)
+make install-hooks
 
 # Run the dev server (binds 127.0.0.1:8080, dev tenant, no JWT required)
 ./bin/portico dev
@@ -115,6 +122,31 @@ make lint           # requires golangci-lint v1.61+
 ```
 
 Coverage targets per phase plan are non-negotiable. If a PR drops coverage below the target for a touched package, it is rejected.
+
+### 4.1 Preflight gate — non-negotiable
+
+Static checks (vet, lint, tests) catch a lot but **not** "the binary boots and the HTTP surface still works." Portico's pre-commit hook and CI both run a live preflight that:
+
+1. Builds `./bin/portico` (no-op if `go.mod` absent).
+2. Boots `./bin/portico dev` on `127.0.0.1:18080` with a temp data dir.
+3. Waits for `/healthz` to return 200.
+4. Runs each `scripts/smoke/phase-N.sh` against the running server.
+5. Tears down (graceful TERM, then KILL, then cleanup).
+
+Each phase smoke script auto-skips its surface if the endpoint returns 404/405/501 — so the gate works at every phase: the surfaces that exist must work, the ones that don't yet are fine. **This means: when you ship Phase N, the corresponding `scripts/smoke/phase-N.sh` must already pass before you commit, because pre-commit will run it.**
+
+When you add a feature, extend the relevant `scripts/smoke/phase-N.sh` so the new surface is covered. PRs that introduce a new endpoint without a smoke check are rejected.
+
+To install the pre-commit hook locally:
+```bash
+make install-hooks
+```
+
+To bypass in an actual emergency (e.g. CI is the source of truth and your local box can't run `make build`):
+```bash
+PORTICO_PREFLIGHT_SKIP=1 git commit -m '...'
+```
+The PR description must justify the skip. CI still runs the gate; an emergency local skip never reaches `main`.
 
 ---
 
@@ -313,6 +345,8 @@ These will cause the PR to be rejected on sight.
 - ❌ Adding `//nolint:` without a one-line reason.
 - ❌ `go test` without `-race`.
 - ❌ `git push --force` to `main`.
+- ❌ Committing with `--no-verify` to skip the preflight hook except in a documented emergency. Doing so without justification is treated the same as merging a broken build.
+- ❌ Adding a new HTTP endpoint or MCP method without extending the relevant `scripts/smoke/phase-N.sh` to exercise it.
 
 ---
 
@@ -322,18 +356,21 @@ Before requesting review, run through this:
 
 - [ ] `make vet test build` passes locally.
 - [ ] `golangci-lint run` is clean.
+- [ ] **`make preflight` passes locally** (build + boot + HTTP smoke against impacted/new surfaces).
+- [ ] If you added an endpoint or MCP method, the relevant `scripts/smoke/phase-N.sh` exercises it and asserts response shape.
 - [ ] Coverage on touched packages is ≥ phase target (or this PR explicitly improves it toward the target).
 - [ ] If multi-tenant code paths changed: cross-tenant isolation test passes.
 - [ ] If MCP types changed: every reference still compiles, including northbound and southbound clients.
 - [ ] If config schema changed: example configs in `examples/` updated; backward compatibility verified.
 - [ ] If migrations added: clean DB starts cleanly; existing DB runs the new migration; both via tests.
+- [ ] AGENTS.md and CLAUDE.md still verbatim identical (`make check-mirror`).
 - [ ] No new TODO comments without an issue link.
 - [ ] No leftover `fmt.Println` / `log.Print*`.
 - [ ] No new dependencies without one-liner rationale in the PR description.
 - [ ] PR description references RFC section / phase plan section.
 - [ ] CHANGELOG (when it exists post-V1) updated.
 
-If you are an AI agent: **do not claim a task is done until every applicable checklist item is verified.** "I think tests pass" is not verification. Run the commands; show the output.
+If you are an AI agent: **do not claim a task is done until every applicable checklist item is verified.** "I think tests pass" is not verification. Run the commands; show the output. In particular, "preflight passed" requires actually running `make preflight` and reading the OK/SKIP/FAIL counts at the end.
 
 ---
 
