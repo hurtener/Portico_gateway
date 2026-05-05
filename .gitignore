@@ -1,0 +1,48 @@
+# Binaries / build output
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+
+# Coverage
+coverage.out
+coverage.html
+*.cover
+
+# Local data / runtime
+*.db
+*.db-shm
+*.db-wal
+/data/
+/logs/
+*.log
+
+# Go workspace files (we don't use them)
+go.work
+go.work.sum
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.envrc
+
+# Secrets / vault
+vault.yaml
+vault.yaml.tmp*
+.vault.key.next
+*.pem
+*.key
+!testdata/**/*.pem
+!testdata/**/*.key
+
+# CI artifacts pulled locally
+/.cache/

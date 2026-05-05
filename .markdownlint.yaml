@@ -1,0 +1,32 @@
+# markdownlint configuration
+# https://github.com/DavidAnson/markdownlint
+
+default: true
+
+# Allow long lines in prose / tables (RFC has wide tables).
+MD013: false
+
+# Allow inline HTML (we use small SVG/diagram tags occasionally).
+MD033: false
+
+# Allow duplicate headings under different parents.
+MD024:
+  siblings_only: true
+
+# First heading is required, but the doc title may be a different style.
+MD041: false
+
+# Allow nested fenced code blocks (we have YAML inside Markdown sections).
+MD046:
+  style: fenced
+
+# Bare URLs are fine in markdown for internal links.
+MD034: false
+
+# Heading punctuation — RFC sections end with periods sometimes.
+MD026:
+  punctuation: ".,;:!?"
+
+# Allow ordered list non-1 numbering for grouped sequences.
+MD029:
+  style: ordered

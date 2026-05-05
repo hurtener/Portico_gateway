@@ -1,0 +1,117 @@
+# golangci-lint configuration for Portico
+# Activates when Go code lands in the repo. Pre-Go-code, the CI lint job
+# is a no-op.
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+  build-tags:
+    - cgroups   # phase 2 optional path
+    - sqlite_omit_load_extension
+
+linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment   # noisy; can be revisited per-package later
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: github.com/hurtener/Portico_gateway
+
+  staticcheck:
+    checks: ["all"]
+
+  revive:
+    rules:
+      - name: var-naming
+      - name: exported
+      - name: package-comments
+      - name: receiver-naming
+      - name: error-return
+      - name: error-naming
+      - name: error-strings
+      - name: errorf
+      - name: range-val-in-closure
+      - name: time-naming
+      - name: unused-parameter
+        disabled: true   # too noisy for handlers / interface impls
+
+  gocyclo:
+    min-complexity: 18
+
+  gosec:
+    excludes:
+      - G104   # errors unhandled — handled case-by-case via errcheck
+      - G304   # file inclusion — many legitimate cases (config, vault path)
+
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    exclude-functions:
+      - (*log/slog.Logger).Debug
+      - (*log/slog.Logger).Info
+      - (*log/slog.Logger).Warn
+      - (*log/slog.Logger).Error
+
+  unused:
+    check-exported: false   # we have plenty of public surface; revisit V1.x
+
+  goconst:
+    min-len: 4
+    min-occurrences: 4
+
+  nakedret:
+    max-func-lines: 30
+
+  lll:
+    line-length: 140
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - errorlint
+    - gocyclo
+    - gofmt
+    - goimports
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - revive
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - bodyclose
+    - contextcheck
+    - durationcheck
+    - exhaustive
+    - forbidigo
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+        - lll
+        - gocyclo
+        - dupl
+    - path: examples/
+      linters:
+        - all
+    - path: testdata/
+      linters:
+        - all
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+severity:
+  default-severity: error

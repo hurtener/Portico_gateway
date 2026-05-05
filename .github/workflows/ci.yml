@@ -1,0 +1,308 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.22"
+  CGO_ENABLED: "0"
+
+jobs:
+  detect:
+    name: Detect repo state
+    runs-on: ubuntu-latest
+    outputs:
+      has_go: ${{ steps.flags.outputs.has_go }}
+      has_dockerfile: ${{ steps.flags.outputs.has_dockerfile }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: flags
+        run: |
+          if [ -f go.mod ]; then echo "has_go=true" >> "$GITHUB_OUTPUT"; else echo "has_go=false" >> "$GITHUB_OUTPUT"; fi
+          if [ -f Dockerfile ]; then echo "has_dockerfile=true" >> "$GITHUB_OUTPUT"; else echo "has_dockerfile=false" >> "$GITHUB_OUTPUT"; fi
+
+  docs:
+    name: Docs lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@v16
+        with:
+          globs: |
+            **/*.md
+            !**/node_modules/**
+            !**/vendor/**
+      - name: Check links
+        uses: lycheeverse/lychee-action@v1
+        with:
+          args: >-
+            --no-progress
+            --max-concurrency 8
+            --exclude-mail
+            --exclude-path node_modules
+            --exclude-path vendor
+            './**/*.md'
+          fail: false   # advisory until V1; flips to true post-V1
+      - name: AGENTS.md == CLAUDE.md (verbatim invariant)
+        run: |
+          if ! diff -q AGENTS.md CLAUDE.md >/dev/null 2>&1; then
+            echo "::error::AGENTS.md and CLAUDE.md must be verbatim identical."
+            echo "Diff:"
+            diff -u AGENTS.md CLAUDE.md || true
+            exit 1
+          fi
+
+  yaml:
+    name: YAML lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: yamllint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: .
+          config_data: |
+            extends: default
+            rules:
+              line-length:
+                max: 200
+              comments:
+                min-spaces-from-content: 1
+              comments-indentation: disable
+              document-start: disable
+              truthy:
+                allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
+                check-keys: false
+
+  go-fmt:
+    name: Go fmt + imports
+    needs: detect
+    if: needs.detect.outputs.has_go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: gofmt
+        run: |
+          out=$(gofmt -l -s .)
+          if [ -n "$out" ]; then
+            echo "::error::gofmt issues:"
+            echo "$out"
+            exit 1
+          fi
+      - name: goimports
+        run: |
+          go install golang.org/x/tools/cmd/goimports@latest
+          out=$(goimports -l -local github.com/hurtener/Portico_gateway .)
+          if [ -n "$out" ]; then
+            echo "::error::goimports issues:"
+            echo "$out"
+            exit 1
+          fi
+
+  go-vet:
+    name: Go vet
+    needs: detect
+    if: needs.detect.outputs.has_go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - run: go vet ./...
+
+  go-lint:
+    name: golangci-lint
+    needs: detect
+    if: needs.detect.outputs.has_go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.61
+          args: --timeout=5m
+
+  go-test:
+    name: Go tests (${{ matrix.os }})
+    needs: detect
+    if: needs.detect.outputs.has_go == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Test with race detector
+        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+      - name: Coverage report
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          go tool cover -func=coverage.out | tail -1
+      - name: Upload coverage artifact
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
+
+  go-build:
+    name: Go build
+    needs: [go-fmt, go-vet, go-test]
+    if: needs.detect.outputs.has_go == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p bin
+          go build -ldflags='-s -w' -o "bin/portico-${GOOS}-${GOARCH}" ./cmd/portico
+      - name: Verify static
+        if: matrix.goos == 'linux'
+        run: |
+          file "bin/portico-${{ matrix.goos }}-${{ matrix.goarch }}" || true
+          if command -v ldd >/dev/null; then
+            if ldd "bin/portico-${{ matrix.goos }}-${{ matrix.goarch }}" 2>&1 | grep -v "not a dynamic executable" | grep -E "=> "; then
+              echo "::error::binary is not statically linked"
+              exit 1
+            fi
+          fi
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: portico-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: bin/portico-${{ matrix.goos }}-${{ matrix.goarch }}
+          retention-days: 14
+
+  govulncheck:
+    name: Govulncheck
+    needs: detect
+    if: needs.detect.outputs.has_go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  gitleaks:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker-build:
+    name: Docker build
+    needs: [detect, go-build]
+    if: needs.detect.outputs.has_dockerfile == 'true' && needs.detect.outputs.has_go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: portico/portico:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  ci-summary:
+    name: CI summary
+    needs:
+      - docs
+      - yaml
+      - go-fmt
+      - go-vet
+      - go-lint
+      - go-test
+      - go-build
+      - govulncheck
+      - gitleaks
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate
+        run: |
+          echo "Job statuses:"
+          echo "  docs:         ${{ needs.docs.result }}"
+          echo "  yaml:         ${{ needs.yaml.result }}"
+          echo "  go-fmt:       ${{ needs.go-fmt.result }}"
+          echo "  go-vet:       ${{ needs.go-vet.result }}"
+          echo "  go-lint:      ${{ needs.go-lint.result }}"
+          echo "  go-test:      ${{ needs.go-test.result }}"
+          echo "  go-build:     ${{ needs.go-build.result }}"
+          echo "  govulncheck:  ${{ needs.govulncheck.result }}"
+          echo "  gitleaks:     ${{ needs.gitleaks.result }}"
+          # Skipped is acceptable for go-* jobs while pre-Go-code; failure is not.
+          for r in "${{ needs.docs.result }}" "${{ needs.yaml.result }}" "${{ needs.gitleaks.result }}"; do
+            if [ "$r" = "failure" ]; then
+              echo "::error::Required job failed (docs/yaml/gitleaks)"
+              exit 1
+            fi
+          done
+          for r in "${{ needs.go-fmt.result }}" "${{ needs.go-vet.result }}" "${{ needs.go-lint.result }}" "${{ needs.go-test.result }}" "${{ needs.go-build.result }}" "${{ needs.govulncheck.result }}"; do
+            if [ "$r" = "failure" ]; then
+              echo "::error::Required Go job failed"
+              exit 1
+            fi
+          done

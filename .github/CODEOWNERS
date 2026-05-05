@@ -1,0 +1,15 @@
+# Default ownership: Santi (@hurtener)
+*       @hurtener
+
+# RFC and plans require owner review explicitly
+RFC-001-Portico.md      @hurtener
+/docs/                  @hurtener
+/docs/plans/            @hurtener
+
+# CI / build infra
+/.github/               @hurtener
+/Makefile               @hurtener
+/Dockerfile             @hurtener
+/.golangci.yml          @hurtener
+/AGENTS.md              @hurtener
+/CLAUDE.md              @hurtener
