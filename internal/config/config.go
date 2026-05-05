@@ -81,12 +81,31 @@ type LoggingConfig struct {
 	Format string `yaml:"format"` // json | text
 }
 
-// ServerSpec is the schema for a registered MCP server. Phase 2 owns the
-// implementation; Phase 0 reserves the field so the YAML parses without error.
+// ServerSpec is the schema for a registered MCP server. Phase 1 wires the
+// minimum needed to instantiate stdio/http southbound clients; Phase 2 layers
+// per-runtime-mode lifecycle, hot reload, and dynamic CRUD on top.
 type ServerSpec struct {
-	ID          string `yaml:"id"`
-	Transport   string `yaml:"transport"`
-	RuntimeMode string `yaml:"runtime_mode"`
-	// Additional fields land in Phase 2.
-	Raw map[string]any `yaml:",inline"`
+	ID          string        `yaml:"id"`
+	DisplayName string        `yaml:"display_name,omitempty"`
+	Transport   string        `yaml:"transport"` // stdio | http
+	RuntimeMode string        `yaml:"runtime_mode,omitempty"`
+	Stdio       *StdioSpec    `yaml:"stdio,omitempty"`
+	HTTP        *HTTPSpec     `yaml:"http,omitempty"`
+	// StartTimeout is the southbound-handshake budget (initialize round-trip).
+	StartTimeout time.Duration `yaml:"start_timeout,omitempty"`
+}
+
+// StdioSpec configures a stdio-transport downstream MCP server.
+type StdioSpec struct {
+	Command string   `yaml:"command"`
+	Args    []string `yaml:"args,omitempty"`
+	Env     []string `yaml:"env,omitempty"` // KEY=VALUE pairs
+	Cwd     string   `yaml:"cwd,omitempty"`
+}
+
+// HTTPSpec configures an HTTP-transport downstream MCP server.
+type HTTPSpec struct {
+	URL        string        `yaml:"url"`
+	AuthHeader string        `yaml:"auth_header,omitempty"` // Phase 5 wires real values from vault
+	Timeout    time.Duration `yaml:"timeout,omitempty"`
 }

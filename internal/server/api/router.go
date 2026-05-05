@@ -15,6 +15,9 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
 	"github.com/hurtener/Portico_gateway/internal/auth/scope"
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
+	mcpnb "github.com/hurtener/Portico_gateway/internal/mcp/northbound/http"
+	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
+	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	"github.com/hurtener/Portico_gateway/internal/server/ui"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
@@ -29,6 +32,11 @@ type Deps struct {
 	Audit       ifaces.AuditStore
 	Version     string
 	BuildCommit string
+
+	// Phase 1 additions: MCP gateway. Optional in tests (nil = no /mcp).
+	Sessions   *mcpgw.SessionRegistry
+	Dispatcher *mcpgw.Dispatcher
+	Manager    *southboundmgr.Manager
 }
 
 // NewRouter wires the full HTTP routing surface.
@@ -58,6 +66,15 @@ func NewRouter(d Deps) http.Handler {
 
 		// REST: tenant-scoped audit (Phase 5 fills the body)
 		r.Get("/v1/audit/events", auditQueryHandler(d))
+
+		// Phase 1: northbound MCP transport. Mounted under the auth group so the
+		// dev-mode bypass + JWT path both produce a tenant identity for the session.
+		if d.Sessions != nil && d.Dispatcher != nil {
+			h := mcpnb.NewHandler(d.Sessions, d.Dispatcher, d.Logger)
+			r.Method("POST", "/mcp", h)
+			r.Method("GET", "/mcp", h)
+			r.Method("DELETE", "/mcp", h)
+		}
 
 		// Admin endpoints
 		r.Group(func(r chi.Router) {

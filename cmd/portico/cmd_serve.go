@@ -12,7 +12,9 @@ import (
 
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
 	"github.com/hurtener/Portico_gateway/internal/config"
+	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/server/api"
+	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	"github.com/hurtener/Portico_gateway/internal/storage"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 	// Side-effect: register the sqlite driver. Future drivers register here.
@@ -90,6 +92,13 @@ func runWithConfig(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
+	// Phase 1: build the MCP gateway components. The southbound Manager is
+	// initialised with the configured server specs; clients are constructed
+	// lazily on first use.
+	manager := southboundmgr.NewManager(cfg.Servers, logger)
+	dispatcher := mcpgw.NewDispatcher(manager, logger)
+	sessions := mcpgw.NewSessionRegistry()
+
 	deps := api.Deps{
 		Logger:      logger,
 		Validator:   validator,
@@ -99,6 +108,9 @@ func runWithConfig(ctx context.Context, cfg *config.Config) error {
 		Audit:       audit,
 		Version:     version,
 		BuildCommit: buildCommit,
+		Sessions:    sessions,
+		Dispatcher:  dispatcher,
+		Manager:     manager,
 	}
 
 	handler := api.NewRouter(deps)
@@ -130,6 +142,11 @@ func runWithConfig(ctx context.Context, cfg *config.Config) error {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Warn("graceful shutdown timeout", "err", err)
+	}
+	// Drain MCP sessions and downstream clients.
+	sessions.CloseAll()
+	if err := manager.CloseAll(shutdownCtx); err != nil {
+		logger.Warn("southbound shutdown errors", "err", err)
 	}
 	return nil
 }
