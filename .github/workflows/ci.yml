@@ -25,12 +25,14 @@ jobs:
     outputs:
       has_go: ${{ steps.flags.outputs.has_go }}
       has_dockerfile: ${{ steps.flags.outputs.has_dockerfile }}
+      has_frontend: ${{ steps.flags.outputs.has_frontend }}
     steps:
       - uses: actions/checkout@v4
       - id: flags
         run: |
           if [ -f go.mod ]; then echo "has_go=true" >> "$GITHUB_OUTPUT"; else echo "has_go=false" >> "$GITHUB_OUTPUT"; fi
           if [ -f Dockerfile ]; then echo "has_dockerfile=true" >> "$GITHUB_OUTPUT"; else echo "has_dockerfile=false" >> "$GITHUB_OUTPUT"; fi
+          if [ -f web/console/package.json ]; then echo "has_frontend=true" >> "$GITHUB_OUTPUT"; else echo "has_frontend=false" >> "$GITHUB_OUTPUT"; fi
 
   docs:
     name: Docs lint
@@ -266,10 +268,41 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  frontend:
+    name: Frontend (svelte-check + build)
+    needs: detect
+    if: needs.detect.outputs.has_frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/console
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/console/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: svelte-check
+        run: npm run check
+      - name: Lint
+        run: npm run lint --if-present
+      - name: Build
+        run: npm run build
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-build
+          path: web/console/build/
+          retention-days: 7
+
   preflight:
     name: Preflight (build + boot + HTTP smoke)
-    needs: [detect, go-build]
-    if: always() && needs.detect.result == 'success'
+    needs: [detect, go-build, frontend]
+    # frontend job is gated by has_frontend; skip is acceptable, fail is not.
+    if: always() && needs.detect.result == 'success' && (needs.frontend.result == 'success' || needs.frontend.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -278,11 +311,21 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+      - uses: actions/setup-node@v4
+        if: needs.detect.outputs.has_frontend == 'true'
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/console/package-lock.json
       - name: Install jq
         run: |
           if ! command -v jq >/dev/null; then
             sudo apt-get update -qq && sudo apt-get install -y jq
           fi
+      - name: Build frontend (so embed.FS finds web/console/build)
+        if: needs.detect.outputs.has_frontend == 'true'
+        working-directory: web/console
+        run: npm ci && npm run build
       - name: make preflight
         run: make preflight
 
@@ -298,6 +341,7 @@ jobs:
       - go-build
       - govulncheck
       - gitleaks
+      - frontend
       - preflight
     if: always()
     runs-on: ubuntu-latest
@@ -314,17 +358,19 @@ jobs:
           echo "  go-build:     ${{ needs.go-build.result }}"
           echo "  govulncheck:  ${{ needs.govulncheck.result }}"
           echo "  gitleaks:     ${{ needs.gitleaks.result }}"
+          echo "  frontend:     ${{ needs.frontend.result }}"
           echo "  preflight:    ${{ needs.preflight.result }}"
-          # Skipped is acceptable for go-* jobs while pre-Go-code; failure is not.
+          # Skipped is acceptable for go-* and frontend jobs while their
+          # respective code isn't present; failure is never acceptable.
           for r in "${{ needs.docs.result }}" "${{ needs.yaml.result }}" "${{ needs.gitleaks.result }}" "${{ needs.preflight.result }}"; do
             if [ "$r" = "failure" ]; then
               echo "::error::Required job failed (docs/yaml/gitleaks/preflight)"
               exit 1
             fi
           done
-          for r in "${{ needs.go-fmt.result }}" "${{ needs.go-vet.result }}" "${{ needs.go-lint.result }}" "${{ needs.go-test.result }}" "${{ needs.go-build.result }}" "${{ needs.govulncheck.result }}"; do
+          for r in "${{ needs.go-fmt.result }}" "${{ needs.go-vet.result }}" "${{ needs.go-lint.result }}" "${{ needs.go-test.result }}" "${{ needs.go-build.result }}" "${{ needs.govulncheck.result }}" "${{ needs.frontend.result }}"; do
             if [ "$r" = "failure" ]; then
-              echo "::error::Required Go job failed"
+              echo "::error::Required Go/frontend job failed"
               exit 1
             fi
           done

@@ -174,6 +174,29 @@ Document any deviation in the PR description (Phase / RFC reference section). Up
 
 ---
 
+## 4.5 Frontend conventions (binding)
+
+The Console is a SvelteKit SPA built with `@sveltejs/adapter-static`, output to `web/console/build/`, and embedded into the Go binary via `//go:embed`. The same HTTP listener that serves REST + MCP serves the Console — no separate process, no proxy, one artifact.
+
+Phase 0 ships *transitional* placeholder pages rendered by stdlib `html/template`. **Phase 2 owns the SvelteKit migration** (scaffold the project, wire the build into Make + CI, replace the html/template handler with an embed-served SPA, ship the Servers page).
+
+Binding conventions for any frontend work:
+
+1. **Stack: SvelteKit + Vite, TypeScript.** Not React, not Next, not Vue. The choice is settled.
+2. **Embed model.** Production server reads `web/console/build/` via `embed.FS`; SPA index-fallback for unknown client-side routes; no static file server tricks. Dev mode (`portico dev`) does the same — there is no separate Vite dev server proxied through the Go binary in any shipped configuration. Frontend devs run `npm run dev` against the REST API directly.
+3. **Design tokens live in one place.** `web/console/src/lib/tokens.css` defines the full token surface as CSS custom properties (colors, spacings, type scale, radii, motion). Components reference tokens, not raw values. Swapping a brand or theme is a single-file change. PRs that introduce raw color/spacing literals in `.svelte` files are rejected (see §13).
+4. **Lean on a component library; do not rebuild from scratch.** Default: **Skeleton** (`@skeletonlabs/skeleton`) — it has first-class SvelteKit support and an explicit token system that aligns with #3. Alternates that satisfy the same constraints are acceptable when justified in the PR (Flowbite-Svelte, shadcn-svelte). Whatever the choice, the project anchors on **one** library; pick once and don't fragment. Custom components live in `web/console/src/lib/components/` only when no equivalent exists in the chosen library.
+5. **Typed API client.** REST calls go through `web/console/src/lib/api.ts`, which exports typed functions per endpoint. Hand-rolled `fetch` calls in components are not allowed; the typed client is the seam where authentication, error handling, and retries are centralised.
+6. **`svelte-check` is part of CI.** A `frontend` CI job runs `npm ci && npm run check && npm run lint && npm run build` in `web/console/`. PRs that break svelte-check or fail to build are blocked. The same commands are part of `make preflight` once Phase 2 lands.
+7. **Routing**: SvelteKit file-based routes under `src/routes/`. Client-side; no SSR. Server-side rendering is explicitly off (we ship a static SPA).
+8. **Package manager: `npm`.** Lockfile committed (`package-lock.json`). No `pnpm` / `yarn` mixing.
+9. **No build artifacts in git.** `web/console/build/` and `web/console/node_modules/` are in `.gitignore`. CI installs Node (`actions/setup-node`) and runs `npm ci && npm run build` before the Go build embeds the output.
+10. **Same data, one path.** When the frontend wants registry/skill/session data, it calls the REST endpoints already designed in the phase plans — never a parallel data path. New REST endpoints introduced for the UI go through the same `internal/server/api/` review process and need a smoke check (see §4.2).
+
+Forbidden practices added (see §13): hand-rolled component primitives that the chosen library already provides; raw color or spacing values in `.svelte` files; mixing package managers; `npm run build` artifacts committed to git; React/Vue/etc. dependencies in `web/console/`.
+
+---
+
 ## 4.4 Extensibility seams (project-wide policy)
 
 Any subsystem with **plausible alternate backends or strategies** must live behind an interface, not a concrete type. SQLite vs Postgres vs an external proxy is the canonical example; the same pattern applies to credential vaults (file → HashiCorp Vault → AWS SM), skill sources (LocalDir → Git → OCI → HTTP), MCP transports (stdio → HTTP → WebSocket), credential injectors (env → header → OAuth-exchange), spawners (subprocess → seccomp → container).
@@ -398,6 +421,12 @@ These will cause the PR to be rejected on sight.
 - ❌ Adding a new HTTP endpoint or MCP method without extending the relevant `scripts/smoke/phase-N.sh` to exercise it.
 - ❌ Importing a concrete driver package (`internal/storage/sqlite`, future `internal/secrets/<vault>`, `internal/skills/source/<src>`, etc.) from anywhere except `cmd/portico` (blank import for self-registration) or that driver's own tests. Production code talks to the `ifaces` package; the factory dispatches.
 - ❌ Building a new subsystem with plausible alternate implementations as a single concrete type instead of an interface + factory + registry (see §4.4).
+- ❌ Raw color / spacing / type-scale literals in `.svelte` files — every visual property comes from `web/console/src/lib/tokens.css` (see §4.5).
+- ❌ Hand-rolling a component the chosen library (default Skeleton) already provides, unless the PR justifies why the library version is unsuitable.
+- ❌ Mixing package managers (`pnpm`/`yarn`) inside `web/console/`. `npm` only.
+- ❌ Committing `web/console/build/` or `web/console/node_modules/`. CI builds them.
+- ❌ Adding a non-Svelte frontend dependency (React/Vue/etc.) to `web/console/`.
+- ❌ Hand-rolled `fetch` calls in `.svelte` files — go through `web/console/src/lib/api.ts`.
 
 ---
 

@@ -110,9 +110,13 @@ internal/secrets/         # stub vault for Phase 2 (real one in Phase 5)
 internal/server/api/
   handlers_servers.go     # /v1/servers CRUD
   handlers_servers_test.go
-web/console/templates/
-  servers.templ           # filled in
-  server_detail.templ
+web/console/                # SvelteKit project (scaffolded in this phase if absent)
+  src/
+    lib/tokens.css         # design tokens (CSS variables) — single swap point
+    routes/
+      servers/+page.svelte         # filled in
+      servers/[id]/+page.svelte    # detail
+  build/                    # embedded by the Go binary; CI rebuilds
 test/integration/
   registry_e2e_test.go
   supervisor_e2e_test.go
@@ -726,14 +730,19 @@ The southbound stdio Client gets stderr piped into a `MultiWriter` of (rotating 
 
 ### Step 10: Console
 
-`web/console/templates/servers.templ`:
-- Table: ID, transport, mode, status pill, instance count, last error.
-- Per-row: link to detail.
+This is the phase that scaffolds the SvelteKit project (if it isn't yet) and replaces the Phase 0 transitional `html/template` pages with an embedded Svelte SPA. The Go server-side change: switch `internal/server/ui/handlers.go` to serve `web/console/build/` via `embed.FS` with a SPA index-fallback for client-side routes. Consult AGENTS.md §11 for the frontend conventions before scaffolding.
 
-`web/console/templates/server_detail.templ`:
-- Spec (formatted JSON).
+`web/console/src/routes/servers/+page.svelte`:
+- Loads `/v1/servers` via the typed client in `src/lib/api.ts`.
+- Table: ID, transport, mode, status pill, instance count, last error. Use the component-library Data Table; do not hand-roll one.
+- Per-row: link to detail route `/servers/[id]`.
+
+`web/console/src/routes/servers/[id]/+page.svelte`:
+- Spec (formatted JSON viewer from the component library).
 - Instances table (id, state, started, last call, restart count).
-- Tail of latest log (htmx-poll every 2s for live tail).
+- Tail of latest log: poll the `/v1/servers/{id}/logs?tail=N` endpoint via `setInterval`/`onMount` every 2s. Use a Svelte store + `derived` for reactive updates.
+
+All UI strings, spacings, and colors come from `web/console/src/lib/tokens.css`. No raw color or spacing in components.
 
 ## Test plan
 

@@ -510,7 +510,7 @@ Integrations:
 
 ## 10. Operator UI
 
-The UI ships from V0.1. It does not need to be polished, but it does need to make the system legible. Built with htmx + Templ; embedded in the binary as a single artifact.
+The UI ships from V0.1. It does not need to be polished, but it does need to make the system legible. Built as a SvelteKit SPA with `@sveltejs/adapter-static`, compiled to static HTML/JS/CSS, and embedded into the Go binary via `//go:embed`. The same HTTP server that handles the REST and MCP endpoints serves the Console — no separate process, no proxy, one artifact to ship.
 
 ### 10.1 Surfaces
 
@@ -543,8 +543,12 @@ Portico is implemented in Go. The decision is settled, not open. Reasons unchang
 | Logging                | `log/slog`                                           | Stdlib, structured                          |
 | OpenTelemetry          | `go.opentelemetry.io/otel` + sdk + exporters/otlp    | OTLP via gRPC or HTTP                       |
 | MCP SDK                | `github.com/modelcontextprotocol/go-sdk`             | Verify availability at Phase 1 kickoff      |
-| HTML templating        | `github.com/a-h/templ`                               | Type-safe Go templates                      |
-| HTML over the wire     | htmx (vendored)                                      | Avoids Node build step                      |
+| Frontend framework     | SvelteKit + `@sveltejs/adapter-static`               | SPA built to static assets; embedded        |
+| Frontend build         | Vite (driven by SvelteKit)                           | Standard tooling; fast dev loop             |
+| Frontend embed         | stdlib `embed.FS` over the SvelteKit `build/` output | One Go binary serves the Console            |
+| Frontend type-check    | `svelte-check` in CI                                 | Catches Svelte/TS errors before merge       |
+| Component library      | Skeleton (default; swappable)                        | Pre-built admin components; do not rebuild  |
+| Design tokens          | Single CSS-variables file `src/lib/tokens.css`       | One swap point for theme/branding           |
 | Process supervision    | stdlib `os/exec` + custom supervisor                 |                                             |
 | Linux sandboxing       | `github.com/elastic/go-seccomp-bpf` (optional)       | Build-tagged, Linux only                    |
 | Crypto for vault       | stdlib `crypto/aes` + `crypto/rand` (AES-256-GCM)    |                                             |
@@ -557,7 +561,7 @@ If `github.com/modelcontextprotocol/go-sdk` is not available or insufficient at 
 
 | Concern        | Choice                                        | Reason                                      |
 |----------------|-----------------------------------------------|---------------------------------------------|
-| UI             | Embedded in binary; htmx + Templ              | One artifact to ship; no Node build         |
+| UI             | Embedded in binary; SvelteKit SPA (adapter-static) | One artifact to ship; backend serves UI     |
 | Storage        | SQLite default; Postgres optional             | Zero-setup for local; Postgres for ops      |
 | Config         | YAML with hot reload                          | Familiar to ops; live editing               |
 | Native API     | REST+JSON only in V1                          | Simpler client integration; gRPC deferred   |
@@ -781,9 +785,26 @@ portico/
       sqlite/                # schema, migrations, queries
       ifaces/                # storage interfaces
   web/
-    console/                 # htmx + Templ templates
-      static/                # vendored htmx, css
-      templates/             # *.templ files
+    console/                 # SvelteKit project (adapter-static)
+      package.json
+      svelte.config.js
+      vite.config.ts
+      tsconfig.json
+      src/
+        app.html             # SvelteKit shell
+        lib/
+          tokens.css         # design tokens (CSS variables) — single swap point
+          api.ts             # typed REST client
+          components/        # local wrappers around component-library primitives
+        routes/
+          +layout.svelte
+          +page.svelte       # /
+          servers/+page.svelte
+          skills/+page.svelte
+          sessions/+page.svelte
+      static/                # raw assets (favicon, fonts) copied verbatim
+      build/                 # SvelteKit output, embedded by the Go binary
+                             # generated; not committed (CI builds it)
   examples/
     servers/
       mock/                  # in-process mock MCP server for tests

@@ -4,7 +4,7 @@
 >
 > **Implementation deviations (recorded after the fact):**
 >
-> - **UI templating: stdlib `html/template` instead of Templ.** Templ requires a code-generation step that adds friction for placeholder pages. Phase 0 ships static placeholder content; the migration to Templ is deferred to whichever phase first needs typed components (likely Phase 3+ when MCP Apps land). The package comment in `internal/server/ui/handlers.go` records the rationale.
+> - **Frontend stack pivoted to SvelteKit.** The original plan described "htmx + Templ"; the canonical decision is now **SvelteKit + `@sveltejs/adapter-static`** with the build output (`web/console/build/`) embedded into the Go binary via `//go:embed` and served by the same HTTP listener that handles REST + MCP. Phase 0 ships *transitional* placeholder pages rendered by stdlib `html/template` (`internal/server/ui/templates/*.html`) so the binary boots and the Phase 0 smoke check passes immediately. **Phase 2 owns the SvelteKit migration**: scaffolds `web/console/`, wires the build into the Makefile, replaces the html/template handler with an embed-served SPA, and ships the first real page (Servers). The package comment in `internal/server/ui/handlers.go` records the transition.
 > - **Storage protocol layer.** The Phase 0 plan described `internal/storage/sqlite/` directly; the implementation puts it behind an `ifaces.Backend` interface with a factory in `internal/storage/storage.go` and self-registration in the SQLite driver. This is the canonical "easy seam" pattern documented in AGENTS.md §4.4 and applies to every later subsystem with potential alternate backends. Callers (the CLI) blank-import the driver to register it; production code talks to `ifaces.Backend` only.
 
 ## Goal
@@ -30,7 +30,7 @@ Multi-tenant from V1 means tenant context must permeate every internal API. Esta
 5. Tenant context primitive + JWT middleware (dev-mode bypass).
 6. HTTP server using `chi` with middleware chain.
 7. SQLite schema + migrations for V1 tables (most empty in Phase 0; populated in later phases).
-8. Embedded Console shell (htmx + Templ) — placeholder pages for /, /servers, /skills, /sessions.
+8. Console shell. **Canonical path: a SvelteKit project at `web/console/` built with `@sveltejs/adapter-static` and embedded into the binary via `//go:embed`.** Phase 0 ships a *transitional* placeholder using stdlib `html/template` so the binary boots and the smoke check passes today; Phase 2 scaffolds the SvelteKit project, wires the build into the Makefile, and replaces the html/template handler with an embed-served SPA.
 9. `log/slog` JSON logger wired through every package.
 10. Makefile + Dockerfile + GitHub Actions CI.
 11. README skeleton.
@@ -83,7 +83,8 @@ A reviewer can confirm Phase 0 is complete by running:
              |
              v
 +--------------------------+
-| internal/server/ui       |  Console handlers, htmx + Templ
+| internal/server/ui       |  Console handlers; embeds web/console/build/ in V1.
+|                          |  Phase 0 transitional: stdlib html/template.
 +--------------------------+
 ```
 
@@ -138,16 +139,28 @@ internal/
   telemetry/
     logger.go              # slog setup
 web/
-  console/
+  console/                 # In V1 this is a SvelteKit project (adapter-static).
+                            # Phase 0 ships transitional html/template only:
     static/
-      htmx.min.js          # vendored
+      htmx.min.js          # placeholder (no real JS in Phase 0)
       portico.css
-    templates/
-      layout.templ
-      home.templ
-      servers.templ
-      skills.templ
-      sessions.templ
+    templates/             # Phase 0 transitional only — replaced in Phase 2:
+      layout.html
+      home.html
+      servers.html
+      skills.html
+      sessions.html
+    # Phase 2 scaffolds:
+    #   package.json, svelte.config.js, vite.config.ts, tsconfig.json
+    #   src/app.html
+    #   src/lib/tokens.css           # design tokens — single swap point
+    #   src/lib/api.ts                # typed REST client
+    #   src/routes/+layout.svelte
+    #   src/routes/+page.svelte       # /
+    #   src/routes/servers/+page.svelte
+    #   src/routes/skills/+page.svelte
+    #   src/routes/sessions/+page.svelte
+    #   build/                        # generated; embedded by Go binary
 go.mod
 go.sum
 Makefile
@@ -600,7 +613,7 @@ GET  /v1/admin/tenants/{id} → 200 {...}                          (admin-only)
 POST /v1/admin/tenants   → 201 {...}                            (admin-only; runtime tenant create)
 
 # Console
-GET  /                   → home page (Templ-rendered)
+GET  /                   → home page (Phase 0: html/template placeholder; Phase 2+: SvelteKit SPA shell)
 GET  /servers            → placeholder list (empty in Phase 0)
 GET  /skills             → placeholder list
 GET  /sessions           → placeholder list
@@ -632,7 +645,7 @@ Add baseline dependencies to `go.mod`:
 - `gopkg.in/yaml.v3`
 - `github.com/oklog/ulid/v2`
 - `github.com/fsnotify/fsnotify`
-- `github.com/a-h/templ`
+- (Phase 0 transitional only) stdlib `html/template`. The canonical V1 frontend stack is SvelteKit + `@sveltejs/adapter-static`; the Phase 2 plan owns the migration.
 - `github.com/stretchr/testify`
 
 ### Step 2: Telemetry
@@ -712,14 +725,10 @@ Add baseline dependencies to `go.mod`:
 ### Step 7: Console UI
 
 `internal/server/ui/handlers.go`:
-- Render Templ templates with current state stubs.
-- `/` shows tenant ID, version, build date, links to /servers, /skills, /sessions.
+- Phase 0 ships transitional handlers using stdlib `html/template`. They render the placeholder pages and serve the static assets via `embed.FS`. The whole `internal/server/ui/` package is rewritten in Phase 2 to embed `web/console/build/` (the SvelteKit static-adapter output) and serve a single SPA shell with index-fallback for client-side routes.
+- `/` shows tenant ID, version, build date, and navigation to /servers, /skills, /sessions.
 - Other pages render an empty-state message ("No servers yet — Phase 2 will populate this").
-- `/static/*` served from `embed.FS`.
-
-`web/console/templates/layout.templ`:
-- Base layout with htmx loaded from local `/static/htmx.min.js`.
-- Header includes tenant badge.
+- `/static/*` served from `embed.FS` (Phase 0 transitional location; in Phase 2 this becomes whatever path the SvelteKit build emits).
 
 ### Step 8: CLI
 

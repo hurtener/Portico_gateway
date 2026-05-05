@@ -104,10 +104,10 @@ internal/server/mcpgw/
   dispatcher.go          // augment with snapshot reads + spans
 cmd/portico/
   cmd_inspect_session.go
-web/console/templates/
-  session_inspector.templ
-  snapshot_view.templ
-  snapshot_diff.templ
+web/console/src/routes/
+  sessions/[id]/+page.svelte         # session inspector
+  snapshots/[id]/+page.svelte        # snapshot view
+  snapshots/[a]/diff/[b]/+page.svelte
 test/integration/
   snapshot_e2e_test.go
   drift_e2e_test.go
@@ -397,10 +397,10 @@ V1 default is 1.0 (record everything). Operators can lower for high-traffic depl
 
 ## Session inspector
 
-`web/console/templates/session_inspector.templ`:
+`web/console/src/routes/sessions/[id]/+page.svelte`:
 - Header: session ID, tenant, user, started, snapshot link, drift banner if any.
-- Tabs:
-  - **Trace**: timeline (rendered with htmx + a small SVG) of spans within the session.
+- Tabs (use the component-library Tabs):
+  - **Trace**: timeline rendered with a small SVG component reading from a Svelte store.
   - **Audit**: filterable event list.
   - **Snapshot**: rendered summary; link to diff with previous session of same tenant.
   - **Approvals**: pending and decided.

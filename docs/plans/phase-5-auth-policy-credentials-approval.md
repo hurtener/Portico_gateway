@@ -150,10 +150,10 @@ internal/server/api/
   handlers_secrets.go   # admin only
 cmd/portico/
   cmd_vault.go          # vault put|get|delete|list|rotate-key
-web/console/templates/
-  approvals.templ
-  audit.templ
-  secrets.templ          # admin only
+web/console/src/routes/
+  approvals/+page.svelte
+  audit/+page.svelte
+  admin/secrets/+page.svelte   # admin scope only
 test/integration/
   policy_e2e_test.go
   approval_e2e_test.go
@@ -690,9 +690,9 @@ func (d *Dispatcher) handleToolsCall(ctx, sess, req) {
 
 ### Step 9: Console
 
-`approvals.templ`: pending list with approve/deny buttons (admin scope only); polls every 2s.
-`audit.templ`: search box, type filter, time range; renders pages of 50 events.
-`secrets.templ`: tenant/name list; "Add" form (admin only); never displays values.
+`web/console/src/routes/approvals/+page.svelte`: pending list with approve/deny buttons (admin scope only); polls `/v1/approvals?status=pending` every 2s via a Svelte store.
+`web/console/src/routes/audit/+page.svelte`: search box, type filter, time range; cursor-paginated table of 50 events per page (component-library Pagination).
+`web/console/src/routes/admin/secrets/+page.svelte`: tenant/name list; "Add" form (admin only); never displays values. Uses component-library Form primitives; tokens for spacing.
 
 ## Test plan
 

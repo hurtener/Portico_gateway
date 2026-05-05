@@ -116,9 +116,9 @@ internal/server/mcpgw/
   prompts.go             // extended to merge SkillProvider
 cmd/portico/
   cmd_validate_skills.go
-web/console/templates/
-  skills.templ           // filled
-  skill_detail.templ
+web/console/src/routes/
+  skills/+page.svelte           // filled
+  skills/[id]/+page.svelte      // detail
 examples/skills/
   github.code-review/
   postgres.sql-analyst/
@@ -566,8 +566,8 @@ linear.triage v0.1.0  WARNING: binding.optional_tools[0] linear.archive missing
 
 ### Step 10: Console
 
-`web/console/templates/skills.templ`: list with status pills (Enabled/Disabled/Missing tools).
-`web/console/templates/skill_detail.templ`: manifest pretty-print, dependency tree, markdown render of SKILL.md, enablement toggles.
+`web/console/src/routes/skills/+page.svelte`: list with status pills (Enabled/Disabled/Missing tools). Use the component-library Badge for status pills.
+`web/console/src/routes/skills/[id]/+page.svelte`: manifest pretty-print (component-library JSON viewer), dependency tree, markdown render (component-library Markdown widget) of SKILL.md, enablement toggles wired to `/v1/skills/{id}/enable|disable`.
 
 ### Step 11: Reference packs
 

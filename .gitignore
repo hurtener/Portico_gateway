@@ -46,3 +46,15 @@ vault.yaml.tmp*
 
 # CI artifacts pulled locally
 /.cache/
+
+# Frontend (SvelteKit) — Phase 2 onward
+web/console/node_modules/
+web/console/build/
+web/console/.svelte-kit/
+web/console/.vite/
+web/console/dist/
+web/console/coverage/
+web/console/*.log
+
+# package-lock.json IS committed; npm-debug.log is not.
+web/console/npm-debug.log*

@@ -105,10 +105,10 @@ internal/server/api/
   handlers_resources.go
   handlers_prompts.go
   handlers_apps.go
-web/console/templates/
-  resources.templ
-  prompts.templ
-  apps.templ
+web/console/src/routes/
+  resources/+page.svelte
+  prompts/+page.svelte
+  apps/+page.svelte
 test/integration/
   resources_e2e_test.go
   prompts_e2e_test.go
@@ -498,9 +498,11 @@ Capability advertisement in `initialize`: now turn on `resources` and `prompts` 
 
 ### Step 9: Console
 
-`web/console/templates/resources.templ`: table grouped by server, with size, MIME, last seen.
-`web/console/templates/prompts.templ`: table with arguments hint.
-`web/console/templates/apps.templ`: card layout; in dev mode, each card has a "Preview" button that opens `/v1/apps/{uri}/preview` in a sandboxed iframe.
+`web/console/src/routes/resources/+page.svelte`: table grouped by server, with size, MIME, last seen. Use the component-library Data Table.
+`web/console/src/routes/prompts/+page.svelte`: table with arguments hint.
+`web/console/src/routes/apps/+page.svelte`: card layout; in dev mode, each card has a "Preview" button that opens `/v1/apps/{uri}/preview` in a sandboxed iframe.
+
+All UI styling sourced from `web/console/src/lib/tokens.css`. Per-component CSS is allowed only via Svelte scoped styles that reference token variables, never raw colors/spacings.
 
 ### Step 10: Audit events
 
