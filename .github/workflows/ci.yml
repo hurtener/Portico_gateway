@@ -141,10 +141,13 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.64
-          args: --timeout=5m
+      # Install from source so the lint binary is built with the same Go
+      # toolchain the project targets. The prebuilt binaries shipped via the
+      # GitHub action lag behind newer Go versions.
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+      - name: Run golangci-lint
+        run: golangci-lint run --timeout=5m
 
   go-test:
     name: Go tests (${{ matrix.os }})

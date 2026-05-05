@@ -49,3 +49,11 @@ MD038: false
 
 # Allow trailing punctuation in headings — we use ":" and "." in some.
 MD036: false
+
+# Both `*emphasis*` and `_emphasis_` are fine; markdown engines render them
+# identically and our docs use both.
+MD049: false
+
+# Hard tabs appear inside fenced code blocks (Go source) — that's expected.
+MD010:
+  code_blocks: false

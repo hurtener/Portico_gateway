@@ -17,6 +17,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	"github.com/hurtener/Portico_gateway/internal/storage"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
+
 	// Side-effect: register the sqlite driver. Future drivers register here.
 	_ "github.com/hurtener/Portico_gateway/internal/storage/sqlite"
 	"github.com/hurtener/Portico_gateway/internal/telemetry"
