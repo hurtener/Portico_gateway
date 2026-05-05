@@ -1,0 +1,7 @@
+# Missing server.bind — should fail validation with a clear field error.
+storage:
+  driver: sqlite
+  dsn: ":memory:"
+logging:
+  level: error
+  format: json

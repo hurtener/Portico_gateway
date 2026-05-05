@@ -1,0 +1,37 @@
+server:
+  bind: 127.0.0.1:0  # ephemeral port for tests; production sets a real one
+  shutdown_grace: 5s
+
+auth:
+  jwt:
+    issuer: https://test.local/
+    audiences: [portico]
+    static_jwks: testdata/jwks-test.json
+    tenant_claim: tenant
+    scope_claim: scope
+    clock_skew: 60s
+
+storage:
+  driver: sqlite
+  dsn: ":memory:"
+
+tenants:
+  - id: acme
+    display_name: Acme Corp
+    plan: enterprise
+    entitlements:
+      skills: ["*"]
+      max_sessions: 100
+  - id: beta
+    display_name: Beta Industries
+    plan: pro
+    entitlements:
+      skills: ["github.*"]
+      max_sessions: 10
+
+logging:
+  level: error
+  format: json
+
+skills:
+  sources: []

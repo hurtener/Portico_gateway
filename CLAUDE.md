@@ -174,6 +174,31 @@ Document any deviation in the PR description (Phase / RFC reference section). Up
 
 ---
 
+## 4.4 Extensibility seams (project-wide policy)
+
+Any subsystem with **plausible alternate backends or strategies** must live behind an interface, not a concrete type. SQLite vs Postgres vs an external proxy is the canonical example; the same pattern applies to credential vaults (file → HashiCorp Vault → AWS SM), skill sources (LocalDir → Git → OCI → HTTP), MCP transports (stdio → HTTP → WebSocket), credential injectors (env → header → OAuth-exchange), spawners (subprocess → seccomp → container).
+
+The shape:
+
+1. Interface in `internal/<area>/ifaces/` (or `internal/<area>/source.go` when that's the more natural home).
+2. Concrete implementations in `internal/<area>/<driver>/` — one driver per subdirectory.
+3. A factory + registry at `internal/<area>/<area>.go` (e.g. `internal/storage/storage.go`) that dispatches by name.
+4. Drivers self-register from their `init()` and are pulled in via blank import (`_ "github.com/.../driver"`) at the binary entry point.
+5. Callers depend ONLY on the interface package. Nothing else imports a concrete driver except `cmd/portico` and tests scoped to that driver.
+6. The factory's error message lists registered drivers so misconfigurations are obvious.
+
+The reference implementation lives in `internal/storage/`:
+- `internal/storage/ifaces/backend.go` defines `Backend`.
+- `internal/storage/sqlite/` implements it and self-registers.
+- `internal/storage/storage.go` exposes `Open(ctx, cfg, log)`.
+- `cmd/portico/cmd_serve.go` blank-imports the driver and calls `storage.Open`.
+
+When you build a new subsystem in any phase, follow this pattern. PRs that introduce a new "single-implementation" subsystem without the seam are accepted only when the subsystem genuinely has no alternate-backend story (and the reviewer must agree). When in doubt, add the seam — it's cheap up-front and free thereafter.
+
+Forbidden practices added (see §13): importing a concrete driver from anywhere outside `cmd/portico` or that driver's own tests; bypassing the factory by calling driver-specific `Open` directly from production code.
+
+---
+
 ## 5. Code conventions (Go)
 
 ### Language and tooling
@@ -371,6 +396,8 @@ These will cause the PR to be rejected on sight.
 - ❌ `git push --force` to `main`.
 - ❌ Committing with `--no-verify` to skip the preflight hook except in a documented emergency. Doing so without justification is treated the same as merging a broken build.
 - ❌ Adding a new HTTP endpoint or MCP method without extending the relevant `scripts/smoke/phase-N.sh` to exercise it.
+- ❌ Importing a concrete driver package (`internal/storage/sqlite`, future `internal/secrets/<vault>`, `internal/skills/source/<src>`, etc.) from anywhere except `cmd/portico` (blank import for self-registration) or that driver's own tests. Production code talks to the `ifaces` package; the factory dispatches.
+- ❌ Building a new subsystem with plausible alternate implementations as a single concrete type instead of an interface + factory + registry (see §4.4).
 
 ---
 

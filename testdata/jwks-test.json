@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "kid": "portico-test-fixture",
+      "use": "sig",
+      "alg": "RS256",
+      "n": "uHs6ZgNNWdyjVFimdubQV4BrKbjTfXeUkTUY0kr8nqs717aPsNOYG04XiHOnhqyO6HSZNnGJ3DSzaKuy4P1eNiIUonFlVRIhgnnYZF4SWrUmv8J2NR7fkNd3WVBax5uTjUgA5SW4Rm61mFCGLoPseUkeqBCA4Znh4lI7x4Lo_fg1N2O2JxN7LMKYx_WUubZ37FVvk2bvAi1QVJFRqLXGKt6rohXdpVvQR0P1gLae0hzwEAYx4QNsaqvdZ4l1otCkn34wQ_5p0mnmQo6B118oUEfqp6y6lLesa7K3KsumGl4RXtc2YJXvy_S3mGRVqcNKcISyDch7A1gU_BiJcHCnOw",
+      "e": "AQAB"
+    }
+  ]
+}

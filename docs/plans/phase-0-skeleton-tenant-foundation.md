@@ -1,6 +1,11 @@
 # Phase 0 — Skeleton & Tenant Foundation
 
 > Self-contained implementation plan. Implementor should be able to start with this document, the RFC, and an empty repo.
+>
+> **Implementation deviations (recorded after the fact):**
+>
+> - **UI templating: stdlib `html/template` instead of Templ.** Templ requires a code-generation step that adds friction for placeholder pages. Phase 0 ships static placeholder content; the migration to Templ is deferred to whichever phase first needs typed components (likely Phase 3+ when MCP Apps land). The package comment in `internal/server/ui/handlers.go` records the rationale.
+> - **Storage protocol layer.** The Phase 0 plan described `internal/storage/sqlite/` directly; the implementation puts it behind an `ifaces.Backend` interface with a factory in `internal/storage/storage.go` and self-registration in the SQLite driver. This is the canonical "easy seam" pattern documented in AGENTS.md §4.4 and applies to every later subsystem with potential alternate backends. Callers (the CLI) blank-import the driver to register it; production code talks to `ifaces.Backend` only.
 
 ## Goal
 
