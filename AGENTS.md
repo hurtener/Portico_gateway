@@ -148,6 +148,30 @@ PORTICO_PREFLIGHT_SKIP=1 git commit -m '...'
 ```
 The PR description must justify the skip. CI still runs the gate; an emergency local skip never reaches `main`.
 
+### 4.2 Phase implementor contract
+
+When you are implementing **Phase N**, the following are part of the work — not optional follow-ups:
+
+1. **`scripts/smoke/phase-N.sh` must pass against your build before you commit.** The skeleton already exists for every phase. You add real assertions as you implement the surface. Whatever the phase plan declares as an acceptance criterion at the HTTP / MCP level must have a smoke check.
+2. **A new endpoint or MCP method = a new smoke check in the same PR.** Reviewers look for this. Forgetting it is a rejection-on-sight reason (see §13).
+3. **Use `scripts/smoke/common.sh` helpers.** Don't roll new curl wrappers — `assert_status`, `skip_if_404`, `assert_json_path`, `assert_json_truthy`, `jsonrpc`, `api_url`, `mcp_url` are the vocabulary. New helpers go in `common.sh` with a one-line docstring.
+4. **The 404/405/501 → SKIP convention is sacred.** It's how phase-N+1 scripts coexist with phase-N builds. If you replace a previously-implemented endpoint with a new one that returns 404 temporarily, the smoke will go SKIP instead of FAIL — fix the underlying code; do not weaken the smoke.
+5. **A SKIP that should be an OK is a bug.** When a phase's surface lands, its smoke counters in preflight should show `OK > 0` for that phase. If the entire phase still shows `SKIP` after you've shipped its endpoints, your endpoints are wired wrong.
+6. **A FAIL is never acceptable on `main`.** Pre-commit + CI both gate this. If you ever land a commit with a FAIL, revert immediately.
+7. **New env vars or config keys**: document in the relevant phase plan AND the example `portico.yaml` AND, if the smoke script needs them, the smoke script itself.
+8. **New CLI subcommands**: if the smoke script invokes them (e.g. `portico vault put` in phase-5), include a degradation path so the smoke still works on builds that don't yet have the subcommand (`./bin/portico foo --help >/dev/null 2>&1` → SKIP if the help fails).
+9. **Done definition**: a phase is done when (a) all phase plan acceptance criteria pass, (b) coverage targets met, (c) `scripts/smoke/phase-N.sh` shows OK ≥ the count of acceptance criteria it covers and FAIL = 0, (d) prior phases' smoke scripts still pass against the new build (no regressions).
+
+### 4.3 Reasonable plan deviations
+
+A phase plan describes the intended path. Deviations are allowed when justified:
+
+- The implementor finds a simpler approach that still satisfies the acceptance criteria.
+- A library named in the plan turns out to be missing/abandoned — pick a like-for-like swap and document it.
+- A speculative interface in the plan turns out wrong once code lands — refactor and update the plan in the same PR.
+
+Document any deviation in the PR description (Phase / RFC reference section). Update the plan file if the deviation is permanent. **Never** silently violate the RFC; if the deviation reaches into RFC territory, that's an RFC PR first.
+
 ---
 
 ## 5. Code conventions (Go)
