@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hurtener/Portico_gateway/internal/apps"
 	"github.com/hurtener/Portico_gateway/internal/config"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
@@ -128,6 +129,17 @@ func startMcpDevServer(t *testing.T, specs []config.ServerSpec) (*httptest.Serve
 	disp := mcpgw.NewDispatcher(mgr, logger)
 	sess := mcpgw.NewSessionRegistry()
 
+	// Phase 3 wiring — same as cmd/portico/cmd_serve.go.
+	appsReg := apps.New(apps.DefaultCSP())
+	resourceAgg := mcpgw.NewResourceAggregator(mgr, appsReg, mcpgw.DefaultResourceLimits(), logger)
+	promptAgg := mcpgw.NewPromptAggregator(mgr, resourceAgg, logger)
+	listChangedMux := mcpgw.NewListChangedMux(sess, resourceAgg, mcpgw.ModeStable, logger)
+	disp.SetAggregators(resourceAgg, promptAgg, listChangedMux)
+	supervisor.SetNotifSink(func(ctx context.Context, serverID string, n protocol.Notification) {
+		listChangedMux.OnDownstream(ctx, serverID, n)
+	})
+	sess.OnClose(listChangedMux.ForgetSession)
+
 	t.Cleanup(func() {
 		sess.CloseAll()
 		_ = mgr.CloseAll(context.Background())
@@ -144,6 +156,7 @@ func startMcpDevServer(t *testing.T, specs []config.ServerSpec) (*httptest.Serve
 		Dispatcher: disp,
 		Manager:    mgr,
 		Registry:   reg,
+		Apps:       appsReg,
 	})
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)

@@ -12,6 +12,9 @@
     <a class="brand" href="/">Portico</a>
     <nav>
       <a href="/servers" class:active={isActive('/servers')}>Servers</a>
+      <a href="/resources" class:active={isActive('/resources')}>Resources</a>
+      <a href="/prompts" class:active={isActive('/prompts')}>Prompts</a>
+      <a href="/apps" class:active={isActive('/apps')}>Apps</a>
       <a href="/skills" class:active={isActive('/skills')}>Skills</a>
       <a href="/sessions" class:active={isActive('/sessions')}>Sessions</a>
     </nav>

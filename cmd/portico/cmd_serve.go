@@ -10,8 +10,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/hurtener/Portico_gateway/internal/apps"
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
 	"github.com/hurtener/Portico_gateway/internal/config"
+	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/registry"
 	"github.com/hurtener/Portico_gateway/internal/runtime/process"
@@ -139,6 +141,19 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	dispatcher := mcpgw.NewDispatcher(manager, logger)
 	sessions := mcpgw.NewSessionRegistry()
 
+	// Phase 3: resource + prompt aggregators, MCP Apps registry, list-
+	// changed mux. The mux subscribes to every supervised client's
+	// notifications stream via supervisor.SetNotifSink.
+	appsReg := apps.New(apps.DefaultCSP())
+	resourceAgg := mcpgw.NewResourceAggregator(manager, appsReg, mcpgw.DefaultResourceLimits(), logger)
+	promptAgg := mcpgw.NewPromptAggregator(manager, resourceAgg, logger)
+	listChangedMux := mcpgw.NewListChangedMux(sessions, resourceAgg, mcpgw.ModeStable, logger)
+	dispatcher.SetAggregators(resourceAgg, promptAgg, listChangedMux)
+	supervisor.SetNotifSink(func(ctx context.Context, serverID string, n protocol.Notification) {
+		listChangedMux.OnDownstream(ctx, serverID, n)
+	})
+	sessions.OnClose(listChangedMux.ForgetSession)
+
 	// Subscribe the supervisor to registry change events so spec edits
 	// (via /v1/servers/{id}/reload, hot-reload, or admin POST) drain the
 	// affected instances.
@@ -178,6 +193,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		Dispatcher:  dispatcher,
 		Manager:     manager,
 		Registry:    reg,
+		Apps:        appsReg,
 	}
 
 	handler := api.NewRouter(deps)

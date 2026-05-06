@@ -83,6 +83,44 @@ export interface InstanceRecord {
   last_heartbeat?: string;
 }
 
+export interface Resource {
+  uri: string;
+  name?: string;
+  description?: string;
+  mimeType?: string;
+  size?: number;
+  _meta?: Record<string, unknown>;
+}
+
+export interface ResourceTemplate {
+  uriTemplate: string;
+  name?: string;
+  description?: string;
+  mimeType?: string;
+}
+
+export interface PromptArgument {
+  name: string;
+  description?: string;
+  required?: boolean;
+}
+
+export interface Prompt {
+  name: string;
+  description?: string;
+  arguments?: PromptArgument[];
+}
+
+export interface AppEntry {
+  uri: string;
+  upstreamUri: string;
+  serverId: string;
+  name?: string;
+  description?: string;
+  mimeType?: string;
+  discoveredAt: string;
+}
+
 function baseURL(): string {
   // In the browser, same-origin (the Go binary serves both API and SPA).
   // In tests/SSR (which we don't ship), assume localhost dev server.
@@ -150,5 +188,30 @@ export const api = {
   disableServer: (id: string) =>
     request<ServerSpec>(`/v1/servers/${encodeURIComponent(id)}/disable`, { method: 'POST' }),
   listInstances: (id: string) =>
-    request<{ items: InstanceRecord[] }>(`/v1/servers/${encodeURIComponent(id)}/instances`)
+    request<{ items: InstanceRecord[] }>(`/v1/servers/${encodeURIComponent(id)}/instances`),
+
+  listResources: (cursor = '') =>
+    request<{ resources: Resource[]; nextCursor?: string }>(
+      `/v1/resources${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`
+    ),
+  listResourceTemplates: () =>
+    request<{ resourceTemplates: ResourceTemplate[]; nextCursor?: string }>(
+      '/v1/resources/templates'
+    ),
+  readResource: (uri: string) =>
+    request<{ contents: Array<{ uri: string; mimeType?: string; text?: string; blob?: string }> }>(
+      `/v1/resources/${encodeURI(uri)}`
+    ),
+
+  listPrompts: () => request<{ prompts: Prompt[]; nextCursor?: string }>('/v1/prompts'),
+  getPrompt: (name: string, args: Record<string, string> = {}) =>
+    request<{
+      description?: string;
+      messages: Array<{ role: string; content: { type: string; text?: string } }>;
+    }>(`/v1/prompts/${encodeURIComponent(name)}`, {
+      method: 'POST',
+      body: JSON.stringify({ arguments: args })
+    }),
+
+  listApps: () => request<{ items: AppEntry[] }>('/v1/apps')
 };

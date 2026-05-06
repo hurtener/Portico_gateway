@@ -35,3 +35,18 @@ func NewError(code int, msg string, data any) *Error {
 	}
 	return e
 }
+
+// IsMethodNotFound reports whether an error represents an MCP
+// "method not found" condition. Aggregators use this to silently skip
+// downstreams that don't advertise a particular surface (resources or
+// prompts on a tools-only server) instead of treating it as a partial
+// failure.
+func IsMethodNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	if e, ok := err.(*Error); ok {
+		return e.Code == ErrMethodNotFound
+	}
+	return false
+}

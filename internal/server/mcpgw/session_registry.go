@@ -141,6 +141,29 @@ func (s *Session) Close() {
 type SessionRegistry struct {
 	mu       sync.RWMutex
 	sessions map[string]*Session
+
+	onCloseMu sync.Mutex
+	onClose   []func(sessionID string)
+}
+
+// OnClose registers a callback fired (synchronously) whenever a session
+// terminates. The list-changed mux uses it to drop per-session state.
+func (r *SessionRegistry) OnClose(fn func(sessionID string)) {
+	if fn == nil {
+		return
+	}
+	r.onCloseMu.Lock()
+	r.onClose = append(r.onClose, fn)
+	r.onCloseMu.Unlock()
+}
+
+func (r *SessionRegistry) fireClose(sessionID string) {
+	r.onCloseMu.Lock()
+	cbs := append([]func(string){}, r.onClose...)
+	r.onCloseMu.Unlock()
+	for _, fn := range cbs {
+		fn(sessionID)
+	}
 }
 
 func NewSessionRegistry() *SessionRegistry {
@@ -179,6 +202,7 @@ func (r *SessionRegistry) Close(id string) {
 	r.mu.Unlock()
 	if ok {
 		s.Close()
+		r.fireClose(id)
 	}
 }
 
@@ -188,8 +212,9 @@ func (r *SessionRegistry) CloseAll() {
 	all := r.sessions
 	r.sessions = make(map[string]*Session)
 	r.mu.Unlock()
-	for _, s := range all {
+	for id, s := range all {
 		s.Close()
+		r.fireClose(id)
 	}
 }
 
