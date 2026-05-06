@@ -1,152 +1,130 @@
-// Package manager owns Client lifecycles for downstream MCP servers. Lives
-// in its own sub-package to break a would-be import cycle with the per-
-// transport client packages (which depend on the southbound types).
+// Package manager owns Client lifecycles for downstream MCP servers. In
+// Phase 2 it became a thin coordinator: the Registry holds per-tenant
+// specs, the Supervisor owns the live process state, and the Manager
+// translates a session-scoped Acquire request into a (key, client) pair
+// for the dispatcher.
+//
+// Lives in its own sub-package to break a would-be import cycle with the
+// per-transport client packages (which depend on the southbound types).
 package manager
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
-	"sync"
 
-	"github.com/hurtener/Portico_gateway/internal/config"
 	"github.com/hurtener/Portico_gateway/internal/mcp/southbound"
-	httpclient "github.com/hurtener/Portico_gateway/internal/mcp/southbound/http"
-	stdiocli "github.com/hurtener/Portico_gateway/internal/mcp/southbound/stdio"
+	"github.com/hurtener/Portico_gateway/internal/registry"
+	"github.com/hurtener/Portico_gateway/internal/runtime/process"
+	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
 
-// Manager owns Client instances keyed by server id. Phase 1 uses a single
-// shared client per server (shared_global). Phase 2 extends the key set with
-// tenant + user + session for per_tenant / per_user / per_session modes.
-type Manager struct {
-	log     *slog.Logger
-	mu      sync.RWMutex
-	specs   map[string]*config.ServerSpec
-	clients map[string]southbound.Client
+// AcquireRequest carries the per-call identity needed to compute the
+// supervisor's InstanceKey. Sourced from the MCP session.
+type AcquireRequest struct {
+	TenantID  string
+	UserID    string
+	SessionID string
+	ServerID  string
 }
 
-// NewManager builds a Manager. The supplied specs are taken by reference; the
-// Manager does not mutate them.
-func NewManager(specs []config.ServerSpec, log *slog.Logger) *Manager {
+// Manager fronts the supervisor and registry for the dispatcher.
+type Manager struct {
+	log *slog.Logger
+	reg *registry.Registry
+	sup *process.Supervisor
+}
+
+// NewManager wires the supervisor + registry. Either may be nil only in
+// tests that don't exercise tool routing — production callers must
+// supply both.
+func NewManager(reg *registry.Registry, sup *process.Supervisor, log *slog.Logger) *Manager {
 	if log == nil {
 		log = slog.Default()
 	}
-	m := &Manager{
-		log:     log,
-		specs:   make(map[string]*config.ServerSpec, len(specs)),
-		clients: make(map[string]southbound.Client),
-	}
-	for i := range specs {
-		s := specs[i]
-		m.specs[s.ID] = &s
-	}
-	return m
+	return &Manager{log: log, reg: reg, sup: sup}
 }
 
-// Servers returns the configured server specs in stable id-sorted order.
-// Phase 1 ignores tenant scoping; Phase 2 fixes that.
-func (m *Manager) Servers() []*config.ServerSpec {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	out := make([]*config.ServerSpec, 0, len(m.specs))
-	for _, s := range m.specs {
-		out = append(out, s)
+// Servers returns the snapshot list for the given tenant.
+func (m *Manager) Servers(ctx context.Context, tenantID string) ([]*registry.Snapshot, error) {
+	if m.reg == nil {
+		return nil, errors.New("manager: registry not configured")
 	}
-	sortByID(out)
-	return out
+	if tenantID == "" {
+		// Defensive: shouldn't happen in production paths but keeps tests
+		// that use empty-tenant scaffolding from panicking.
+		return []*registry.Snapshot{}, nil
+	}
+	return m.reg.List(ctx, tenantID)
 }
 
-// Get returns the spec for an id (for diagnostics / 404 handling).
-func (m *Manager) Get(id string) (*config.ServerSpec, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	s, ok := m.specs[id]
-	return s, ok
+// Get returns the snapshot for (tenant, server). ifaces.ErrNotFound when
+// the server is not registered for the tenant.
+func (m *Manager) Get(ctx context.Context, tenantID, serverID string) (*registry.Snapshot, error) {
+	if m.reg == nil {
+		return nil, errors.New("manager: registry not configured")
+	}
+	return m.reg.Get(ctx, tenantID, serverID)
 }
 
-// AcquireClient returns a started Client for the named server, lazily
-// constructing it on first call. Subsequent calls return the cached client.
-func (m *Manager) AcquireClient(ctx context.Context, serverID string) (southbound.Client, error) {
-	m.mu.RLock()
-	c, ok := m.clients[serverID]
-	m.mu.RUnlock()
-	if ok && c.Initialized() {
-		return c, nil
+// Acquire returns a started Client for (tenant, server, identity).
+// Lazily spawns via the supervisor on first use.
+func (m *Manager) Acquire(ctx context.Context, req AcquireRequest) (southbound.Client, error) {
+	if m.sup == nil {
+		return nil, errors.New("manager: supervisor not configured")
 	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if c, ok := m.clients[serverID]; ok && c.Initialized() {
-		return c, nil
-	}
-	spec, ok := m.specs[serverID]
-	if !ok {
-		return nil, fmt.Errorf("manager: unknown server %q", serverID)
-	}
-	c, err := m.buildClient(spec)
+	snap, err := m.Get(ctx, req.TenantID, req.ServerID)
 	if err != nil {
 		return nil, err
 	}
-	if err := c.Start(ctx); err != nil {
-		return nil, fmt.Errorf("manager: start %q: %w", serverID, err)
+	if !snap.Record.Enabled {
+		return nil, errors.New("manager: server is disabled")
 	}
-	m.clients[serverID] = c
-	return c, nil
+	return m.sup.Acquire(ctx, &snap.Spec, process.AcquireOpts{
+		TenantID:  req.TenantID,
+		UserID:    req.UserID,
+		SessionID: req.SessionID,
+	})
 }
 
-func (m *Manager) buildClient(spec *config.ServerSpec) (southbound.Client, error) {
-	switch spec.Transport {
-	case "stdio":
-		if spec.Stdio == nil || spec.Stdio.Command == "" {
-			return nil, fmt.Errorf("manager: server %q stdio.command is required", spec.ID)
-		}
-		return stdiocli.New(stdiocli.Config{
-			ServerID:     spec.ID,
-			Command:      spec.Stdio.Command,
-			Args:         spec.Stdio.Args,
-			Env:          spec.Stdio.Env,
-			Cwd:          spec.Stdio.Cwd,
-			StartTimeout: spec.StartTimeout,
-			Logger:       m.log,
-		}), nil
-	case "http":
-		if spec.HTTP == nil || spec.HTTP.URL == "" {
-			return nil, fmt.Errorf("manager: server %q http.url is required", spec.ID)
-		}
-		return httpclient.New(httpclient.Config{
-			ServerID:   spec.ID,
-			URL:        spec.HTTP.URL,
-			AuthHeader: spec.HTTP.AuthHeader,
-			Timeout:    spec.HTTP.Timeout,
-			Logger:     m.log,
-		}), nil
-	default:
-		return nil, fmt.Errorf("manager: server %q unsupported transport %q", spec.ID, spec.Transport)
+// Tick informs the supervisor that the caller successfully made a tool
+// call against the given server, so idle/last-call bookkeeping updates.
+func (m *Manager) Tick(ctx context.Context, req AcquireRequest) {
+	if m.sup == nil {
+		return
 	}
+	snap, err := m.Get(ctx, req.TenantID, req.ServerID)
+	if err != nil {
+		return
+	}
+	key, err := process.KeyForMode(snap.Spec.RuntimeMode, snap.Spec.ID, process.AcquireOpts{
+		TenantID:  req.TenantID,
+		UserID:    req.UserID,
+		SessionID: req.SessionID,
+	})
+	if err != nil {
+		return
+	}
+	m.sup.Tick(ctx, key)
 }
 
-// CloseAll terminates every started client.
+// CloseAll terminates every supervised instance.
 func (m *Manager) CloseAll(ctx context.Context) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var errs []error
-	for id, c := range m.clients {
-		if err := c.Close(ctx); err != nil {
-			errs = append(errs, fmt.Errorf("close %q: %w", id, err))
-		}
-	}
-	m.clients = make(map[string]southbound.Client)
-	if len(errs) == 0 {
+	if m.sup == nil {
 		return nil
 	}
-	return errors.Join(errs...)
+	return m.sup.StopAll(ctx)
 }
 
-func sortByID(specs []*config.ServerSpec) {
-	for i := 1; i < len(specs); i++ {
-		for j := i; j > 0 && specs[j-1].ID > specs[j].ID; j-- {
-			specs[j-1], specs[j] = specs[j], specs[j-1]
-		}
+// SnapshotByTenant is a convenience for callers that only need the spec
+// list (no client acquisition).
+func (m *Manager) SnapshotByTenant(ctx context.Context, tenantID string) ([]*registry.Snapshot, error) {
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return nil, ctx.Err()
 	}
+	return m.Servers(ctx, tenantID)
 }
+
+// IfacesErrNotFound is re-exported for callers that branch on it without
+// importing storage/ifaces directly.
+var IfacesErrNotFound = ifaces.ErrNotFound

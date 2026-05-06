@@ -13,10 +13,13 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	"github.com/hurtener/Portico_gateway/internal/mcp/southbound"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
+	"github.com/hurtener/Portico_gateway/internal/registry"
+	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
 
-// Dispatcher routes MCP requests from the northbound transport to the right
-// southbound client. Holds a per-session aggregated tools cache (60s TTL).
+// Dispatcher routes MCP requests from the northbound transport to the
+// right southbound client. Holds a per-session aggregated tools cache
+// (60s TTL) and a 5s fan-out timeout for tools/list aggregation.
 type Dispatcher struct {
 	manager *southboundmgr.Manager
 	log     *slog.Logger
@@ -32,8 +35,8 @@ type toolsCacheEntry struct {
 	expiresAt time.Time
 }
 
-// NewDispatcher constructs a Dispatcher. Defaults: 60s tool cache, 5s fan-out
-// timeout for tools/list aggregation.
+// NewDispatcher constructs a Dispatcher. Defaults: 60s tool cache, 5s
+// fan-out timeout for tools/list aggregation.
 func NewDispatcher(m *southboundmgr.Manager, log *slog.Logger) *Dispatcher {
 	if log == nil {
 		log = slog.Default()
@@ -64,9 +67,9 @@ func (d *Dispatcher) HandleRequest(ctx context.Context, sess *Session, req *prot
 	}
 }
 
-// HandleNotification processes inbound notifications from the client. Phase 1
-// handles cancellations + the initialized notification; everything else is
-// debug-logged.
+// HandleNotification processes inbound notifications from the client.
+// Phase 1 handles cancellations + the initialized notification; everything
+// else is debug-logged.
 func (d *Dispatcher) HandleNotification(_ context.Context, sess *Session, n *protocol.Notification) {
 	switch n.Method {
 	case protocol.NotifInitialized:
@@ -97,12 +100,16 @@ func (d *Dispatcher) handleInitialize(ctx context.Context, sess *Session, req *p
 
 	// Aggregate downstream caps. Phase 1 surfaces tools-only; resources +
 	// prompts come in Phase 3 once the dispatcher routes them.
-	servers := d.manager.Servers()
+	servers, err := d.serversFor(ctx, sess)
+	if err != nil {
+		d.log.Warn("dispatcher: list servers for initialize", "err", err)
+	}
 	caps := make([]protocol.ServerCapabilities, 0, len(servers))
 	for _, s := range servers {
-		c, err := d.manager.AcquireClient(ctx, s.ID)
+		c, err := d.acquireFor(ctx, sess, s)
 		if err != nil {
-			d.log.Warn("server unavailable during initialize", "server_id", s.ID, "err", err)
+			d.log.Warn("server unavailable during initialize",
+				"server_id", s.Spec.ID, "err", err)
 			continue
 		}
 		caps = append(caps, c.Capabilities())
@@ -111,8 +118,8 @@ func (d *Dispatcher) handleInitialize(ctx context.Context, sess *Session, req *p
 	// Always advertise the tools capability — Phase 1 always exposes tools
 	// even when no downstream is configured. ListChanged is NOT advertised
 	// because the dispatcher does not yet emit
-	// notifications/tools/list_changed; Phase 2 wires it once the registry
-	// publishes change events.
+	// notifications/tools/list_changed; Phase 2's registry change-event
+	// fan-out will wire it.
 	if srv.Tools == nil {
 		srv.Tools = &protocol.ToolsCapability{}
 	}
@@ -122,7 +129,7 @@ func (d *Dispatcher) handleInitialize(ctx context.Context, sess *Session, req *p
 		Capabilities:    srv,
 		ServerInfo: protocol.Implementation{
 			Name:    "portico-gateway",
-			Version: "phase-1",
+			Version: "phase-2",
 		},
 	}
 	body, err := json.Marshal(res)
@@ -133,7 +140,7 @@ func (d *Dispatcher) handleInitialize(ctx context.Context, sess *Session, req *p
 }
 
 func (d *Dispatcher) handleToolsList(ctx context.Context, sess *Session, _ *protocol.Request) (json.RawMessage, *protocol.Error) {
-	// Cache check
+	// Cache check (per-session — tenant scoping via session uniqueness).
 	d.cacheMu.Lock()
 	if e, ok := d.toolsCache[sess.ID]; ok && time.Now().Before(e.expiresAt) {
 		d.cacheMu.Unlock()
@@ -145,7 +152,10 @@ func (d *Dispatcher) handleToolsList(ctx context.Context, sess *Session, _ *prot
 	listCtx, cancel := context.WithTimeout(ctx, d.listToolsTimeout)
 	defer cancel()
 
-	servers := d.manager.Servers()
+	servers, err := d.serversFor(listCtx, sess)
+	if err != nil {
+		return nil, protocol.NewError(protocol.ErrInternalError, err.Error(), nil)
+	}
 
 	type result struct {
 		serverID string
@@ -156,13 +166,13 @@ func (d *Dispatcher) handleToolsList(ctx context.Context, sess *Session, _ *prot
 	for _, s := range servers {
 		s := s
 		go func() {
-			c, err := d.manager.AcquireClient(listCtx, s.ID)
+			c, err := d.acquireFor(listCtx, sess, s)
 			if err != nil {
-				results <- result{serverID: s.ID, err: err}
+				results <- result{serverID: s.Spec.ID, err: err}
 				return
 			}
 			tools, err := c.ListTools(listCtx)
-			results <- result{serverID: s.ID, tools: tools, err: err}
+			results <- result{serverID: s.Spec.ID, tools: tools, err: err}
 		}()
 	}
 
@@ -170,7 +180,8 @@ func (d *Dispatcher) handleToolsList(ctx context.Context, sess *Session, _ *prot
 	for i := 0; i < len(servers); i++ {
 		r := <-results
 		if r.err != nil {
-			d.log.Warn("tools/list partial failure", "server_id", r.serverID, "err", r.err)
+			d.log.Warn("tools/list partial failure",
+				"server_id", r.serverID, "err", r.err)
 			continue
 		}
 		for _, t := range r.tools {
@@ -200,10 +211,21 @@ func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *pr
 	if !ok {
 		return nil, protocol.NewError(protocol.ErrToolNotEnabled, "tool name must be qualified as <server>.<tool>", map[string]string{"name": params.Name})
 	}
-	if _, present := d.manager.Get(serverID); !present {
-		return nil, protocol.NewError(protocol.ErrToolNotEnabled, "unknown server", map[string]string{"server_id": serverID})
+	if d.manager == nil {
+		return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, "manager not configured", nil)
 	}
-	client, err := d.manager.AcquireClient(ctx, serverID)
+	if _, err := d.manager.Get(ctx, sess.TenantID, serverID); err != nil {
+		if errors.Is(err, ifaces.ErrNotFound) {
+			return nil, protocol.NewError(protocol.ErrToolNotEnabled, "unknown server", map[string]string{"server_id": serverID})
+		}
+		return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, err.Error(), map[string]string{"server_id": serverID})
+	}
+	client, err := d.manager.Acquire(ctx, southboundmgr.AcquireRequest{
+		TenantID:  sess.TenantID,
+		UserID:    sess.UserID,
+		SessionID: sess.ID,
+		ServerID:  serverID,
+	})
 	if err != nil {
 		return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, err.Error(), map[string]string{"server_id": serverID})
 	}
@@ -245,11 +267,45 @@ func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *pr
 		// transport / context error
 		return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, err.Error(), map[string]string{"server_id": serverID})
 	}
+
+	// Tick supervisor bookkeeping (last-call-at, idle reset).
+	d.manager.Tick(ctx, southboundmgr.AcquireRequest{
+		TenantID:  sess.TenantID,
+		UserID:    sess.UserID,
+		SessionID: sess.ID,
+		ServerID:  serverID,
+	})
+
 	body, mErr := json.Marshal(res)
 	if mErr != nil {
 		return nil, protocol.NewError(protocol.ErrInternalError, mErr.Error(), nil)
 	}
 	return body, nil
+}
+
+// serversFor returns the snapshots visible to sess. Empty tenant id (e.g.
+// dev mode without upstream identity) returns an empty list silently.
+func (d *Dispatcher) serversFor(ctx context.Context, sess *Session) ([]*registry.Snapshot, error) {
+	if d.manager == nil {
+		return nil, nil
+	}
+	tenantID := sess.TenantID
+	if tenantID == "" {
+		return []*registry.Snapshot{}, nil
+	}
+	return d.manager.Servers(ctx, tenantID)
+}
+
+func (d *Dispatcher) acquireFor(ctx context.Context, sess *Session, snap *registry.Snapshot) (southbound.Client, error) {
+	if !snap.Record.Enabled {
+		return nil, errors.New("server disabled")
+	}
+	return d.manager.Acquire(ctx, southboundmgr.AcquireRequest{
+		TenantID:  sess.TenantID,
+		UserID:    sess.UserID,
+		SessionID: sess.ID,
+		ServerID:  snap.Spec.ID,
+	})
 }
 
 func extractProgressToken(meta json.RawMessage) json.RawMessage {

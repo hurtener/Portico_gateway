@@ -22,9 +22,11 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/registry"
+	"github.com/hurtener/Portico_gateway/internal/runtime/process"
 	"github.com/hurtener/Portico_gateway/internal/server/api"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	"github.com/hurtener/Portico_gateway/internal/storage"
+	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 
 	_ "github.com/hurtener/Portico_gateway/internal/storage/sqlite"
 )
@@ -103,10 +105,28 @@ func startMcpDevServer(t *testing.T, specs []config.ServerSpec) (*httptest.Serve
 	}
 	t.Cleanup(func() { _ = backend.Close() })
 
-	mgr := southboundmgr.NewManager(cfg.Servers, logger)
+	reg := registry.New(backend.Registry(), logger)
+	// Seed the dev tenant so subsequent registry inserts satisfy the
+	// servers.tenant_id FK constraint. cmd_serve.go relies on the auth
+	// middleware to create this lazily; tests that bypass auth must do it
+	// explicitly.
+	if err := backend.Tenants().Upsert(context.Background(), &ifaces.Tenant{
+		ID: "dev", DisplayName: "dev", Plan: "free",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Seed the test scaffolding's registry from cfg.Servers under the dev
+	// tenant so the dispatcher can find them (mirrors cmd_serve.go).
+	for _, cs := range cfg.Servers {
+		spec := configToRegistry(cs)
+		if _, err := reg.Upsert(context.Background(), "dev", spec); err != nil {
+			t.Fatalf("seed registry: %v", err)
+		}
+	}
+	supervisor := process.NewSupervisor(logger, process.NewResolver(nil), reg)
+	mgr := southboundmgr.NewManager(reg, supervisor, logger)
 	disp := mcpgw.NewDispatcher(mgr, logger)
 	sess := mcpgw.NewSessionRegistry()
-	reg := registry.New(backend.Registry(), logger)
 
 	t.Cleanup(func() {
 		sess.CloseAll()
@@ -160,6 +180,34 @@ func rpcPost(t *testing.T, base, sessionID string, req protocol.Request) (resp p
 	}
 	sid = res.Header.Get("Mcp-Session-Id")
 	return resp, sid
+}
+
+// configToRegistry mirrors cmd/portico/cmd_serve.go's translation. Tests
+// that build a *config.Config seed registry rows from it directly.
+func configToRegistry(c config.ServerSpec) *registry.ServerSpec {
+	out := &registry.ServerSpec{
+		ID:          c.ID,
+		DisplayName: c.DisplayName,
+		Transport:   c.Transport,
+		RuntimeMode: c.RuntimeMode,
+	}
+	if c.Stdio != nil {
+		out.Stdio = &registry.StdioSpec{
+			Command:      c.Stdio.Command,
+			Args:         append([]string(nil), c.Stdio.Args...),
+			Env:          append([]string(nil), c.Stdio.Env...),
+			Cwd:          c.Stdio.Cwd,
+			StartTimeout: registry.Duration(c.StartTimeout),
+		}
+	}
+	if c.HTTP != nil {
+		out.HTTP = &registry.HTTPSpec{
+			URL:        c.HTTP.URL,
+			AuthHeader: c.HTTP.AuthHeader,
+			Timeout:    registry.Duration(c.HTTP.Timeout),
+		}
+	}
+	return out
 }
 
 func newReq(id int, method string, params any) protocol.Request {

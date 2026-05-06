@@ -225,8 +225,8 @@ func scanServer(rs rowScanner) (*ifaces.ServerRecord, error) {
 
 func scanInstance(rs rowScanner) (*ifaces.InstanceRecord, error) {
 	var (
-		i                       ifaces.InstanceRecord
-		startedAt, lastCallAt   string
+		i                     ifaces.InstanceRecord
+		startedAt, lastCallAt string
 	)
 	if err := rs.Scan(
 		&i.ID, &i.TenantID, &i.ServerID, &i.UserID, &i.SessionID, &i.PID,

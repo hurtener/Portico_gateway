@@ -14,6 +14,8 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/config"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/registry"
+	"github.com/hurtener/Portico_gateway/internal/runtime/process"
+	"github.com/hurtener/Portico_gateway/internal/secrets"
 	"github.com/hurtener/Portico_gateway/internal/server/api"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	"github.com/hurtener/Portico_gateway/internal/storage"
@@ -94,20 +96,40 @@ func runWithConfig(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
-	// Phase 1: build the MCP gateway components. The southbound Manager is
-	// initialised with the configured server specs; clients are constructed
-	// lazily on first use.
-	manager := southboundmgr.NewManager(cfg.Servers, logger)
-	dispatcher := mcpgw.NewDispatcher(manager, logger)
-	sessions := mcpgw.NewSessionRegistry()
-
 	// Phase 2: registry over the storage backend. Persists ServerSpecs
-	// per-tenant and broadcasts change events that the supervisor (also
-	// added in Phase 2) consumes.
+	// per-tenant and broadcasts change events that the supervisor consumes.
 	reg := registry.New(backend.Registry(), logger)
 	if err := seedRegistryFromConfig(ctx, reg, cfg, logger); err != nil {
 		return err
 	}
+
+	// Phase 2: stub vault for {{secret:...}} env interpolation. Loaded
+	// from PORTICO_VAULT_KEY (base64 32-byte AES-256 key) + a YAML file
+	// at <data_dir>/vault.yaml. Missing key disables the vault — secret
+	// references in stdio env then surface as start failures.
+	var vault secrets.Vault
+	if key, err := secrets.LoadKeyFromEnv(); err != nil {
+		return err
+	} else if key != nil {
+		vaultPath := filepath.Join(filepath.Dir(deriveDataDir(cfg.Storage.DSN)), "vault.yaml")
+		fv, err := secrets.NewFileVault(vaultPath, key)
+		if err != nil {
+			return fmt.Errorf("vault: %w", err)
+		}
+		vault = fv
+	}
+
+	// Phase 2: process supervisor. Holds southbound stdio + http clients
+	// keyed by InstanceKey (tenant/user/session, per runtime mode).
+	resolver := process.NewResolver(vault)
+	supervisor := process.NewSupervisor(logger, resolver, reg)
+
+	// Phase 1+2: MCP gateway components. The Manager is now a thin
+	// coordinator over Registry + Supervisor — clients are constructed
+	// lazily on first use via supervisor.Acquire.
+	manager := southboundmgr.NewManager(reg, supervisor, logger)
+	dispatcher := mcpgw.NewDispatcher(manager, logger)
+	sessions := mcpgw.NewSessionRegistry()
 
 	deps := api.Deps{
 		Logger:      logger,
@@ -243,6 +265,16 @@ func ensureDataDir(dsn string, logger interface {
 	}
 	logger.Info("data dir ready", "dir", dir)
 	return nil
+}
+
+// deriveDataDir extracts the data directory from a SQLite DSN. If the DSN
+// is ":memory:" or otherwise lacks a path, returns the cwd.
+func deriveDataDir(dsn string) string {
+	path := sqlitePathFromDSN(dsn)
+	if path == ":memory:" || path == "" {
+		return "."
+	}
+	return path
 }
 
 func sqlitePathFromDSN(dsn string) string {

@@ -35,12 +35,12 @@ const (
 // Status values surfaced via the API. The supervisor transitions a server
 // through these as instances start, fail, or recover.
 const (
-	StatusUnknown      = "unknown"
-	StatusStarting     = "starting"
-	StatusHealthy      = "healthy"
-	StatusUnhealthy    = "unhealthy"
-	StatusDisabled     = "disabled"
-	StatusCircuitOpen  = "circuit_open"
+	StatusUnknown     = "unknown"
+	StatusStarting    = "starting"
+	StatusHealthy     = "healthy"
+	StatusUnhealthy   = "unhealthy"
+	StatusDisabled    = "disabled"
+	StatusCircuitOpen = "circuit_open"
 )
 
 // ServerSpec is the canonical representation of a registered MCP server.
