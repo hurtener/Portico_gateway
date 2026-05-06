@@ -24,6 +24,17 @@ type Server struct {
 	// ToolsOverride lets a test customise the advertised tools. Default is
 	// the four-tool repertoire (echo, add, slow, broken).
 	ToolsOverride []protocol.Tool
+
+	// Phase 3: optional resource + prompt fixtures. nil means "no
+	// resources / prompts advertised" and the corresponding methods
+	// return ErrMethodNotFound so aggregators silently skip the server.
+	ResourcesOverride         []protocol.Resource
+	ResourceTemplatesOverride []protocol.ResourceTemplate
+	PromptsOverride           []protocol.Prompt
+	// ReadOverride lets a test inject custom resources/read responses.
+	ReadOverride func(uri string) (*protocol.ReadResourceResult, error)
+	// GetPromptOverride lets a test customise prompts/get.
+	GetPromptOverride func(name string, args map[string]string) (*protocol.GetPromptResult, error)
 }
 
 // NewDefault returns a Server ready to run against a stdio pipe.
@@ -76,9 +87,16 @@ func (s *Server) handleLine(ctx context.Context, line []byte, enc *lineEncoder) 
 	resp := protocol.Response{JSONRPC: protocol.JSONRPCVersion, ID: probe.ID}
 	switch probe.Method {
 	case protocol.MethodInitialize:
+		caps := protocol.ServerCapabilities{Tools: &protocol.ToolsCapability{ListChanged: true}}
+		if len(s.ResourcesOverride) > 0 || s.ReadOverride != nil {
+			caps.Resources = &protocol.ResourcesCapability{ListChanged: true}
+		}
+		if len(s.PromptsOverride) > 0 || s.GetPromptOverride != nil {
+			caps.Prompts = &protocol.PromptsCapability{ListChanged: true}
+		}
 		body, _ := json.Marshal(protocol.InitializeResult{
 			ProtocolVersion: protocol.ProtocolVersion,
-			Capabilities:    protocol.ServerCapabilities{Tools: &protocol.ToolsCapability{ListChanged: true}},
+			Capabilities:    caps,
 			ServerInfo:      protocol.Implementation{Name: s.Name, Version: s.Version},
 		})
 		resp.Result = body
@@ -90,10 +108,77 @@ func (s *Server) handleLine(ctx context.Context, line []byte, enc *lineEncoder) 
 	case protocol.MethodToolsCall:
 		s.handleCallTool(ctx, probe.ID, probe.Params, enc)
 		return
+	case protocol.MethodResourcesList:
+		if s.ResourcesOverride == nil {
+			resp.Error = protocol.NewError(protocol.ErrMethodNotFound, "resources not supported", nil)
+			break
+		}
+		body, _ := json.Marshal(protocol.ListResourcesResult{Resources: s.ResourcesOverride})
+		resp.Result = body
+	case protocol.MethodResourcesTemplatesList:
+		if s.ResourceTemplatesOverride == nil {
+			resp.Error = protocol.NewError(protocol.ErrMethodNotFound, "templates not supported", nil)
+			break
+		}
+		body, _ := json.Marshal(protocol.ListResourceTemplatesResult{ResourceTemplates: s.ResourceTemplatesOverride})
+		resp.Result = body
+	case protocol.MethodResourcesRead:
+		var p protocol.ReadResourceParams
+		_ = json.Unmarshal(probe.Params, &p)
+		res, err := s.handleRead(p.URI)
+		if err != nil {
+			resp.Error = protocol.NewError(protocol.ErrInternalError, err.Error(), nil)
+			break
+		}
+		body, _ := json.Marshal(res)
+		resp.Result = body
+	case protocol.MethodPromptsList:
+		if s.PromptsOverride == nil {
+			resp.Error = protocol.NewError(protocol.ErrMethodNotFound, "prompts not supported", nil)
+			break
+		}
+		body, _ := json.Marshal(protocol.ListPromptsResult{Prompts: s.PromptsOverride})
+		resp.Result = body
+	case protocol.MethodPromptsGet:
+		var p protocol.GetPromptParams
+		_ = json.Unmarshal(probe.Params, &p)
+		res, err := s.handleGetPrompt(p.Name, p.Arguments)
+		if err != nil {
+			resp.Error = protocol.NewError(protocol.ErrInternalError, err.Error(), nil)
+			break
+		}
+		body, _ := json.Marshal(res)
+		resp.Result = body
 	default:
 		resp.Error = protocol.NewError(protocol.ErrMethodNotFound, "unknown method", map[string]string{"method": probe.Method})
 	}
 	enc.encode(resp)
+}
+
+func (s *Server) handleRead(uri string) (*protocol.ReadResourceResult, error) {
+	if s.ReadOverride != nil {
+		return s.ReadOverride(uri)
+	}
+	for _, r := range s.ResourcesOverride {
+		if r.URI == uri {
+			return &protocol.ReadResourceResult{Contents: []protocol.ResourceContent{
+				{URI: uri, MimeType: r.MimeType, Text: "mock body for " + uri},
+			}}, nil
+		}
+	}
+	return nil, fmt.Errorf("unknown resource %q", uri)
+}
+
+func (s *Server) handleGetPrompt(name string, args map[string]string) (*protocol.GetPromptResult, error) {
+	if s.GetPromptOverride != nil {
+		return s.GetPromptOverride(name, args)
+	}
+	return &protocol.GetPromptResult{
+		Description: "mock prompt " + name,
+		Messages: []protocol.PromptMessage{
+			{Role: "user", Content: protocol.ContentBlock{Type: "text", Text: "render " + name}},
+		},
+	}, nil
 }
 
 func (s *Server) handleCallTool(ctx context.Context, id json.RawMessage, paramsRaw json.RawMessage, enc *lineEncoder) {

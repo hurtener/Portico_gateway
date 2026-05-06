@@ -1,6 +1,9 @@
 package protocol
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"errors"
+)
 
 // JSON-RPC error codes plus Portico-defined codes in the implementation
 // reserved range (-32099..-32000). New codes go here and only here.
@@ -34,4 +37,20 @@ func NewError(code int, msg string, data any) *Error {
 		}
 	}
 	return e
+}
+
+// IsMethodNotFound reports whether an error represents an MCP
+// "method not found" condition. Aggregators use this to silently skip
+// downstreams that don't advertise a particular surface (resources or
+// prompts on a tools-only server) instead of treating it as a partial
+// failure. Unwraps via errors.As so wrapped *Errors are detected.
+func IsMethodNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var pe *Error
+	if errors.As(err, &pe) {
+		return pe.Code == ErrMethodNotFound
+	}
+	return false
 }

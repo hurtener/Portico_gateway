@@ -46,6 +46,11 @@ type Client struct {
 	initErr  error
 	initRes  *protocol.InitializeResult
 	initDone atomic.Bool
+
+	// notifCh is the read-only notifications stream. Phase 3 HTTP transport
+	// doesn't subscribe to SSE yet, so the channel stays empty and is closed
+	// on Close — consumers can drain harmlessly.
+	notifCh chan protocol.Notification
 }
 
 func New(cfg Config) *Client {
@@ -60,9 +65,10 @@ func New(cfg Config) *Client {
 		hc = &nethttp.Client{Timeout: cfg.Timeout}
 	}
 	return &Client{
-		cfg: cfg,
-		log: cfg.Logger.With("server_id", cfg.ServerID, "transport", "http"),
-		hc:  hc,
+		cfg:     cfg,
+		log:     cfg.Logger.With("server_id", cfg.ServerID, "transport", "http"),
+		hc:      hc,
+		notifCh: make(chan protocol.Notification),
 	}
 }
 
@@ -132,6 +138,88 @@ func (c *Client) ListTools(ctx context.Context) ([]protocol.Tool, error) {
 	}
 	return res.Tools, nil
 }
+
+// ListResources returns the downstream resource catalog.
+func (c *Client) ListResources(ctx context.Context, cursor string) ([]protocol.Resource, string, error) {
+	raw, err := c.call(ctx, protocol.MethodResourcesList, protocol.ListResourcesParams{Cursor: cursor})
+	if err != nil {
+		return nil, "", err
+	}
+	var res protocol.ListResourcesResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, "", fmt.Errorf("resources/list result: %w", err)
+	}
+	return res.Resources, res.NextCursor, nil
+}
+
+// ListResourceTemplates returns the parameterised-URI catalog.
+func (c *Client) ListResourceTemplates(ctx context.Context, cursor string) ([]protocol.ResourceTemplate, string, error) {
+	raw, err := c.call(ctx, protocol.MethodResourcesTemplatesList, protocol.ListResourceTemplatesParams{Cursor: cursor})
+	if err != nil {
+		return nil, "", err
+	}
+	var res protocol.ListResourceTemplatesResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, "", fmt.Errorf("resources/templates/list result: %w", err)
+	}
+	return res.ResourceTemplates, res.NextCursor, nil
+}
+
+// ReadResource fetches the bytes for a downstream resource URI.
+func (c *Client) ReadResource(ctx context.Context, uri string) (*protocol.ReadResourceResult, error) {
+	raw, err := c.call(ctx, protocol.MethodResourcesRead, protocol.ReadResourceParams{URI: uri})
+	if err != nil {
+		return nil, err
+	}
+	var res protocol.ReadResourceResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, fmt.Errorf("resources/read result: %w", err)
+	}
+	return &res, nil
+}
+
+// SubscribeResource asks the downstream to publish updates for uri.
+func (c *Client) SubscribeResource(ctx context.Context, uri string) error {
+	_, err := c.call(ctx, protocol.MethodResourcesSubscribe, protocol.SubscribeResourceParams{URI: uri})
+	return err
+}
+
+// UnsubscribeResource cancels a prior SubscribeResource.
+func (c *Client) UnsubscribeResource(ctx context.Context, uri string) error {
+	_, err := c.call(ctx, protocol.MethodResourcesUnsubscribe, protocol.UnsubscribeResourceParams{URI: uri})
+	return err
+}
+
+// ListPrompts returns the downstream prompt catalog.
+func (c *Client) ListPrompts(ctx context.Context, cursor string) ([]protocol.Prompt, string, error) {
+	raw, err := c.call(ctx, protocol.MethodPromptsList, protocol.ListPromptsParams{Cursor: cursor})
+	if err != nil {
+		return nil, "", err
+	}
+	var res protocol.ListPromptsResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, "", fmt.Errorf("prompts/list result: %w", err)
+	}
+	return res.Prompts, res.NextCursor, nil
+}
+
+// GetPrompt renders a prompt with the supplied arguments.
+func (c *Client) GetPrompt(ctx context.Context, name string, args map[string]string) (*protocol.GetPromptResult, error) {
+	raw, err := c.call(ctx, protocol.MethodPromptsGet, protocol.GetPromptParams{Name: name, Arguments: args})
+	if err != nil {
+		return nil, err
+	}
+	var res protocol.GetPromptResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, fmt.Errorf("prompts/get result: %w", err)
+	}
+	return &res, nil
+}
+
+// Notifications exposes the downstream's notifications stream. Phase 3
+// HTTP transport does not yet subscribe to SSE so the channel never
+// receives values; consumers select on it harmlessly.
+func (c *Client) Notifications() <-chan protocol.Notification { return c.notifCh }
 
 func (c *Client) CallTool(ctx context.Context, name string, arguments json.RawMessage, progressToken json.RawMessage, _ southbound.ProgressCallback) (*protocol.CallToolResult, error) {
 	// Phase 1 does not subscribe to SSE progress streams from HTTP downstreams;

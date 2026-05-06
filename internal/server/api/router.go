@@ -12,6 +12,7 @@ import (
 
 	"errors"
 
+	"github.com/hurtener/Portico_gateway/internal/apps"
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
 	"github.com/hurtener/Portico_gateway/internal/auth/scope"
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
@@ -41,6 +42,10 @@ type Deps struct {
 
 	// Phase 2 addition: server registry. Optional in tests (nil = no /v1/servers).
 	Registry *registry.Registry
+
+	// Phase 3 addition: MCP Apps registry (ui:// resource index).
+	// Optional — handlers gate on nil so tests can omit it.
+	Apps *apps.Registry
 }
 
 // NewRouter wires the full HTTP routing surface.
@@ -83,6 +88,19 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/v1/servers/{id}/enable", enableServerHandler(d, true))
 			r.Post("/v1/servers/{id}/disable", enableServerHandler(d, false))
 			r.Get("/v1/servers/{id}/instances", listInstancesHandler(d))
+		}
+
+		// Phase 3: resources, prompts, apps. Gated on the dispatcher
+		// having Phase 3 aggregators wired (otherwise paths return 503).
+		if d.Dispatcher != nil {
+			r.Get("/v1/resources", listResourcesHandler(d))
+			r.Get("/v1/resources/templates", listResourceTemplatesHandler(d))
+			r.Get("/v1/resources/*", readResourceHandler(d))
+			r.Get("/v1/prompts", listPromptsHandler(d))
+			r.Post("/v1/prompts/{name}", getPromptHandler(d))
+		}
+		if d.Apps != nil {
+			r.Get("/v1/apps", listAppsHandler(d))
 		}
 
 		// Phase 1: northbound MCP transport. Mounted under the auth group so the

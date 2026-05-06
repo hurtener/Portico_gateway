@@ -24,6 +24,10 @@ type Dispatcher struct {
 	manager *southboundmgr.Manager
 	log     *slog.Logger
 
+	resources *ResourceAggregator
+	prompts   *PromptAggregator
+	mux       *ListChangedMux
+
 	cacheMu          sync.Mutex
 	toolsCache       map[string]toolsCacheEntry // sessionID -> tools
 	cacheTTL         time.Duration
@@ -50,6 +54,23 @@ func NewDispatcher(m *southboundmgr.Manager, log *slog.Logger) *Dispatcher {
 	}
 }
 
+// SetAggregators installs the Phase 3 resource/prompt aggregators and
+// the list-changed mux. Optional — when nil, dispatcher routes for those
+// surfaces return MethodNotFound.
+func (d *Dispatcher) SetAggregators(r *ResourceAggregator, p *PromptAggregator, mux *ListChangedMux) {
+	d.resources = r
+	d.prompts = p
+	d.mux = mux
+}
+
+// Resources returns the resource aggregator (nil if not configured).
+// REST handlers reach into the dispatcher to drive synthetic in-process
+// sessions for /v1/resources.
+func (d *Dispatcher) Resources() *ResourceAggregator { return d.resources }
+
+// Prompts returns the prompt aggregator (nil if not configured).
+func (d *Dispatcher) Prompts() *PromptAggregator { return d.prompts }
+
 // HandleRequest is the main entry point used by the northbound transport.
 // It returns either a Result body to encode or an *Error.
 func (d *Dispatcher) HandleRequest(ctx context.Context, sess *Session, req *protocol.Request) (json.RawMessage, *protocol.Error) {
@@ -62,6 +83,16 @@ func (d *Dispatcher) HandleRequest(ctx context.Context, sess *Session, req *prot
 		return d.handleToolsList(ctx, sess, req)
 	case protocol.MethodToolsCall:
 		return d.handleToolsCall(ctx, sess, req)
+	case protocol.MethodResourcesList:
+		return d.handleResourcesList(ctx, sess, req)
+	case protocol.MethodResourcesRead:
+		return d.handleResourcesRead(ctx, sess, req)
+	case protocol.MethodResourcesTemplatesList:
+		return d.handleResourceTemplatesList(ctx, sess, req)
+	case protocol.MethodPromptsList:
+		return d.handlePromptsList(ctx, sess, req)
+	case protocol.MethodPromptsGet:
+		return d.handlePromptsGet(ctx, sess, req)
 	default:
 		return nil, protocol.NewError(protocol.ErrMethodNotFound, "method not supported in this build", map[string]string{"method": req.Method})
 	}
@@ -122,6 +153,26 @@ func (d *Dispatcher) handleInitialize(ctx context.Context, sess *Session, req *p
 	// fan-out will wire it.
 	if srv.Tools == nil {
 		srv.Tools = &protocol.ToolsCapability{}
+	}
+
+	// Phase 3: advertise resources + prompts when the aggregators are
+	// configured. listChanged is advertised so clients can subscribe; the
+	// mux applies stable/live mode per session.
+	if d.resources != nil {
+		if srv.Resources == nil {
+			srv.Resources = &protocol.ResourcesCapability{}
+		}
+		srv.Resources.ListChanged = true
+	}
+	if d.prompts != nil {
+		if srv.Prompts == nil {
+			srv.Prompts = &protocol.PromptsCapability{}
+		}
+		srv.Prompts.ListChanged = true
+	}
+	if d.mux != nil {
+		mode := extractListChangedMode(params.Capabilities.Experimental)
+		d.mux.SetMode(sess.ID, mode)
 	}
 
 	res := protocol.InitializeResult{
@@ -317,4 +368,144 @@ func extractProgressToken(meta json.RawMessage) json.RawMessage {
 		return nil
 	}
 	return m["progressToken"]
+}
+
+// extractListChangedMode reads the client's experimental opt-in for live
+// list-changed forwarding. The protocol carries the hint as
+// `experimental.portico.listChanged: "live" | "stable"`. Anything else
+// returns the project default (stable).
+func extractListChangedMode(exp map[string]json.RawMessage) ListChangedMode {
+	raw, ok := exp["portico"]
+	if !ok || len(raw) == 0 {
+		return ModeStable
+	}
+	var p struct {
+		ListChanged string `json:"listChanged"`
+	}
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return ModeStable
+	}
+	if p.ListChanged == string(ModeLive) {
+		return ModeLive
+	}
+	return ModeStable
+}
+
+// ----- Phase 3 handlers --------------------------------------------------
+
+func (d *Dispatcher) handleResourcesList(ctx context.Context, sess *Session, req *protocol.Request) (json.RawMessage, *protocol.Error) {
+	if d.resources == nil {
+		return nil, protocol.NewError(protocol.ErrMethodNotFound, "resources not configured", nil)
+	}
+	cursor := cursorOf(req)
+	d.subscribeAllForSession(ctx, sess)
+	res, err := d.resources.ListAll(ctx, sess, cursor)
+	if err != nil {
+		return nil, asProtocolError(err)
+	}
+	return mustMarshal(res)
+}
+
+func (d *Dispatcher) handleResourcesRead(ctx context.Context, sess *Session, req *protocol.Request) (json.RawMessage, *protocol.Error) {
+	if d.resources == nil {
+		return nil, protocol.NewError(protocol.ErrMethodNotFound, "resources not configured", nil)
+	}
+	var params protocol.ReadResourceParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return nil, protocol.NewError(protocol.ErrInvalidParams, err.Error(), nil)
+	}
+	res, err := d.resources.Read(ctx, sess, params.URI)
+	if err != nil {
+		return nil, asProtocolError(err)
+	}
+	return mustMarshal(res)
+}
+
+func (d *Dispatcher) handleResourceTemplatesList(ctx context.Context, sess *Session, req *protocol.Request) (json.RawMessage, *protocol.Error) {
+	if d.resources == nil {
+		return nil, protocol.NewError(protocol.ErrMethodNotFound, "resources not configured", nil)
+	}
+	cursor := cursorOf(req)
+	d.subscribeAllForSession(ctx, sess)
+	res, err := d.resources.ListTemplates(ctx, sess, cursor)
+	if err != nil {
+		return nil, asProtocolError(err)
+	}
+	return mustMarshal(res)
+}
+
+func (d *Dispatcher) handlePromptsList(ctx context.Context, sess *Session, req *protocol.Request) (json.RawMessage, *protocol.Error) {
+	if d.prompts == nil {
+		return nil, protocol.NewError(protocol.ErrMethodNotFound, "prompts not configured", nil)
+	}
+	cursor := cursorOf(req)
+	d.subscribeAllForSession(ctx, sess)
+	res, err := d.prompts.ListAll(ctx, sess, cursor)
+	if err != nil {
+		return nil, asProtocolError(err)
+	}
+	return mustMarshal(res)
+}
+
+func (d *Dispatcher) handlePromptsGet(ctx context.Context, sess *Session, req *protocol.Request) (json.RawMessage, *protocol.Error) {
+	if d.prompts == nil {
+		return nil, protocol.NewError(protocol.ErrMethodNotFound, "prompts not configured", nil)
+	}
+	var params protocol.GetPromptParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return nil, protocol.NewError(protocol.ErrInvalidParams, err.Error(), nil)
+	}
+	res, err := d.prompts.Get(ctx, sess, params.Name, params.Arguments)
+	if err != nil {
+		return nil, asProtocolError(err)
+	}
+	return mustMarshal(res)
+}
+
+// subscribeAllForSession registers the session as a subscriber for every
+// server visible to its tenant. Idempotent. Called from list handlers
+// so the list-changed mux knows which sessions to notify.
+func (d *Dispatcher) subscribeAllForSession(ctx context.Context, sess *Session) {
+	if d.mux == nil {
+		return
+	}
+	servers, err := d.serversFor(ctx, sess)
+	if err != nil {
+		return
+	}
+	for _, s := range servers {
+		d.mux.Subscribe(sess.ID, s.Spec.ID)
+	}
+}
+
+func cursorOf(req *protocol.Request) string {
+	if len(req.Params) == 0 {
+		return ""
+	}
+	var p struct {
+		Cursor string `json:"cursor"`
+	}
+	if err := json.Unmarshal(req.Params, &p); err != nil {
+		return ""
+	}
+	return p.Cursor
+}
+
+func mustMarshal(v any) (json.RawMessage, *protocol.Error) {
+	body, err := json.Marshal(v)
+	if err != nil {
+		return nil, protocol.NewError(protocol.ErrInternalError, err.Error(), nil)
+	}
+	return body, nil
+}
+
+func asProtocolError(err error) *protocol.Error {
+	if err == nil {
+		return nil
+	}
+	var pe *protocol.Error
+	if errors.As(err, &pe) {
+		return pe
+	}
+	return protocol.NewError(protocol.ErrInternalError, err.Error(), nil)
 }

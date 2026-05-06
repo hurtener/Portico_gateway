@@ -11,6 +11,8 @@ const (
 	MethodResourcesList          = "resources/list"
 	MethodResourcesRead          = "resources/read"
 	MethodResourcesTemplatesList = "resources/templates/list"
+	MethodResourcesSubscribe     = "resources/subscribe"
+	MethodResourcesUnsubscribe   = "resources/unsubscribe"
 	MethodPromptsList            = "prompts/list"
 	MethodPromptsGet             = "prompts/get"
 

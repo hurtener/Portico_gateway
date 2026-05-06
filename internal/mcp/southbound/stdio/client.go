@@ -61,6 +61,10 @@ type Client struct {
 	initRes  *protocol.InitializeResult
 
 	writeMu sync.Mutex
+
+	// notifications fan-out: every non-progress notification from the
+	// downstream is published to notifCh with drop-oldest backpressure.
+	notifCh chan protocol.Notification
 }
 
 // New constructs a Client. The process is NOT started until Start is called.
@@ -77,6 +81,7 @@ func New(cfg Config) *Client {
 		pending:    make(map[string]chan *protocol.Response),
 		progressCB: make(map[string]southbound.ProgressCallback),
 		closeCh:    make(chan struct{}),
+		notifCh:    make(chan protocol.Notification, 32),
 	}
 }
 
@@ -207,6 +212,88 @@ func (c *Client) ListTools(ctx context.Context) ([]protocol.Tool, error) {
 	}
 	return res.Tools, nil
 }
+
+// ListResources returns the downstream resource catalog. Pass cursor=""
+// for the first page; cursor is opaque to Portico.
+func (c *Client) ListResources(ctx context.Context, cursor string) ([]protocol.Resource, string, error) {
+	raw, err := c.call(ctx, protocol.MethodResourcesList, protocol.ListResourcesParams{Cursor: cursor})
+	if err != nil {
+		return nil, "", err
+	}
+	var res protocol.ListResourcesResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, "", fmt.Errorf("resources/list result: %w", err)
+	}
+	return res.Resources, res.NextCursor, nil
+}
+
+// ListResourceTemplates returns the parameterised-URI catalog.
+func (c *Client) ListResourceTemplates(ctx context.Context, cursor string) ([]protocol.ResourceTemplate, string, error) {
+	raw, err := c.call(ctx, protocol.MethodResourcesTemplatesList, protocol.ListResourceTemplatesParams{Cursor: cursor})
+	if err != nil {
+		return nil, "", err
+	}
+	var res protocol.ListResourceTemplatesResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, "", fmt.Errorf("resources/templates/list result: %w", err)
+	}
+	return res.ResourceTemplates, res.NextCursor, nil
+}
+
+// ReadResource fetches the bytes for a downstream resource URI.
+func (c *Client) ReadResource(ctx context.Context, uri string) (*protocol.ReadResourceResult, error) {
+	raw, err := c.call(ctx, protocol.MethodResourcesRead, protocol.ReadResourceParams{URI: uri})
+	if err != nil {
+		return nil, err
+	}
+	var res protocol.ReadResourceResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, fmt.Errorf("resources/read result: %w", err)
+	}
+	return &res, nil
+}
+
+// SubscribeResource asks the downstream to publish updates for uri.
+func (c *Client) SubscribeResource(ctx context.Context, uri string) error {
+	_, err := c.call(ctx, protocol.MethodResourcesSubscribe, protocol.SubscribeResourceParams{URI: uri})
+	return err
+}
+
+// UnsubscribeResource cancels a prior SubscribeResource.
+func (c *Client) UnsubscribeResource(ctx context.Context, uri string) error {
+	_, err := c.call(ctx, protocol.MethodResourcesUnsubscribe, protocol.UnsubscribeResourceParams{URI: uri})
+	return err
+}
+
+// ListPrompts returns the downstream prompt catalog.
+func (c *Client) ListPrompts(ctx context.Context, cursor string) ([]protocol.Prompt, string, error) {
+	raw, err := c.call(ctx, protocol.MethodPromptsList, protocol.ListPromptsParams{Cursor: cursor})
+	if err != nil {
+		return nil, "", err
+	}
+	var res protocol.ListPromptsResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, "", fmt.Errorf("prompts/list result: %w", err)
+	}
+	return res.Prompts, res.NextCursor, nil
+}
+
+// GetPrompt renders a prompt with the supplied arguments.
+func (c *Client) GetPrompt(ctx context.Context, name string, args map[string]string) (*protocol.GetPromptResult, error) {
+	raw, err := c.call(ctx, protocol.MethodPromptsGet, protocol.GetPromptParams{Name: name, Arguments: args})
+	if err != nil {
+		return nil, err
+	}
+	var res protocol.GetPromptResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, fmt.Errorf("prompts/get result: %w", err)
+	}
+	return &res, nil
+}
+
+// Notifications exposes the downstream's notifications stream. Drop-oldest
+// on backpressure (32-deep buffer); consumers must drain promptly.
+func (c *Client) Notifications() <-chan protocol.Notification { return c.notifCh }
 
 // CallTool routes to the downstream and surfaces progress notifications via
 // the provided callback.
@@ -379,25 +466,49 @@ func (c *Client) handleResponse(line []byte) {
 }
 
 func (c *Client) handleNotification(line []byte, method string) {
-	if method != protocol.NotifProgress {
-		c.log.Debug("downstream notification (unhandled in Phase 1)", "method", method)
-		return
-	}
 	var n protocol.Notification
 	if err := json.Unmarshal(line, &n); err != nil {
+		c.log.Warn("malformed notification", "err", err)
 		return
 	}
-	var p protocol.ProgressParams
-	if err := json.Unmarshal(n.Params, &p); err != nil {
+	if method == protocol.NotifProgress {
+		var p protocol.ProgressParams
+		if err := json.Unmarshal(n.Params, &p); err != nil {
+			return
+		}
+		c.progressMu.Lock()
+		cb, ok := c.progressCB[string(p.ProgressToken)]
+		c.progressMu.Unlock()
+		if !ok || cb == nil {
+			return
+		}
+		cb(p)
 		return
 	}
-	c.progressMu.Lock()
-	cb, ok := c.progressCB[string(p.ProgressToken)]
-	c.progressMu.Unlock()
-	if !ok || cb == nil {
+	// Everything else (list_changed, resources/updated, etc.) goes to the
+	// notifications channel for the list-changed mux to consume. Drop-oldest
+	// on backpressure: a slow consumer is the consumer's problem, not the
+	// downstream's.
+	c.publishNotification(n)
+}
+
+func (c *Client) publishNotification(n protocol.Notification) {
+	// Single producer (readLoop): try to send, and if the buffer is full,
+	// drop one stale entry to make room. One drain attempt is enough
+	// because nobody else can refill between drain and the retry send.
+	select {
+	case c.notifCh <- n:
 		return
+	default:
 	}
-	cb(p)
+	select {
+	case <-c.notifCh:
+	default:
+	}
+	select {
+	case c.notifCh <- n:
+	default:
+	}
 }
 
 func (c *Client) stderrLoop() {

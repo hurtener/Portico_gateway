@@ -107,6 +107,7 @@ type Supervisor struct {
 	resolver *Resolver
 	registry *registry.Registry
 	health   *HealthChecker
+	notif    *NotifPump
 
 	mu        sync.Mutex
 	instances map[InstanceKey]*instance
@@ -130,7 +131,28 @@ func NewSupervisor(log *slog.Logger, resolver *Resolver, reg *registry.Registry)
 		starting:  make(map[InstanceKey]chan struct{}),
 	}
 	s.health = NewHealthChecker(log, s)
+	s.notif = NewNotifPump(log, nil)
 	return s
+}
+
+// SetNotifSink installs a sink that receives every downstream
+// notification (used by the list-changed mux). Safe to call after
+// construction; existing instances start fanning out immediately.
+func (s *Supervisor) SetNotifSink(sink NotifSink) {
+	if s == nil || s.notif == nil {
+		return
+	}
+	s.notif.SetSink(sink)
+	// Track existing instances so they start forwarding now.
+	s.mu.Lock()
+	insts := make([]*instance, 0, len(s.instances))
+	for _, inst := range s.instances {
+		insts = append(insts, inst)
+	}
+	s.mu.Unlock()
+	for _, inst := range insts {
+		s.notif.Track(inst)
+	}
 }
 
 // Acquire returns a started client for the given (server spec, identity).
@@ -259,6 +281,7 @@ func (s *Supervisor) startNew(ctx context.Context, key InstanceKey, spec *regist
 	// Track spawns its own probe goroutine with an internal context;
 	// passing the request context would cancel probing on the spawn caller.
 	s.health.Track(inst) //nolint:contextcheck
+	s.notif.Track(inst)  //nolint:contextcheck
 	return client, nil
 }
 
@@ -308,6 +331,7 @@ func (s *Supervisor) restart(ctx context.Context, inst *instance, callerTenantID
 	// Track spawns its own probe goroutine with an internal context;
 	// passing the request context would cancel probing on the spawn caller.
 	s.health.Track(inst) //nolint:contextcheck
+	s.notif.Track(inst)  //nolint:contextcheck
 	return client, nil
 }
 
@@ -381,6 +405,7 @@ func (s *Supervisor) markIdle(inst *instance) {
 	}
 	inst.mu.Unlock()
 	s.health.Untrack(inst.id)
+	s.notif.Untrack(inst.id)
 	s.publishStatus(context.Background(), inst.spec, registry.StatusUnknown, "idle")
 }
 
@@ -407,6 +432,7 @@ func (s *Supervisor) markCrashed(inst *instance, lastErr error) {
 		_ = client.Close(context.Background())
 	}
 	s.health.Untrack(inst.id)
+	s.notif.Untrack(inst.id)
 	s.publishStatus(context.Background(), inst.spec, registry.StatusUnhealthy, "health probes failed")
 	s.persistInstance(context.Background(), inst, lastErr)
 }
@@ -443,6 +469,7 @@ func (s *Supervisor) Stop(ctx context.Context, key InstanceKey) error {
 	inst.client = nil
 	inst.mu.Unlock()
 	s.health.Untrack(inst.id)
+	s.notif.Untrack(inst.id)
 	if client != nil {
 		_ = client.Close(ctx)
 	}
@@ -455,6 +482,7 @@ func (s *Supervisor) Stop(ctx context.Context, key InstanceKey) error {
 // StopAll terminates every supervised instance. Used on server shutdown.
 func (s *Supervisor) StopAll(ctx context.Context) error {
 	s.health.Stop()
+	s.notif.Stop()
 	s.mu.Lock()
 	all := s.instances
 	s.instances = make(map[InstanceKey]*instance)

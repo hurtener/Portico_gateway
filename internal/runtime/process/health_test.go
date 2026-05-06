@@ -82,6 +82,27 @@ func (w *fakeClientWrapper) ListTools(_ context.Context) ([]protocol.Tool, error
 func (w *fakeClientWrapper) CallTool(_ context.Context, _ string, _ json.RawMessage, _ json.RawMessage, _ southbound.ProgressCallback) (*protocol.CallToolResult, error) {
 	return nil, nil
 }
+func (w *fakeClientWrapper) ListResources(_ context.Context, _ string) ([]protocol.Resource, string, error) {
+	return nil, "", nil
+}
+func (w *fakeClientWrapper) ListResourceTemplates(_ context.Context, _ string) ([]protocol.ResourceTemplate, string, error) {
+	return nil, "", nil
+}
+func (w *fakeClientWrapper) ReadResource(_ context.Context, _ string) (*protocol.ReadResourceResult, error) {
+	return nil, nil
+}
+func (w *fakeClientWrapper) SubscribeResource(_ context.Context, _ string) error   { return nil }
+func (w *fakeClientWrapper) UnsubscribeResource(_ context.Context, _ string) error { return nil }
+func (w *fakeClientWrapper) ListPrompts(_ context.Context, _ string) ([]protocol.Prompt, string, error) {
+	return nil, "", nil
+}
+func (w *fakeClientWrapper) GetPrompt(_ context.Context, _ string, _ map[string]string) (*protocol.GetPromptResult, error) {
+	return nil, nil
+}
+func (w *fakeClientWrapper) Notifications() <-chan protocol.Notification {
+	ch := make(chan protocol.Notification)
+	return ch
+}
 func (w *fakeClientWrapper) Close(_ context.Context) error { return nil }
 
 func TestHealthChecker_HealthyClientNeverMarksCrashed(t *testing.T) {
