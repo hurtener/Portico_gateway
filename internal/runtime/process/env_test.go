@@ -39,7 +39,8 @@ func (v *fakeVault) List(_ context.Context, tenantID string) ([]string, error) {
 	}
 	return out, nil
 }
-func (v *fakeVault) Close() error { return nil }
+func (v *fakeVault) RotateKey(_ context.Context, _ []byte) error { return nil }
+func (v *fakeVault) Close() error                                { return nil }
 
 func TestResolver_SecretInterpolation(t *testing.T) {
 	v := &fakeVault{entries: map[string]map[string]string{

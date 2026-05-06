@@ -94,7 +94,8 @@ type LoggingConfig struct {
 
 // ServerSpec is the schema for a registered MCP server. Phase 1 wires the
 // minimum needed to instantiate stdio/http southbound clients; Phase 2 layers
-// per-runtime-mode lifecycle, hot reload, and dynamic CRUD on top.
+// per-runtime-mode lifecycle, hot reload, and dynamic CRUD on top. Phase 5
+// adds the optional Auth block.
 type ServerSpec struct {
 	ID          string     `yaml:"id"`
 	DisplayName string     `yaml:"display_name,omitempty"`
@@ -102,8 +103,31 @@ type ServerSpec struct {
 	RuntimeMode string     `yaml:"runtime_mode,omitempty"`
 	Stdio       *StdioSpec `yaml:"stdio,omitempty"`
 	HTTP        *HTTPSpec  `yaml:"http,omitempty"`
+	Auth        *AuthSpec  `yaml:"auth,omitempty"`
 	// StartTimeout is the southbound-handshake budget (initialize round-trip).
 	StartTimeout time.Duration `yaml:"start_timeout,omitempty"`
+}
+
+// AuthSpec is the YAML shape for per-server credential strategy +
+// default risk class. Translated into registry.AuthSpec at boot.
+type AuthSpec struct {
+	Strategy         string             `yaml:"strategy,omitempty"`
+	DefaultRiskClass string             `yaml:"default_risk_class,omitempty"`
+	Env              []string           `yaml:"env,omitempty"`
+	Headers          map[string]string  `yaml:"headers,omitempty"`
+	SecretRef        string             `yaml:"secret_ref,omitempty"`
+	Exchange         *OAuthExchangeSpec `yaml:"exchange,omitempty"`
+}
+
+// OAuthExchangeSpec is the YAML shape for RFC 8693 token exchange.
+type OAuthExchangeSpec struct {
+	TokenURL        string `yaml:"token_url"`
+	ClientID        string `yaml:"client_id"`
+	ClientSecretRef string `yaml:"client_secret_ref,omitempty"`
+	Audience        string `yaml:"audience,omitempty"`
+	Scope           string `yaml:"scope,omitempty"`
+	GrantType       string `yaml:"grant_type,omitempty"`
+	SubjectTokenSrc string `yaml:"subject_token_src,omitempty"`
 }
 
 // StdioSpec configures a stdio-transport downstream MCP server.

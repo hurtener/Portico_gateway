@@ -26,10 +26,16 @@ import (
 type Config struct {
 	ServerID   string
 	URL        string
-	AuthHeader string // Phase 5 wires real values from the vault
+	AuthHeader string // legacy static header; HeaderProvider takes precedence
 	Timeout    time.Duration
 	Logger     *slog.Logger
 	HTTPClient *nethttp.Client // optional injection for tests
+	// HeaderProvider, when set, is called on every outbound request and
+	// its result is merged into the headers (overriding AuthHeader on
+	// `Authorization`). The provider receives the per-request context so
+	// it can honor cancellation while resolving credentials. Errors from
+	// the provider abort the request with a transport error.
+	HeaderProvider func(ctx context.Context) (map[string]string, error)
 }
 
 type Client struct {
@@ -265,6 +271,15 @@ func (c *Client) call(ctx context.Context, method string, params any) (json.RawM
 	if c.cfg.AuthHeader != "" {
 		httpReq.Header.Set("Authorization", c.cfg.AuthHeader)
 	}
+	if c.cfg.HeaderProvider != nil {
+		hdrs, err := c.cfg.HeaderProvider(ctx)
+		if err != nil {
+			return nil, &transportError{server: c.cfg.ServerID, err: fmt.Errorf("header provider: %w", err)}
+		}
+		for k, v := range hdrs {
+			httpReq.Header.Set(k, v)
+		}
+	}
 	c.mu.Lock()
 	if c.sessionID != "" {
 		httpReq.Header.Set("Mcp-Session-Id", c.sessionID)
@@ -327,6 +342,15 @@ func (c *Client) notify(ctx context.Context, method string, params any) error {
 	httpReq.Header.Set("Content-Type", "application/json")
 	if c.cfg.AuthHeader != "" {
 		httpReq.Header.Set("Authorization", c.cfg.AuthHeader)
+	}
+	if c.cfg.HeaderProvider != nil {
+		hdrs, err := c.cfg.HeaderProvider(ctx)
+		if err != nil {
+			return err
+		}
+		for k, v := range hdrs {
+			httpReq.Header.Set(k, v)
+		}
 	}
 	c.mu.Lock()
 	if c.sessionID != "" {

@@ -18,6 +18,11 @@ type Identity struct {
 	Issuer   string
 	Subject  string
 	DevMode  bool
+	// RawToken is the verbatim Bearer token the JWT middleware validated
+	// for this request (empty in dev mode). Phase 5's OAuth token-exchange
+	// strategy uses it as the RFC 8693 subject_token. Treat as sensitive:
+	// never log or persist it.
+	RawToken string
 }
 
 // HasScope reports whether the identity carries the given scope.

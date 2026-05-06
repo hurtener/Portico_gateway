@@ -9,9 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/catalog/namespace"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	"github.com/hurtener/Portico_gateway/internal/mcp/southbound"
+	httpclient "github.com/hurtener/Portico_gateway/internal/mcp/southbound/http"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/registry"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
@@ -27,6 +29,9 @@ type Dispatcher struct {
 	resources *ResourceAggregator
 	prompts   *PromptAggregator
 	mux       *ListChangedMux
+
+	policy  *PolicyPipeline
+	emitter audit.Emitter
 
 	cacheMu          sync.Mutex
 	toolsCache       map[string]toolsCacheEntry // sessionID -> tools
@@ -61,6 +66,19 @@ func (d *Dispatcher) SetAggregators(r *ResourceAggregator, p *PromptAggregator, 
 	d.resources = r
 	d.prompts = p
 	d.mux = mux
+}
+
+// SetPolicyPipeline installs the policy → approval → credentials chain
+// run before every tools/call. nil disables the chain (dev mode default).
+func (d *Dispatcher) SetPolicyPipeline(p *PolicyPipeline) { d.policy = p }
+
+// SetAuditEmitter installs the emitter used for tool_call.start / .complete /
+// .failed events. nil falls back to a NopEmitter.
+func (d *Dispatcher) SetAuditEmitter(e audit.Emitter) {
+	if e == nil {
+		e = audit.NopEmitter{}
+	}
+	d.emitter = e
 }
 
 // Resources returns the resource aggregator (nil if not configured).
@@ -271,6 +289,15 @@ func (d *Dispatcher) handleToolsList(ctx context.Context, sess *Session, _ *prot
 	return body, nil
 }
 
+// handleToolsCall is the single hot path that runs the policy →
+// approval → credentials → southbound chain. It carries a gocyclo
+// waiver because each of the seven sequential branches is a real
+// distinct concern (params parse, policy gate, approval gate, manager
+// lookup, southbound acquire, progress wiring, audit emit) — splitting
+// any of them into helpers would obscure the order operators rely on
+// when reading a stack trace.
+//
+//nolint:gocyclo
 func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *protocol.Request) (json.RawMessage, *protocol.Error) {
 	var params protocol.CallToolParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
@@ -283,18 +310,37 @@ func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *pr
 	if d.manager == nil {
 		return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, "manager not configured", nil)
 	}
+
+	// Phase 5: policy → approval → credentials.
+	var prep *PipelineResult
+	if d.policy != nil {
+		var err error
+		prep, err = d.policy.Evaluate(ctx, sess, params)
+		if err != nil {
+			return nil, protocol.NewError(protocol.ErrInternalError, err.Error(), nil)
+		}
+		if prep.StructuredError != nil {
+			return nil, prep.StructuredError
+		}
+	}
+
 	if _, err := d.manager.Get(ctx, sess.TenantID, serverID); err != nil {
 		if errors.Is(err, ifaces.ErrNotFound) {
 			return nil, protocol.NewError(protocol.ErrToolNotEnabled, "unknown server", map[string]string{"server_id": serverID})
 		}
 		return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, err.Error(), map[string]string{"server_id": serverID})
 	}
-	client, err := d.manager.Acquire(ctx, southboundmgr.AcquireRequest{
+	acquireReq := southboundmgr.AcquireRequest{
 		TenantID:  sess.TenantID,
 		UserID:    sess.UserID,
 		SessionID: sess.ID,
 		ServerID:  serverID,
-	})
+	}
+	if prep != nil && prep.PrepTarget != nil {
+		acquireReq.AuthHeaders = prep.PrepTarget.Headers
+		acquireReq.AuthEnv = prep.PrepTarget.Env
+	}
+	client, err := d.manager.Acquire(ctx, acquireReq)
 	if err != nil {
 		return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, err.Error(), map[string]string{"server_id": serverID})
 	}
@@ -326,9 +372,17 @@ func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *pr
 		sess.RegisterCancel(string(req.ID), cancel)
 		defer sess.UnregisterCancel(string(req.ID))
 	}
+	// Attach Phase 5 per-call headers (OAuth Bearer, header_inject, secret_ref)
+	// so the southbound HTTP client picks them up via DefaultHeaderProvider.
+	if prep != nil && prep.PrepTarget != nil && len(prep.PrepTarget.Headers) > 0 {
+		callCtx = httpclient.WithHeaders(callCtx, prep.PrepTarget.Headers)
+	}
 
+	startedAt := time.Now()
+	d.emitToolCall(ctx, sess, audit.EventToolCallStart, params, serverID, prep, 0, nil)
 	res, err := client.CallTool(callCtx, toolName, params.Arguments, progressToken, progressCB)
 	if err != nil {
+		d.emitToolCall(ctx, sess, audit.EventToolCallFailed, params, serverID, prep, time.Since(startedAt), err)
 		var pe *protocol.Error
 		if errors.As(err, &pe) {
 			return nil, pe
@@ -336,6 +390,7 @@ func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *pr
 		// transport / context error
 		return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, err.Error(), map[string]string{"server_id": serverID})
 	}
+	d.emitToolCall(ctx, sess, audit.EventToolCallComplete, params, serverID, prep, time.Since(startedAt), nil)
 
 	// Tick supervisor bookkeeping (last-call-at, idle reset).
 	d.manager.Tick(ctx, southboundmgr.AcquireRequest{
@@ -363,6 +418,40 @@ func (d *Dispatcher) serversFor(ctx context.Context, sess *Session) ([]*registry
 		return []*registry.Snapshot{}, nil
 	}
 	return d.manager.Servers(ctx, tenantID)
+}
+
+// emitToolCall is the audit helper for the start/complete/failed events.
+// d.emitter is nil-safe via SetAuditEmitter; callers may also pass nil
+// emitter for tests.
+func (d *Dispatcher) emitToolCall(ctx context.Context, sess *Session, evType string, params protocol.CallToolParams, serverID string, prep *PipelineResult, dur time.Duration, err error) {
+	if d.emitter == nil {
+		return
+	}
+	payload := map[string]any{
+		"tool":      params.Name,
+		"server_id": serverID,
+	}
+	if prep != nil {
+		if prep.Decision.SkillID != "" {
+			payload["skill_id"] = prep.Decision.SkillID
+		}
+		if prep.Decision.RiskClass != "" {
+			payload["risk_class"] = prep.Decision.RiskClass
+		}
+	}
+	if dur > 0 {
+		payload["duration_ms"] = dur.Milliseconds()
+	}
+	if err != nil {
+		payload["error"] = err.Error()
+	}
+	d.emitter.Emit(ctx, audit.Event{
+		Type:      evType,
+		TenantID:  sess.TenantID,
+		SessionID: sess.ID,
+		UserID:    sess.UserID,
+		Payload:   payload,
+	})
 }
 
 func (d *Dispatcher) acquireFor(ctx context.Context, sess *Session, snap *registry.Snapshot) (southbound.Client, error) {

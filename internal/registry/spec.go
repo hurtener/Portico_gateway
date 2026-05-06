@@ -56,6 +56,7 @@ type ServerSpec struct {
 	Lifecycle   LifecycleSpec  `json:"lifecycle,omitempty" yaml:"lifecycle,omitempty"`
 	Limits      ResourceLimits `json:"limits,omitempty" yaml:"limits,omitempty"`
 	Enabled     *bool          `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Auth        *AuthSpec      `json:"auth,omitempty" yaml:"auth,omitempty"`
 }
 
 type StdioSpec struct {

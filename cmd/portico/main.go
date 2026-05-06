@@ -45,6 +45,8 @@ func main() {
 		err = runValidate(args)
 	case "validate-skills":
 		err = runValidateSkills(args)
+	case "vault":
+		err = runVault(ctx, args)
 	case "version", "--version", "-v":
 		printVersion()
 	case "help", "--help", "-h":
@@ -69,6 +71,7 @@ Commands:
                                        Run in dev mode (localhost only).
   validate  --config <path>           Validate a config file and exit.
   validate-skills <path>...           Validate one or more Skill Pack manifests.
+  vault     <subcommand>              Manage the credential vault.
   version                              Print version info.
 
 Run 'portico <command> -h' for command-specific flags.`)

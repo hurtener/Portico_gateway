@@ -18,7 +18,7 @@ func newAggregatorForTest() *ResourceAggregator {
 
 func TestListChanged_StableMode_SuppressesAndInvalidates(t *testing.T) {
 	sessions := NewSessionRegistry()
-	sess := sessions.Create("acme", "u1")
+	sess := sessions.Create("acme", "u1", "")
 	agg := newAggregatorForTest()
 	// Prime the cache so we can detect invalidation.
 	agg.storeCache(sess.ID, "resources", "", []byte(`{"resources":[]}`))
@@ -45,7 +45,7 @@ func TestListChanged_StableMode_SuppressesAndInvalidates(t *testing.T) {
 
 func TestListChanged_LiveMode_Forwards(t *testing.T) {
 	sessions := NewSessionRegistry()
-	sess := sessions.Create("acme", "u1")
+	sess := sessions.Create("acme", "u1", "")
 	agg := newAggregatorForTest()
 	mux := NewListChangedMux(sessions, agg, ModeStable, discardLogger())
 	mux.SetMode(sess.ID, ModeLive)
@@ -67,8 +67,8 @@ func TestListChanged_LiveMode_Forwards(t *testing.T) {
 
 func TestListChanged_MixedSessions_DifferentModes(t *testing.T) {
 	sessions := NewSessionRegistry()
-	live := sessions.Create("acme", "u1")
-	stable := sessions.Create("acme", "u2")
+	live := sessions.Create("acme", "u1", "")
+	stable := sessions.Create("acme", "u2", "")
 	agg := newAggregatorForTest()
 	mux := NewListChangedMux(sessions, agg, ModeStable, discardLogger())
 	mux.SetMode(live.ID, ModeLive)
@@ -94,7 +94,7 @@ func TestListChanged_MixedSessions_DifferentModes(t *testing.T) {
 
 func TestListChanged_ForgetSessionDropsState(t *testing.T) {
 	sessions := NewSessionRegistry()
-	sess := sessions.Create("acme", "u")
+	sess := sessions.Create("acme", "u", "")
 	mux := NewListChangedMux(sessions, newAggregatorForTest(), ModeStable, discardLogger())
 	mux.SetMode(sess.ID, ModeLive)
 	mux.Subscribe(sess.ID, "github")
