@@ -106,6 +106,7 @@ type Supervisor struct {
 	log      *slog.Logger
 	resolver *Resolver
 	registry *registry.Registry
+	health   *HealthChecker
 
 	mu        sync.Mutex
 	instances map[InstanceKey]*instance
@@ -121,13 +122,15 @@ func NewSupervisor(log *slog.Logger, resolver *Resolver, reg *registry.Registry)
 	if resolver == nil {
 		resolver = NewResolver(nil)
 	}
-	return &Supervisor{
+	s := &Supervisor{
 		log:       log,
 		resolver:  resolver,
 		registry:  reg,
 		instances: make(map[InstanceKey]*instance),
 		starting:  make(map[InstanceKey]chan struct{}),
 	}
+	s.health = NewHealthChecker(log, s)
+	return s
 }
 
 // Acquire returns a started client for the given (server spec, identity).
@@ -253,6 +256,7 @@ func (s *Supervisor) startNew(ctx context.Context, key InstanceKey, spec *regist
 	s.mu.Unlock()
 	s.persistInstance(ctx, inst, nil)
 	s.publishStatus(ctx, spec, registry.StatusHealthy, "")
+	s.health.Track(inst)
 	return client, nil
 }
 
@@ -299,6 +303,7 @@ func (s *Supervisor) restart(ctx context.Context, inst *instance, callerTenantID
 	}
 	s.persistInstance(ctx, inst, nil)
 	s.publishStatus(ctx, inst.spec, registry.StatusHealthy, "")
+	s.health.Track(inst)
 	return client, nil
 }
 
@@ -361,8 +366,8 @@ func (s *Supervisor) spawnHTTP(ctx context.Context, inst *instance) (southbound.
 // instance to idle. Next Acquire restarts it lazily.
 func (s *Supervisor) markIdle(inst *instance) {
 	inst.mu.Lock()
-	defer inst.mu.Unlock()
 	if inst.state != StateRunning {
+		inst.mu.Unlock()
 		return
 	}
 	inst.state = StateIdle
@@ -370,7 +375,36 @@ func (s *Supervisor) markIdle(inst *instance) {
 		_ = inst.client.Close(context.Background())
 		inst.client = nil
 	}
+	inst.mu.Unlock()
+	s.health.Untrack(inst.id)
 	s.publishStatus(context.Background(), inst.spec, registry.StatusUnknown, "idle")
+}
+
+// markCrashed transitions the instance to crashed and detaches the client.
+// Called by the health checker when probes exceed the failure threshold;
+// the next Acquire path triggers a fresh restart.
+func (s *Supervisor) markCrashed(inst *instance, lastErr error) {
+	inst.mu.Lock()
+	if inst.state != StateRunning {
+		inst.mu.Unlock()
+		return
+	}
+	inst.state = StateCrashed
+	if lastErr != nil {
+		inst.lastError = lastErr.Error()
+	}
+	client := inst.client
+	inst.client = nil
+	if inst.idle != nil {
+		inst.idle.Stop()
+	}
+	inst.mu.Unlock()
+	if client != nil {
+		_ = client.Close(context.Background())
+	}
+	s.health.Untrack(inst.id)
+	s.publishStatus(context.Background(), inst.spec, registry.StatusUnhealthy, "health probes failed")
+	s.persistInstance(context.Background(), inst, lastErr)
 }
 
 // tickIdle pings the idle timer when the instance services a real call.
@@ -404,6 +438,7 @@ func (s *Supervisor) Stop(ctx context.Context, key InstanceKey) error {
 	client := inst.client
 	inst.client = nil
 	inst.mu.Unlock()
+	s.health.Untrack(inst.id)
 	if client != nil {
 		_ = client.Close(ctx)
 	}
@@ -415,6 +450,7 @@ func (s *Supervisor) Stop(ctx context.Context, key InstanceKey) error {
 
 // StopAll terminates every supervised instance. Used on server shutdown.
 func (s *Supervisor) StopAll(ctx context.Context) error {
+	s.health.Stop()
 	s.mu.Lock()
 	all := s.instances
 	s.instances = make(map[InstanceKey]*instance)
@@ -438,6 +474,67 @@ func (s *Supervisor) StopAll(ctx context.Context) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// OnAdded implements registry.Reactive. New server entries do not eagerly
+// spawn — Acquire stays lazy. We just log so operators see the wiring.
+func (s *Supervisor) OnAdded(_ context.Context, snap *registry.Snapshot) {
+	if snap == nil {
+		return
+	}
+	s.log.Info("supervisor: server added",
+		"server_id", snap.Spec.ID, "tenant_id", snap.Record.TenantID)
+}
+
+// OnUpdated implements registry.Reactive. We drain every running instance
+// for this server (across modes) so the next Acquire picks up the new
+// spec. The new spec is read at Acquire time via the registry.
+func (s *Supervisor) OnUpdated(ctx context.Context, _, newSnap *registry.Snapshot) {
+	if newSnap == nil {
+		return
+	}
+	s.drainServer(ctx, newSnap.Record.TenantID, newSnap.Spec.ID)
+	s.log.Info("supervisor: server updated; draining instances",
+		"server_id", newSnap.Spec.ID, "tenant_id", newSnap.Record.TenantID)
+}
+
+// OnRemoved implements registry.Reactive. Every instance for the deleted
+// server is stopped.
+func (s *Supervisor) OnRemoved(ctx context.Context, oldSnap *registry.Snapshot) {
+	if oldSnap == nil {
+		return
+	}
+	s.drainServer(ctx, oldSnap.Record.TenantID, oldSnap.Spec.ID)
+	s.log.Info("supervisor: server removed; instances stopped",
+		"server_id", oldSnap.Spec.ID, "tenant_id", oldSnap.Record.TenantID)
+}
+
+// drainServer stops every running instance for (tenantID, serverID).
+// shared_global / remote_static keys ignore tenantID; per_tenant +
+// per_user + per_session keys filter by it. Used by OnUpdated /
+// OnRemoved.
+func (s *Supervisor) drainServer(ctx context.Context, tenantID, serverID string) {
+	s.mu.Lock()
+	keys := make([]InstanceKey, 0)
+	for k := range s.instances {
+		if k.ServerID != serverID {
+			continue
+		}
+		// shared_global and remote_static use a synthetic "_global" tenant.
+		// per_tenant et al. carry the real tenant id; only drain those when
+		// the change originates from the same tenant.
+		if k.TenantID != "_global" && tenantID != "" && k.TenantID != tenantID {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	s.mu.Unlock()
+	for _, k := range keys {
+		if err := s.Stop(ctx, k); err != nil {
+			s.log.Warn("supervisor: drain instance",
+				"key", k.String(), "err", err)
+		}
+	}
 }
 
 // Tick reports a successful call against the supervisor — used by the

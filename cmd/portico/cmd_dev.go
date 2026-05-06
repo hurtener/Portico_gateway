@@ -50,7 +50,7 @@ func runDev(ctx context.Context, args []string) error {
 		return err
 	}
 
-	return runWithConfig(ctx, cfg)
+	return runWithConfig(ctx, cfg, "")
 }
 
 func isLocalhostBind(bind string) bool {

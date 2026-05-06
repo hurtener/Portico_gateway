@@ -25,9 +25,11 @@ assert_json_truthy '.events // []' "GET /v1/audit/events body has events array"
 skip_if_404 200 "GET / (console home) returns 200" \
   -- "$(api_url /)"
 
-# Static asset (htmx)
-skip_if_404 200 "GET /static/htmx.min.js returns 200" \
-  -- "$(api_url /static/htmx.min.js)"
+# Static asset bundled by the SvelteKit adapter-static build. If the
+# frontend hasn't been built yet the placeholder page renders without a
+# favicon, so the check tolerates a 404.
+skip_if_404 200 "GET /favicon.svg returns 200 (Console SPA asset)" \
+  -- "$(api_url /favicon.svg)"
 
 # 404 path returns structured JSON
 capture_status "GET /v1/does-not-exist returns 404 JSON" \

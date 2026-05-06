@@ -13,10 +13,20 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
 
-// pathsAlwaysAllowed bypass auth (health, static assets).
+// pathsAlwaysAllowed bypass auth (health, console assets).
 var pathsAlwaysAllowed = []string{
 	"/healthz",
 	"/readyz",
+	"/favicon.svg",
+	"/favicon.ico",
+	"/robots.txt",
+}
+
+// assetPrefixesAlwaysAllowed lists path prefixes that bypass auth — these
+// are static assets the Console SPA needs even before the user has a
+// session (the SvelteKit runtime is loaded from `/_app/`).
+var assetPrefixesAlwaysAllowed = []string{
+	"/_app/",
 }
 
 func isAlwaysAllowed(path string) bool {
@@ -25,8 +35,10 @@ func isAlwaysAllowed(path string) bool {
 			return true
 		}
 	}
-	if strings.HasPrefix(path, "/static/") {
-		return true
+	for _, p := range assetPrefixesAlwaysAllowed {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
 	}
 	return false
 }
