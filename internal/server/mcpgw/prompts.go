@@ -17,14 +17,17 @@ import (
 
 // PromptAggregator implements `prompts/list` and `prompts/get` over the
 // downstream fleet. Names are namespaced as `{server}.{name}`; the
-// aggregator splits and routes on `prompts/get`.
+// aggregator splits and routes on `prompts/get`. The Phase 4 skill
+// surface contributes additional prompts via the SkillProvider seam
+// configured on the shared ResourceAggregator.
 type PromptAggregator struct {
 	log     *slog.Logger
 	manager clientFleet
 	timeout time.Duration
 
 	// shares the resource aggregator's cache plumbing for symmetry; the
-	// list-changed mux invalidates by sessionID.
+	// list-changed mux invalidates by sessionID. cache.skills is also
+	// the SkillProvider used by Phase 4.
 	cache *ResourceAggregator
 }
 
@@ -109,6 +112,21 @@ func (a *PromptAggregator) ListAll(ctx context.Context, sess *Session, cursor st
 	}
 	sort.Slice(combined, func(i, j int) bool { return combined[i].Name < combined[j].Name })
 
+	// Phase 4: append skill prompts. Skill ids are dotted, so the
+	// names appear like `github.code-review.review_pr` and naturally
+	// sort below `<server>.<tool>` style names if those happened to
+	// share a leading namespace.
+	if a.cache != nil && a.cache.skills != nil {
+		plan, ents := a.cache.resolveTenant(sess.TenantID)
+		skillPrompts, err := a.cache.skills.ListPrompts(listCtx, sess.TenantID, sess.ID, plan, ents)
+		if err != nil {
+			a.log.Warn("skills/prompts partial failure", "err", err)
+		} else {
+			combined = append(combined, skillPrompts...)
+			sort.Slice(combined, func(i, j int) bool { return combined[i].Name < combined[j].Name })
+		}
+	}
+
 	out := &protocol.ListPromptsResult{Prompts: combined}
 	if encoded := encodeAggregatorCursor(nextPer); encoded != "" {
 		out.NextCursor = encoded
@@ -120,8 +138,19 @@ func (a *PromptAggregator) ListAll(ctx context.Context, sess *Session, cursor st
 	return out, nil
 }
 
-// Get strips the namespace prefix and routes to the origin server.
+// Get strips the namespace prefix and routes to the origin server, or
+// to the skills runtime when the name is owned by a skill (Phase 4).
 func (a *PromptAggregator) Get(ctx context.Context, sess *Session, name string, args map[string]string) (*protocol.GetPromptResult, error) {
+	// Phase 4: skill prompts are namespaced `{skillID}.{prompt}` and
+	// the skill id itself contains a dot. RestorePromptName splits on
+	// the first dot, so `github.code-review.review_pr` would route to
+	// the `github` server. Probe the catalog first to detect the
+	// skill case.
+	if a.cache != nil && a.cache.skills != nil {
+		if res, err := a.cache.skills.GetPrompt(ctx, sess.TenantID, sess.ID, name, args); err == nil {
+			return res, nil
+		}
+	}
 	serverID, original, ok := namespace.RestorePromptName(name)
 	if !ok {
 		return nil, protocol.NewError(protocol.ErrInvalidParams, "prompt name must be qualified as <server>.<name>", map[string]string{"name": name})

@@ -26,6 +26,9 @@ type Backend interface {
 	// Registry returns the server / instance registry store (Phase 2+).
 	Registry() RegistryStore
 
+	// Skills returns the per-skill enablement store (Phase 4+).
+	Skills() SkillEnablementStore
+
 	// Health pings the underlying connection. Returns error if the backend
 	// is not reachable. Used by /readyz and tests.
 	Health(ctx context.Context) error

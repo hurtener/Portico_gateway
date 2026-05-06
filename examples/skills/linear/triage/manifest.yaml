@@ -1,0 +1,20 @@
+id: linear.triage
+title: Linear Issue Triage
+version: 0.1.0
+spec: skills/v1
+description: Triage Linear issues and (with approval) update them.
+instructions: SKILL.md
+prompts:
+  - prompts/triage.md
+binding:
+  server_dependencies: [linear]
+  required_tools:
+    - linear.list_issues
+    - linear.update_issue
+  policy:
+    requires_approval:
+      - linear.update_issue
+    risk_classes:
+      linear.update_issue: external_side_effect
+  entitlements:
+    plans: [pro, enterprise]

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,6 +21,9 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/secrets"
 	"github.com/hurtener/Portico_gateway/internal/server/api"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
+	skillloader "github.com/hurtener/Portico_gateway/internal/skills/loader"
+	skillruntime "github.com/hurtener/Portico_gateway/internal/skills/runtime"
+	skillsource "github.com/hurtener/Portico_gateway/internal/skills/source"
 	"github.com/hurtener/Portico_gateway/internal/storage"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 
@@ -162,6 +166,29 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	// affected instances.
 	reactor := registry.NewReactor(reg, supervisor, logger)
 
+	// Phase 4: skills runtime. Sources are constructed from cfg.Skills.
+	// The provider plugs into the resource + prompt aggregators; the
+	// index generator surfaces the per-tenant catalog.
+	skillsMgr, skillSources, err := buildSkillsManager(ctx, cfg, reg, logger, backend)
+	if err != nil {
+		logger.Warn("skills runtime disabled", "err", err)
+	}
+	if skillsMgr != nil {
+		resourceAgg.SetSkillProvider(skillsMgr.Provider(), nil)
+		// Drop the index cache when the catalog mutates so the next
+		// _index render reflects new state. The skills Manager already
+		// invalidates on its own change paths; this hook is defensive.
+		go func() {
+			ch := skillsMgr.Catalog().Subscribe()
+			for range ch {
+				skillsMgr.IndexGenerator().InvalidateAll()
+			}
+		}()
+		if err := skillsMgr.Start(ctx, skillSources); err != nil {
+			logger.Warn("skills manager start failed", "err", err)
+		}
+	}
+
 	// Phase 2: optional config hot-reload. Only `serve --config` exposes
 	// a file path; `dev` synthesises the config in memory.
 	var watcher *config.Watcher
@@ -198,6 +225,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		Registry:       reg,
 		Apps:           appsReg,
 		AllowedOrigins: cfg.Server.AllowedOrigins,
+		Skills:         skillsMgr,
 	}
 
 	handler := api.NewRouter(deps)
@@ -238,6 +266,59 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	reactor.Stop()
 	reg.CloseAll()
 	return nil
+}
+
+// buildSkillsManager wires the skills runtime from cfg.Skills.
+// Returns (nil, nil, nil) when no sources are configured — the gateway
+// runs with skills disabled in that case.
+func buildSkillsManager(_ context.Context, cfg *config.Config, reg *registry.Registry, logger *slog.Logger, backend ifaces.Backend) (*skillruntime.Manager, []skillsource.Source, error) {
+	if len(cfg.Skills.Sources) == 0 {
+		return nil, nil, nil
+	}
+	srcs := make([]skillsource.Source, 0, len(cfg.Skills.Sources))
+	for _, s := range cfg.Skills.Sources {
+		switch s.Type {
+		case "local":
+			lo, err := skillsource.NewLocalDir(s.Path, logger.With("component", "skills.localdir"))
+			if err != nil {
+				return nil, nil, fmt.Errorf("skill source local %q: %w", s.Path, err)
+			}
+			srcs = append(srcs, lo)
+		default:
+			return nil, nil, fmt.Errorf("skill source type %q not supported in V1", s.Type)
+		}
+	}
+	loaderInst, err := skillloader.New(srcs, reg, logger.With("component", "skills.loader"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("skill loader: %w", err)
+	}
+	mode := skillruntime.ModeOptIn
+	if cfg.Skills.EnablementDefault == string(skillruntime.ModeAuto) {
+		mode = skillruntime.ModeAuto
+	}
+	enablement := skillruntime.NewEnablement(backend.Skills(), mode)
+
+	// The annotator closure consults the manager's catalog (created
+	// inside NewManager). We declare a holder, build the manager, then
+	// the closure resolves through the holder safely after construction.
+	var mgrHolder *skillruntime.Manager
+	annotate := func(ctx context.Context, tenantID, skillID string) ([]string, []string) {
+		if mgrHolder == nil {
+			return nil, nil
+		}
+		s, ok := mgrHolder.Catalog().Get(skillID)
+		if !ok {
+			return nil, nil
+		}
+		missing := loaderInst.AnnotateMissingTools(ctx, tenantID, s.Manifest)
+		return missing, nil
+	}
+	mgr := skillruntime.NewManager(loaderInst, enablement,
+		func(string) (string, []string) { return "", []string{"*"} },
+		annotate,
+		logger.With("component", "skills.manager"))
+	mgrHolder = mgr
+	return mgr, srcs, nil
 }
 
 // seedRegistryFromConfig materialises every server in the YAML config into

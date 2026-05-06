@@ -121,6 +121,42 @@ export interface AppEntry {
   discoveredAt: string;
 }
 
+export interface SkillIndexEntry {
+  id: string;
+  version: string;
+  title: string;
+  description?: string;
+  spec: string;
+  required_servers: string[];
+  required_tools: string[];
+  optional_tools?: string[];
+  manifest_uri: string;
+  instructions_uri: string;
+  ui_resource_uri?: string;
+  enabled_for_tenant: boolean;
+  enabled_for_session: boolean;
+  missing_tools?: string[];
+  warnings?: string[];
+}
+
+export interface SkillsIndex {
+  version: number;
+  tenant_id: string;
+  session_id?: string;
+  generated_at: string;
+  skills: SkillIndexEntry[];
+}
+
+export interface SkillDetail {
+  id: string;
+  version: string;
+  title: string;
+  description?: string;
+  manifest: Record<string, unknown>;
+  warnings?: string[];
+  enabled_for_tenant: boolean;
+}
+
 function baseURL(): string {
   // In the browser, same-origin (the Go binary serves both API and SPA).
   // In tests/SSR (which we don't ship), assume localhost dev server.
@@ -213,5 +249,21 @@ export const api = {
       body: JSON.stringify({ arguments: args })
     }),
 
-  listApps: () => request<{ items: AppEntry[] }>('/v1/apps')
+  listApps: () => request<{ items: AppEntry[] }>('/v1/apps'),
+
+  listSkills: () => request<SkillsIndex>('/v1/skills'),
+  getSkill: (id: string) => request<SkillDetail>(`/v1/skills/${encodeURIComponent(id)}`),
+  enableSkill: (id: string) =>
+    request<{ skill_id: string; enabled: boolean }>(`/v1/skills/${encodeURIComponent(id)}/enable`, {
+      method: 'POST',
+      body: '{}'
+    }),
+  disableSkill: (id: string) =>
+    request<{ skill_id: string; enabled: boolean }>(
+      `/v1/skills/${encodeURIComponent(id)}/disable`,
+      {
+        method: 'POST',
+        body: '{}'
+      }
+    )
 };

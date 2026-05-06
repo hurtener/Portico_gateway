@@ -26,8 +26,9 @@ case "$RESPONSE_STATUS" in
     ;;
 esac
 
-# Pick the first skill (if any) and fetch its manifest
-FIRST_ID=$(printf '%s' "$RESPONSE_BODY" | jq -r '.[0].id // empty' 2>/dev/null || true)
+# Pick the first skill (if any) and fetch its manifest. The Phase 4
+# response shape is `{"version":1, "skills":[{...}]}`.
+FIRST_ID=$(printf '%s' "$RESPONSE_BODY" | jq -r '.skills[0].id // empty' 2>/dev/null || true)
 if [ -n "$FIRST_ID" ]; then
   assert_status 200 "GET /v1/skills/$FIRST_ID returns 200" \
     -- "$(api_url "/v1/skills/$FIRST_ID")"
