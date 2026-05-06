@@ -20,5 +20,10 @@ type Vault interface {
 	Put(ctx context.Context, tenantID, name, value string) error
 	Delete(ctx context.Context, tenantID, name string) error
 	List(ctx context.Context, tenantID string) ([]string, error)
+	// RotateKey re-encrypts every entry under newKey using the latest
+	// at-rest scheme (HKDF-derived per-value keys + AAD binding). On any
+	// per-entry decrypt failure the rotation is aborted and the on-disk
+	// state is left unchanged. newKey must be 32 bytes.
+	RotateKey(ctx context.Context, newKey []byte) error
 	Close() error
 }

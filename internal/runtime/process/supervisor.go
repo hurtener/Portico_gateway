@@ -49,6 +49,12 @@ type AcquireOpts struct {
 	TenantID  string
 	UserID    string
 	SessionID string
+	// AuthEnv carries Phase 5 credential-injector env vars (KEY=VALUE).
+	// Merged into the child stdio environment at spawn. Nil for HTTP.
+	AuthEnv map[string]string
+	// AuthHeaders carries Phase 5 credential-injector headers; applied
+	// per-request to HTTP southbound clients. Nil for stdio.
+	AuthHeaders map[string]string
 }
 
 // KeyForMode returns the InstanceKey for the given mode + identity. Errors
@@ -84,6 +90,11 @@ type instance struct {
 	key      InstanceKey
 	spec     *registry.ServerSpec
 	tenantID string // the *real* tenant id used for env interpolation, even when key.TenantID == "_global"
+	// authEnv is the credential-injector-resolved env list applied at
+	// spawn time. Only honored for stdio transports (HTTP uses per-call
+	// HeaderProvider via context). Set by Acquire when the caller passes
+	// AcquireOpts.AuthEnv.
+	authEnv map[string]string
 
 	mu sync.Mutex
 
@@ -198,7 +209,7 @@ func (s *Supervisor) Acquire(ctx context.Context, spec *registry.ServerSpec, opt
 		s.starting[key] = waitCh
 		s.mu.Unlock()
 
-		client, startErr := s.startNew(ctx, key, spec, opts.TenantID)
+		client, startErr := s.startNew(ctx, key, spec, opts.TenantID, opts.AuthEnv)
 
 		s.mu.Lock()
 		delete(s.starting, key)
@@ -242,12 +253,13 @@ func (s *Supervisor) ensureRunning(ctx context.Context, inst *instance, callerTe
 	}
 }
 
-func (s *Supervisor) startNew(ctx context.Context, key InstanceKey, spec *registry.ServerSpec, tenantID string) (southbound.Client, error) {
+func (s *Supervisor) startNew(ctx context.Context, key InstanceKey, spec *registry.ServerSpec, tenantID string, authEnv map[string]string) (southbound.Client, error) {
 	inst := &instance{
 		id:       newInstanceID(),
 		key:      key,
 		spec:     spec,
 		tenantID: tenantID,
+		authEnv:  authEnv,
 		state:    StateStarting,
 	}
 	if spec.Lifecycle.IdleTimeout > 0 {
@@ -351,6 +363,12 @@ func (s *Supervisor) spawnStdio(ctx context.Context, inst *instance) (southbound
 		return nil, fmt.Errorf("supervisor: %s: stdio.command required", inst.spec.ID)
 	}
 	env := append([]string(nil), inst.spec.Stdio.Env...)
+	// Phase 5: merge credential-injector resolved env BEFORE placeholder
+	// expansion. Auth env is treated as plain key=value pairs (the
+	// injector already resolved any {{secret:name}} references).
+	for k, v := range inst.authEnv {
+		env = append(env, k+"="+v)
+	}
 	if len(env) > 0 {
 		resolved, err := s.resolver.Resolve(ctx, inst.tenantID, env)
 		if err != nil {
@@ -378,11 +396,12 @@ func (s *Supervisor) spawnHTTP(ctx context.Context, inst *instance) (southbound.
 		return nil, fmt.Errorf("supervisor: %s: http.url required", inst.spec.ID)
 	}
 	c := httpclient.New(httpclient.Config{
-		ServerID:   inst.spec.ID,
-		URL:        inst.spec.HTTP.URL,
-		AuthHeader: inst.spec.HTTP.AuthHeader,
-		Timeout:    inst.spec.HTTP.Timeout.Std(),
-		Logger:     s.log,
+		ServerID:       inst.spec.ID,
+		URL:            inst.spec.HTTP.URL,
+		AuthHeader:     inst.spec.HTTP.AuthHeader,
+		Timeout:        inst.spec.HTTP.Timeout.Std(),
+		Logger:         s.log,
+		HeaderProvider: httpclient.DefaultHeaderProvider,
 	})
 	if err := c.Start(ctx); err != nil {
 		return nil, err

@@ -125,6 +125,7 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				Scopes:   claims.Scopes,
 				Issuer:   claims.Issuer,
 				Subject:  claims.Subject,
+				RawToken: raw,
 			}
 			next.ServeHTTP(w, r.WithContext(With(r.Context(), id)))
 		})

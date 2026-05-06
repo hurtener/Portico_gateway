@@ -19,10 +19,14 @@ type Session struct {
 	ID         string
 	TenantID   string
 	UserID     string
-	ClientCaps protocol.ClientCapsRecord
-	InitParams protocol.InitializeParams
-	CreatedAt  time.Time
-	LastSeenAt atomic.Int64 // unix nanos
+	// SubjectToken is the raw bearer JWT the client presented at session
+	// creation. Phase 5's OAuth token-exchange strategy reuses it as the
+	// RFC 8693 subject_token. Sensitive: never log, persist, or surface.
+	SubjectToken string
+	ClientCaps   protocol.ClientCapsRecord
+	InitParams   protocol.InitializeParams
+	CreatedAt    time.Time
+	LastSeenAt   atomic.Int64 // unix nanos
 
 	// notifCh is the outbound notification channel served to the long-lived
 	// SSE GET /mcp stream (and in Phase 5 to the server-initiated request
@@ -40,14 +44,15 @@ type Session struct {
 	closed   atomic.Bool
 }
 
-func newSession(id, tenantID, userID string) *Session {
+func newSession(id, tenantID, userID, subjectToken string) *Session {
 	s := &Session{
-		ID:        id,
-		TenantID:  tenantID,
-		UserID:    userID,
-		CreatedAt: time.Now().UTC(),
-		notifCh:   make(chan protocol.Notification, 256),
-		cancels:   make(map[string]context.CancelFunc),
+		ID:           id,
+		TenantID:     tenantID,
+		UserID:       userID,
+		SubjectToken: subjectToken,
+		CreatedAt:    time.Now().UTC(),
+		notifCh:      make(chan protocol.Notification, 256),
+		cancels:      make(map[string]context.CancelFunc),
 	}
 	s.LastSeenAt.Store(time.Now().UnixNano())
 	return s
@@ -171,10 +176,11 @@ func NewSessionRegistry() *SessionRegistry {
 }
 
 // Create makes a new session and returns it. Generates a cryptographically
-// random session id.
-func (r *SessionRegistry) Create(tenantID, userID string) *Session {
+// random session id. subjectToken is the raw bearer JWT (or "" in dev
+// mode) — Phase 5's OAuth strategy reuses it as the RFC 8693 subject_token.
+func (r *SessionRegistry) Create(tenantID, userID, subjectToken string) *Session {
 	id := newSessionID()
-	s := newSession(id, tenantID, userID)
+	s := newSession(id, tenantID, userID, subjectToken)
 	r.mu.Lock()
 	r.sessions[id] = s
 	r.mu.Unlock()

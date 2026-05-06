@@ -136,7 +136,7 @@ func TestOrigin_Wildcard_AllowsAny(t *testing.T) {
 
 func TestSSE_RejectsNonSSEAccept(t *testing.T) {
 	sessions := mcpgw.NewSessionRegistry()
-	sess := sessions.Create("acme", "u")
+	sess := sessions.Create("acme", "u", "")
 	h := NewHandlerWithConfig(sessions, stubDispatcher{}, discardLogger(), HandlerConfig{AllowLocalhostOrigins: true})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)

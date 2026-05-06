@@ -26,6 +26,14 @@ type AcquireRequest struct {
 	UserID    string
 	SessionID string
 	ServerID  string
+	// AuthEnv supplies env vars resolved by the credential injectors —
+	// merged into the stdio child env at instance spawn. Nil when the
+	// server has no auth strategy configured.
+	AuthEnv map[string]string
+	// AuthHeaders supplies headers resolved by the credential injectors —
+	// applied to outbound HTTP southbound requests. Nil when no headers
+	// are configured.
+	AuthHeaders map[string]string
 }
 
 // Manager fronts the supervisor and registry for the dispatcher.
@@ -81,9 +89,11 @@ func (m *Manager) Acquire(ctx context.Context, req AcquireRequest) (southbound.C
 		return nil, errors.New("manager: server is disabled")
 	}
 	return m.sup.Acquire(ctx, &snap.Spec, process.AcquireOpts{
-		TenantID:  req.TenantID,
-		UserID:    req.UserID,
-		SessionID: req.SessionID,
+		TenantID:    req.TenantID,
+		UserID:      req.UserID,
+		SessionID:   req.SessionID,
+		AuthEnv:     req.AuthEnv,
+		AuthHeaders: req.AuthHeaders,
 	})
 }
 

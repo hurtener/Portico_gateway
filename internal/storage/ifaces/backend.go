@@ -29,6 +29,9 @@ type Backend interface {
 	// Skills returns the per-skill enablement store (Phase 4+).
 	Skills() SkillEnablementStore
 
+	// Approvals returns the per-tenant approval store.
+	Approvals() ApprovalStore
+
 	// Health pings the underlying connection. Returns error if the backend
 	// is not reachable. Used by /readyz and tests.
 	Health(ctx context.Context) error

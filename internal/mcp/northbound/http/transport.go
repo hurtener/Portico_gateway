@@ -58,6 +58,18 @@ type Handler struct {
 	dispatcher Dispatcher
 	log        *slog.Logger
 	cfg        HandlerConfig
+	// serverInit, when non-nil, intercepts inbound JSON-RPC responses
+	// whose id matches a pending server-initiated request (e.g. an
+	// elicitation/create reply) and routes them away from the normal
+	// dispatcher path.
+	serverInit *ServerInitiatedRequester
+}
+
+// SetServerInitiated installs the server-initiated request requester. The
+// gateway calls this after constructing the Handler so the requester can
+// reference the same SessionRegistry.
+func (h *Handler) SetServerInitiated(r *ServerInitiatedRequester) {
+	h.serverInit = r
 }
 
 // NewHandler constructs a Handler with the default (empty) HandlerConfig.
@@ -141,6 +153,15 @@ func isLocalhostOrigin(origin string) bool {
 
 func (h *Handler) handlePost(w nethttp.ResponseWriter, r *nethttp.Request) {
 	body := readBody(r)
+
+	// Server-initiated request response: a JSON-RPC reply whose id
+	// matches a pending elicitation. The requester consumes it directly
+	// and answers 202 Accepted; the dispatcher never sees it.
+	if h.serverInit != nil && h.serverInit.TryDeliver(body) {
+		w.WriteHeader(nethttp.StatusAccepted)
+		return
+	}
+
 	var req protocol.Request
 	if err := json.Unmarshal(body, &req); err != nil {
 		writeJSONError(w, nethttp.StatusBadRequest, protocol.ErrParseError, err.Error(), nil)
@@ -204,8 +225,8 @@ func (h *Handler) resolveSession(r *nethttp.Request, req protocol.Request) (sess
 		// client must complete the handshake before any other method.
 		return nil, false
 	}
-	tenantID, userID := identityFrom(r)
-	return h.sessions.Create(tenantID, userID), true
+	tenantID, userID, raw := identityFrom(r)
+	return h.sessions.Create(tenantID, userID, raw), true
 }
 
 // ----- GET /mcp (SSE) -----------------------------------------------------
@@ -255,12 +276,24 @@ func (h *Handler) handleGet(w nethttp.ResponseWriter, r *nethttp.Request) {
 			if !ok {
 				return // session closed
 			}
+			id := fmt.Sprintf("%s-%d", streamID, seq.Add(1))
+
+			// Phase 5 server-initiated requests piggyback on the
+			// notifications channel with a special method marker. Emit
+			// them as `event: server_request` carrying the embedded
+			// JSON-RPC envelope; the client POSTs back a normal response.
+			if n.Method == serverRequestNotifMethod && len(n.Params) > 0 {
+				fmt.Fprintf(w, "event: server_request\nid: %s\n", id)
+				fmt.Fprintf(w, "data: %s\n\n", n.Params)
+				flusher.Flush()
+				continue
+			}
+
 			body, err := json.Marshal(n)
 			if err != nil {
 				h.log.Warn("sse marshal failed", "err", err)
 				continue
 			}
-			id := fmt.Sprintf("%s-%d", streamID, seq.Add(1))
 			fmt.Fprintf(w, "id: %s\n", id)
 			fmt.Fprintf(w, "data: %s\n\n", body)
 			flusher.Flush()
@@ -302,11 +335,11 @@ func (h *Handler) handleDelete(w nethttp.ResponseWriter, r *nethttp.Request) {
 
 // ----- helpers ------------------------------------------------------------
 
-func identityFrom(r *nethttp.Request) (tenantID, userID string) {
+func identityFrom(r *nethttp.Request) (tenantID, userID, rawToken string) {
 	if id, ok := tenant.From(r.Context()); ok {
-		return id.TenantID, id.UserID
+		return id.TenantID, id.UserID, id.RawToken
 	}
-	return "", ""
+	return "", "", ""
 }
 
 func readBody(r *nethttp.Request) []byte {

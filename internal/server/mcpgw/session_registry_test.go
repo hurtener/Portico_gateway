@@ -13,7 +13,7 @@ import (
 // Close in parallel. Without the notifMu protection a concurrent close + send
 // panics on the closed channel.
 func TestSession_EmitNotification_NoRaceWithClose(t *testing.T) {
-	s := newSession("s_test", "tenant-a", "user-1")
+	s := newSession("s_test", "tenant-a", "user-1", "")
 	body, _ := json.Marshal(protocol.ProgressParams{Progress: 1})
 	n := protocol.Notification{JSONRPC: protocol.JSONRPCVersion, Method: protocol.NotifProgress, Params: body}
 
@@ -47,7 +47,7 @@ func TestSession_EmitNotification_NoRaceWithClose(t *testing.T) {
 
 // TestSession_EmitNotification_AfterClose returns dropped=true and never panics.
 func TestSession_EmitNotification_AfterClose(t *testing.T) {
-	s := newSession("s_test", "tenant-a", "user-1")
+	s := newSession("s_test", "tenant-a", "user-1", "")
 	s.Close()
 	body, _ := json.Marshal(protocol.ProgressParams{Progress: 1})
 	n := protocol.Notification{JSONRPC: protocol.JSONRPCVersion, Method: protocol.NotifProgress, Params: body}
@@ -70,8 +70,8 @@ func TestSessionRegistry_OnCloseFiresOnExplicitCloseAndCloseAll(t *testing.T) {
 		closed[id]++
 	})
 
-	a := r.Create("acme", "u1")
-	b := r.Create("acme", "u2")
+	a := r.Create("acme", "u1", "")
+	b := r.Create("acme", "u2", "")
 	r.Close(a.ID)
 	r.CloseAll()
 

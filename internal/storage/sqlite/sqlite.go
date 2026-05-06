@@ -99,6 +99,11 @@ func (d *DB) Skills() ifaces.SkillEnablementStore {
 	return &skillStore{db: d.sql}
 }
 
+// Approvals returns an ApprovalStore backed by this DB.
+func (d *DB) Approvals() ifaces.ApprovalStore {
+	return &approvalStore{db: d.sql}
+}
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {
