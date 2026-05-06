@@ -14,6 +14,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/apps"
 	auditpkg "github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
+	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
 	"github.com/hurtener/Portico_gateway/internal/config"
 	porticohttp "github.com/hurtener/Portico_gateway/internal/mcp/northbound/http"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
@@ -251,6 +252,48 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	dispatcher.SetPolicyPipeline(pipeline)
 	dispatcher.SetAuditEmitter(auditEmitter)
 
+	// Phase 6: snapshot service + lazy session→snapshot binder + drift
+	// detector. The probe reads from the same southbound manager the
+	// dispatcher already holds, so snapshots reflect exactly what the
+	// session would see live.
+	snapshotProbe := mcpgw.NewSnapshotProbe(manager, reg, skillsMgr,
+		snapshotEnablement(skillsMgr),
+		policyEngine,
+		nil, // tenant policy resolver — Phase 5 wires this when configured.
+	)
+	snapshotService := snapshots.NewService(
+		snapshots.NewStorageAdapter(backend.Snapshots()),
+		snapshotProbe,
+		auditEmitter,
+		logger.With("component", "snapshots"),
+	)
+	snapshotBinder := mcpgw.NewSnapshotBinder(snapshotService)
+	dispatcher.SetSnapshotBinder(snapshotBinder)
+	sessions.OnClose(snapshotBinder.Forget)
+	sessions.OnClose(func(sid string) {
+		_ = backend.Snapshots().CloseSession(context.Background(), sid)
+	})
+
+	driftProbe := newSnapshotsDriftAdapter(snapshotProbe)
+	driftDetector := snapshots.NewDetector(snapshotService, driftProbe,
+		logger.With("component", "snapshots.drift"),
+		cfg.Telemetry.DriftInterval.Duration())
+	driftDetector.Start(ctx)
+
+	otelShutdown, err := telemetry.Init(ctx, telemetry.Config{
+		Enabled:       cfg.Telemetry.Enabled,
+		ServiceName:   cfg.Telemetry.ServiceName,
+		Exporter:      cfg.Telemetry.Exporter,
+		OTLPEndpoint:  cfg.Telemetry.OTLPEndpoint,
+		OTLPHeaders:   cfg.Telemetry.OTLPHeaders,
+		SampleRate:    cfg.Telemetry.SampleRate,
+		ResourceAttrs: cfg.Telemetry.ResourceAttrs,
+	}, logger.With("component", "telemetry"))
+	if err != nil {
+		logger.Warn("telemetry init failed; tracing disabled", "err", err)
+		otelShutdown = telemetry.NopShutdown
+	}
+
 	// Sweep expired approvals every minute. The flow keeps the in-memory
 	// row consistent; the sweep flips persisted rows that were never
 	// resolved manually after a fallback.
@@ -310,6 +353,8 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		ApprovalFlow:   api.NewApprovalFlowAdapter(approvalFlowResolverFor(approvalFlow)),
 		Vault:          vault,
 		ServerInit:     serverInit,
+		Snapshots:      snapshotService,
+		SnapshotBinder: snapshotBinder,
 	}
 
 	handler := api.NewRouter(deps)
@@ -350,8 +395,45 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	reactor.Stop()
 	reg.CloseAll()
 	serverInit.Stop()
+	driftDetector.Stop()
 	auditStore.Stop()
+	if otelShutdown != nil {
+		_ = otelShutdown(shutdownCtx)
+	}
 	return nil
+}
+
+// snapshotEnablement returns the skills runtime's enablement when the
+// skills manager is configured; nil otherwise.
+func snapshotEnablement(m *skillruntime.Manager) *skillruntime.Enablement {
+	if m == nil {
+		return nil
+	}
+	return m.Enablement()
+}
+
+// newSnapshotsDriftAdapter wraps the SnapshotProbe so it satisfies the
+// drift detector's narrower LiveProbe interface (which doesn't carry
+// session context). The drift detector probes per-tenant, not
+// per-session, so we collapse the session axis.
+func newSnapshotsDriftAdapter(p *mcpgw.SnapshotProbe) snapshots.LiveProbe {
+	return &driftAdapter{p: p}
+}
+
+type driftAdapter struct {
+	p *mcpgw.SnapshotProbe
+}
+
+func (a *driftAdapter) ListTools(ctx context.Context, tenantID string) (map[string][]protocol.Tool, error) {
+	tools, err := a.p.ListTools(ctx, tenantID, "")
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string][]protocol.Tool)
+	for _, t := range tools {
+		out[t.ServerID] = append(out[t.ServerID], t.Tool)
+	}
+	return out, nil
 }
 
 // buildSkillsManager wires the skills runtime from cfg.Skills.

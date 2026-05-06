@@ -104,6 +104,11 @@ func (d *DB) Approvals() ifaces.ApprovalStore {
 	return &approvalStore{db: d.sql}
 }
 
+// Snapshots returns a SnapshotStore backed by this DB.
+func (d *DB) Snapshots() ifaces.SnapshotStore {
+	return &snapshotStore{db: d.sql}
+}
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {

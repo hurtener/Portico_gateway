@@ -17,6 +17,7 @@ import (
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/registry"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
+	"github.com/hurtener/Portico_gateway/internal/telemetry"
 )
 
 // Dispatcher routes MCP requests from the northbound transport to the
@@ -32,6 +33,8 @@ type Dispatcher struct {
 
 	policy  *PolicyPipeline
 	emitter audit.Emitter
+
+	snapshots *SnapshotBinder
 
 	cacheMu          sync.Mutex
 	toolsCache       map[string]toolsCacheEntry // sessionID -> tools
@@ -81,6 +84,15 @@ func (d *Dispatcher) SetAuditEmitter(e audit.Emitter) {
 	d.emitter = e
 }
 
+// SetSnapshotBinder installs the lazy snapshot binder. nil disables stable
+// tools/list mode — the dispatcher falls back to live fan-out on every
+// call.
+func (d *Dispatcher) SetSnapshotBinder(b *SnapshotBinder) { d.snapshots = b }
+
+// SnapshotBinder exposes the binder for the REST/Console inspector and
+// the session-close cache eviction wiring.
+func (d *Dispatcher) SnapshotBinder() *SnapshotBinder { return d.snapshots }
+
 // Resources returns the resource aggregator (nil if not configured).
 // REST handlers reach into the dispatcher to drive synthetic in-process
 // sessions for /v1/resources.
@@ -109,6 +121,14 @@ func (d *Dispatcher) InvalidateSession(sessionID string) {
 // HandleRequest is the main entry point used by the northbound transport.
 // It returns either a Result body to encode or an *Error.
 func (d *Dispatcher) HandleRequest(ctx context.Context, sess *Session, req *protocol.Request) (json.RawMessage, *protocol.Error) {
+	ctx, span := telemetry.StartSpan(ctx, telemetry.SpanMCPRequest,
+		telemetry.String(telemetry.AttrMethod, req.Method),
+		telemetry.String(telemetry.AttrTenantID, sess.TenantID),
+		telemetry.String(telemetry.AttrSessionID, sess.ID),
+		telemetry.String(telemetry.AttrUserID, sess.UserID),
+		telemetry.String(telemetry.AttrRequestID, string(req.ID)),
+	)
+	defer span.End()
 	switch req.Method {
 	case protocol.MethodInitialize:
 		return d.handleInitialize(ctx, sess, req)
@@ -227,6 +247,28 @@ func (d *Dispatcher) handleInitialize(ctx context.Context, sess *Session, req *p
 }
 
 func (d *Dispatcher) handleToolsList(ctx context.Context, sess *Session, _ *protocol.Request) (json.RawMessage, *protocol.Error) {
+	// Phase 6: stable mode — when a snapshot is bound to the session,
+	// answer from it. The snapshot is created lazily on first
+	// catalog-touching call and lives for the session lifetime; downstream
+	// list_changed notifications do not propagate (drift detector handles
+	// out-of-band).
+	if d.snapshots != nil {
+		snap, err := d.snapshots.Get(ctx, sess)
+		if err == nil && snap != nil && len(snap.Tools) > 0 {
+			tools := make([]protocol.Tool, 0, len(snap.Tools))
+			for _, ti := range snap.Tools {
+				tools = append(tools, protocol.Tool{
+					Name:        ti.NamespacedName,
+					Description: ti.Description,
+					InputSchema: ti.InputSchema,
+					Annotations: ti.Annotations,
+				})
+			}
+			body, _ := json.Marshal(protocol.ListToolsResult{Tools: tools})
+			return body, nil
+		}
+	}
+
 	// Cache check (per-session — tenant scoping via session uniqueness).
 	d.cacheMu.Lock()
 	if e, ok := d.toolsCache[sess.ID]; ok && time.Now().Before(e.expiresAt) {
@@ -303,6 +345,13 @@ func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *pr
 	if err := json.Unmarshal(req.Params, &params); err != nil {
 		return nil, protocol.NewError(protocol.ErrInvalidParams, err.Error(), nil)
 	}
+	ctx, span := telemetry.StartSpan(ctx, telemetry.SpanMCPToolCall,
+		telemetry.String(telemetry.AttrTool, params.Name),
+		telemetry.String(telemetry.AttrTenantID, sess.TenantID),
+		telemetry.String(telemetry.AttrSessionID, sess.ID),
+		telemetry.String(telemetry.AttrUserID, sess.UserID),
+	)
+	defer span.End()
 	serverID, toolName, ok := namespace.SplitTool(params.Name)
 	if !ok {
 		return nil, protocol.NewError(protocol.ErrToolNotEnabled, "tool name must be qualified as <server>.<tool>", map[string]string{"name": params.Name})
@@ -380,8 +429,14 @@ func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *pr
 
 	startedAt := time.Now()
 	d.emitToolCall(ctx, sess, audit.EventToolCallStart, params, serverID, prep, 0, nil)
-	res, err := client.CallTool(callCtx, toolName, params.Arguments, progressToken, progressCB)
+	sbCtx, sbSpan := telemetry.StartSpan(callCtx, telemetry.SpanSouthboundCall,
+		telemetry.String(telemetry.AttrServerID, serverID),
+		telemetry.String(telemetry.AttrTool, toolName),
+	)
+	res, err := client.CallTool(sbCtx, toolName, params.Arguments, progressToken, progressCB)
 	if err != nil {
+		_ = telemetry.RecordErr(sbSpan, err)
+		sbSpan.End()
 		d.emitToolCall(ctx, sess, audit.EventToolCallFailed, params, serverID, prep, time.Since(startedAt), err)
 		var pe *protocol.Error
 		if errors.As(err, &pe) {
@@ -390,6 +445,7 @@ func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *pr
 		// transport / context error
 		return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, err.Error(), map[string]string{"server_id": serverID})
 	}
+	sbSpan.End()
 	d.emitToolCall(ctx, sess, audit.EventToolCallComplete, params, serverID, prep, time.Since(startedAt), nil)
 
 	// Tick supervisor bookkeeping (last-call-at, idle reset).

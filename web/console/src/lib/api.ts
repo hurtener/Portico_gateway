@@ -300,8 +300,110 @@ export const api = {
   deleteSecret: (tenant: string, name: string) =>
     request<void>(`/v1/admin/secrets/${encodeURIComponent(tenant)}/${encodeURIComponent(name)}`, {
       method: 'DELETE'
-    })
+    }),
+
+  // Phase 6: snapshots + session inspector.
+  listSnapshots: (params: { since?: string; cursor?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.since) q.set('since', params.since);
+    if (params.cursor) q.set('cursor', params.cursor);
+    if (params.limit) q.set('limit', String(params.limit));
+    const qs = q.toString();
+    return request<{ snapshots: Snapshot[]; next_cursor: string }>(
+      `/v1/catalog/snapshots${qs ? `?${qs}` : ''}`
+    );
+  },
+  getSnapshot: (id: string) => request<Snapshot>(`/v1/catalog/snapshots/${encodeURIComponent(id)}`),
+  diffSnapshots: (a: string, b: string) =>
+    request<SnapshotDiff>(
+      `/v1/catalog/snapshots/${encodeURIComponent(a)}/diff/${encodeURIComponent(b)}`
+    ),
+  getSessionSnapshot: (sessionId: string) =>
+    request<Snapshot>(`/v1/sessions/${encodeURIComponent(sessionId)}/snapshot`)
 };
+
+export interface Snapshot {
+  id: string;
+  tenant_id: string;
+  session_id?: string;
+  created_at: string;
+  overall_hash: string;
+  servers: SnapshotServer[];
+  tools: SnapshotTool[];
+  resources: SnapshotResource[];
+  prompts: SnapshotPrompt[];
+  skills: SnapshotSkill[];
+  policies: SnapshotPolicies;
+  credentials: SnapshotCredential[];
+  warnings?: string[];
+}
+
+export interface SnapshotServer {
+  id: string;
+  display_name?: string;
+  transport: string;
+  runtime_mode?: string;
+  schema_hash: string;
+  health: string;
+}
+
+export interface SnapshotTool {
+  namespaced_name: string;
+  server_id: string;
+  description?: string;
+  input_schema?: unknown;
+  risk_class: string;
+  requires_approval: boolean;
+  skill_id?: string;
+  hash: string;
+}
+
+export interface SnapshotResource {
+  uri: string;
+  upstream_uri?: string;
+  server_id: string;
+  mime_type?: string;
+}
+
+export interface SnapshotPrompt {
+  namespaced_name: string;
+  server_id: string;
+  arguments?: Array<{ name: string; description?: string; required?: boolean }>;
+}
+
+export interface SnapshotSkill {
+  id: string;
+  version: string;
+  enabled_for_session: boolean;
+  missing_tools?: string[];
+}
+
+export interface SnapshotPolicies {
+  allow_list?: string[];
+  deny_list?: string[];
+  approval_timeout?: number;
+  default_risk_class?: string;
+}
+
+export interface SnapshotCredential {
+  server_id: string;
+  strategy?: string;
+  secret_refs?: string[];
+}
+
+export interface SnapshotDiff {
+  tools: { added?: string[]; removed?: string[]; modified?: ModifiedTool[] };
+  resources: { added?: string[]; removed?: string[] };
+  prompts: { added?: string[]; removed?: string[] };
+  skills: { added?: string[]; removed?: string[] };
+}
+
+export interface ModifiedTool {
+  name: string;
+  fields_changed: string[];
+  old_hash: string;
+  new_hash: string;
+}
 
 export interface Approval {
   id: string;

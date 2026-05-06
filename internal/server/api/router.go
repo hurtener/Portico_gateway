@@ -17,6 +17,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
 	"github.com/hurtener/Portico_gateway/internal/auth/scope"
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
+	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
 	mcpnb "github.com/hurtener/Portico_gateway/internal/mcp/northbound/http"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/policy/approval"
@@ -66,6 +67,10 @@ type Deps struct {
 	ApprovalFlow *approvalFlow
 	Vault        VaultManager
 	ServerInit   *mcpnb.ServerInitiatedRequester
+
+	// Phase 6: snapshot service + lazy session→snapshot binder.
+	Snapshots      *snapshots.Service
+	SnapshotBinder *mcpgw.SnapshotBinder
 }
 
 // approvalFlow is the slice of internal/policy/approval.Flow the API
@@ -156,6 +161,17 @@ func NewRouter(d Deps) http.Handler {
 		if d.Approvals != nil {
 			r.Get("/v1/approvals", listApprovalsHandler(d))
 			r.Get("/v1/approvals/{id}", getApprovalHandler(d))
+		}
+
+		// Phase 6: snapshots + per-session inspector hook.
+		if d.Snapshots != nil {
+			r.Post("/v1/catalog/resolve", resolveCatalogHandler(d))
+			r.Get("/v1/catalog/snapshots", listSnapshotsHandler(d))
+			r.Get("/v1/catalog/snapshots/{id}", getSnapshotHandler(d))
+			r.Get("/v1/catalog/snapshots/{a}/diff/{b}", diffSnapshotsHandler(d))
+		}
+		if d.SnapshotBinder != nil {
+			r.Get("/v1/sessions/{session_id}/snapshot", sessionSnapshotHandler(d))
 		}
 
 		// Phase 4: skills runtime APIs.

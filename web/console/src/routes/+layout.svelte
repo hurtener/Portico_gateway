@@ -19,6 +19,7 @@
       <a href="/sessions" class:active={isActive('/sessions')}>Sessions</a>
       <a href="/approvals" class:active={isActive('/approvals')}>Approvals</a>
       <a href="/audit" class:active={isActive('/audit')}>Audit</a>
+      <a href="/snapshots" class:active={isActive('/snapshots')}>Snapshots</a>
       <a href="/admin/secrets" class:active={isActive('/admin/secrets')}>Secrets</a>
     </nav>
     <div class="meta">

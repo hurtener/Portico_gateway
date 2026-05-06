@@ -47,6 +47,8 @@ func main() {
 		err = runValidateSkills(args)
 	case "vault":
 		err = runVault(ctx, args)
+	case "inspect-session":
+		err = runInspectSession(ctx, args)
 	case "version", "--version", "-v":
 		printVersion()
 	case "help", "--help", "-h":
@@ -72,6 +74,8 @@ Commands:
   validate  --config <path>           Validate a config file and exit.
   validate-skills <path>...           Validate one or more Skill Pack manifests.
   vault     <subcommand>              Manage the credential vault.
+  inspect-session <session_id> [--output json|table] [--since <RFC3339>]
+                                       Dump a session's snapshot, audit events, approvals.
   version                              Print version info.
 
 Run 'portico <command> -h' for command-specific flags.`)
