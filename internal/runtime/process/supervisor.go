@@ -256,7 +256,9 @@ func (s *Supervisor) startNew(ctx context.Context, key InstanceKey, spec *regist
 	s.mu.Unlock()
 	s.persistInstance(ctx, inst, nil)
 	s.publishStatus(ctx, spec, registry.StatusHealthy, "")
-	s.health.Track(inst)
+	// Track spawns its own probe goroutine with an internal context;
+	// passing the request context would cancel probing on the spawn caller.
+	s.health.Track(inst) //nolint:contextcheck
 	return client, nil
 }
 
@@ -303,7 +305,9 @@ func (s *Supervisor) restart(ctx context.Context, inst *instance, callerTenantID
 	}
 	s.persistInstance(ctx, inst, nil)
 	s.publishStatus(ctx, inst.spec, registry.StatusHealthy, "")
-	s.health.Track(inst)
+	// Track spawns its own probe goroutine with an internal context;
+	// passing the request context would cancel probing on the spawn caller.
+	s.health.Track(inst) //nolint:contextcheck
 	return client, nil
 }
 

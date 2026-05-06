@@ -250,6 +250,11 @@ jobs:
   gitleaks:
     name: Secret scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # gitleaks-action calls /pulls/{n}/commits on PR runs and 403s
+      # without explicit pull_requests:read scope.
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:

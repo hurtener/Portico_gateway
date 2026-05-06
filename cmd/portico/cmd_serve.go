@@ -50,6 +50,12 @@ func runServe(ctx context.Context, args []string) error {
 // configPath is non-empty only for `serve` (where the file is the source
 // of truth and warrants a hot-reload watcher). `dev` synthesises a
 // config in-memory and passes "".
+//
+// Linter note: this is a deliberate flat boot sequence — pulling the
+// branches into helpers obscures the order without removing real
+// complexity, so the function carries a gocyclo waiver.
+//
+//nolint:gocyclo
 func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) error {
 	logger := telemetry.NewLogger(telemetry.LoggerConfig{
 		Level:  cfg.Logging.Level,

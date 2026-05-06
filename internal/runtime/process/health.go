@@ -137,7 +137,10 @@ func (h *HealthChecker) run(ctx context.Context, inst *instance, interval, timeo
 		if failures >= healthFailThreshold {
 			h.log.Warn("health probe threshold breached; marking crashed",
 				"instance_id", inst.id, "server_id", inst.spec.ID)
-			h.sup.markCrashed(inst, err)
+			// markCrashed runs synchronously from the probe goroutine,
+			// which owns its own ctx; the request context that originally
+			// spawned the instance is no longer in scope.
+			h.sup.markCrashed(inst, err) //nolint:contextcheck
 			return
 		}
 	}
