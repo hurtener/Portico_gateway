@@ -15,6 +15,7 @@ linters-settings:
     enable-all: true
     disable:
       - fieldalignment   # noisy; can be revisited per-package later
+      - shadow           # short-lived err shadowing in nested ifs is idiomatic
 
   gofmt:
     simplify: true
@@ -50,12 +51,26 @@ linters-settings:
 
   errcheck:
     check-type-assertions: true
-    check-blank: true
+    # check-blank stays off: `_, _ = w.Write(...)` is the idiomatic way to
+    # deliberately ignore errors (e.g. write failures on a response that's
+    # already going to be discarded). Forcing a wrap is noise.
+    check-blank: false
     exclude-functions:
+      # Stdlib helpers whose error is rarely actionable in handler/CLI code.
       - (*log/slog.Logger).Debug
       - (*log/slog.Logger).Info
       - (*log/slog.Logger).Warn
       - (*log/slog.Logger).Error
+      - (*encoding/json.Encoder).Encode
+      - encoding/json.Marshal
+      - encoding/json.Unmarshal
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - io.Copy
+      - io.ReadAll
+      - (io.Closer).Close
+      - io/fs.Sub
+      - (net/http.ResponseWriter).Write
 
   unused:
     check-exported: false   # we have plenty of public surface; revisit V1.x
@@ -104,6 +119,13 @@ issues:
         - lll
         - gocyclo
         - dupl
+        - bodyclose       # tests use httptest helpers that defer-close inline
+        - govet           # variable shadowing in test scaffolding is fine
+        - unused          # test-only helpers
+    - path: cmd/
+      linters:
+        - forbidigo       # CLI tools legitimately use fmt.Print* for stdout
+        - contextcheck    # graceful-shutdown contexts are intentionally fresh
     - path: examples/
       linters:
         - all

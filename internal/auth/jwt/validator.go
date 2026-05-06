@@ -90,6 +90,10 @@ func NewValidator(ctx context.Context, cfg config.JWTConfig) (*Validator, error)
 }
 
 // Validate parses, signature-checks, and normalizes a raw bearer token.
+// Linter note: the function is intentionally a single linear sequence of
+// signature, audience, scope, and tenant checks — auditors read it that way.
+//
+//nolint:gocyclo
 func (v *Validator) Validate(ctx context.Context, raw string) (*Claims, error) {
 	if raw == "" {
 		return nil, errors.New("jwt: empty token")

@@ -72,13 +72,12 @@ func (s *StaticKeySet) LookupKey(_ context.Context, kid string) (any, error) {
 
 // RemoteKeySet fetches a JWKS over HTTP and refreshes periodically.
 type RemoteKeySet struct {
-	url          string
-	client       *http.Client
-	mu           sync.RWMutex
-	keys         map[string]any
-	fetched      time.Time
-	ttl          time.Duration
-	bootstrapErr error
+	url     string
+	client  *http.Client
+	mu      sync.RWMutex
+	keys    map[string]any
+	fetched time.Time
+	ttl     time.Duration
 }
 
 // LoadRemote initializes a RemoteKeySet and performs an initial fetch. If the
