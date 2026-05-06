@@ -55,6 +55,10 @@ func Parse(raw []byte) (*Config, error) {
 }
 
 // Validate applies defaults and enforces invariants. Mutates the receiver.
+// Linter note: deliberately a flat sequence of field checks so config
+// errors point at the first offending field rather than nested helpers.
+//
+//nolint:gocyclo
 func (c *Config) Validate() error {
 	// Server
 	if c.Server.Bind == "" {

@@ -226,7 +226,9 @@ func (s *Supervisor) startNew(ctx context.Context, key InstanceKey, spec *regist
 		state:    StateStarting,
 	}
 	if spec.Lifecycle.IdleTimeout > 0 {
-		inst.idle = NewIdleTimer(spec.Lifecycle.IdleTimeout.Std(), func() { s.markIdle(inst) })
+		// IdleTimer fires from its own goroutine after a deadline, with no
+		// caller context to inherit; markIdle uses context.Background.
+		inst.idle = NewIdleTimer(spec.Lifecycle.IdleTimeout.Std(), func() { s.markIdle(inst) }) //nolint:contextcheck
 	}
 
 	client, err := s.spawnClient(ctx, inst)

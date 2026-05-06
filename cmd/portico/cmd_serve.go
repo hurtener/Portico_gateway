@@ -99,9 +99,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config) error {
 	// Phase 2: registry over the storage backend. Persists ServerSpecs
 	// per-tenant and broadcasts change events that the supervisor consumes.
 	reg := registry.New(backend.Registry(), logger)
-	if err := seedRegistryFromConfig(ctx, reg, cfg, logger); err != nil {
-		return err
-	}
+	seedRegistryFromConfig(ctx, reg, cfg, logger)
 
 	// Phase 2: stub vault for {{secret:...}} env interpolation. Loaded
 	// from PORTICO_VAULT_KEY (base64 32-byte AES-256 key) + a YAML file
@@ -188,12 +186,14 @@ func runWithConfig(ctx context.Context, cfg *config.Config) error {
 // seedRegistryFromConfig materialises every server in the YAML config into
 // the registry under each known tenant. Phase 2 ships a per-tenant view
 // from a single global config block; per-tenant overrides arrive in a
-// follow-up. Skips servers that fail validation with a warn.
+// follow-up. Skips servers that fail validation with a warn (no fatal
+// error path — operators expect dev-mode config quirks not to block
+// boot).
 func seedRegistryFromConfig(ctx context.Context, reg *registry.Registry, cfg *config.Config, log interface {
 	Warn(msg string, args ...any)
-}) error {
+}) {
 	if len(cfg.Servers) == 0 {
-		return nil
+		return
 	}
 	tenantIDs := make([]string, 0, len(cfg.Tenants))
 	for _, t := range cfg.Tenants {
@@ -206,7 +206,7 @@ func seedRegistryFromConfig(ctx context.Context, reg *registry.Registry, cfg *co
 		}
 	}
 	if len(tenantIDs) == 0 {
-		return nil
+		return
 	}
 	for _, ts := range cfg.Servers {
 		spec := configServerSpecToRegistry(ts)
@@ -217,7 +217,6 @@ func seedRegistryFromConfig(ctx context.Context, reg *registry.Registry, cfg *co
 			}
 		}
 	}
-	return nil
 }
 
 func configServerSpecToRegistry(c config.ServerSpec) *registry.ServerSpec {

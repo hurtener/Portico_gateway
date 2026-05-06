@@ -169,6 +169,12 @@ var ValidModes = map[string]struct{}{
 
 // Validate enforces the spec invariants and applies defaults. Returns a
 // FieldError naming the offending field when something is wrong.
+//
+// Linter note: the function is intentionally a single linear sequence of
+// id / transport / mode / sub-spec / defaults checks. Splitting it
+// obscures the order operators rely on when reading the diagnostics.
+//
+//nolint:gocyclo
 func (s *ServerSpec) Validate() error {
 	if s == nil {
 		return fieldErr("spec", "is required")

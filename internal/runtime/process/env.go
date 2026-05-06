@@ -67,7 +67,7 @@ func (r *Resolver) resolveOne(ctx context.Context, tenantID, in string) (string,
 			}
 			val, err := r.vault.Get(ctx, tenantID, name)
 			if err != nil {
-				firstErr = fmt.Errorf("%w: %s: %v", ErrSecretLookup, name, err)
+				firstErr = fmt.Errorf("%w: %s: %w", ErrSecretLookup, name, err)
 				return match
 			}
 			return val
