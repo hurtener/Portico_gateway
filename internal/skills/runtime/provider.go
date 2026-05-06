@@ -67,7 +67,7 @@ func (p *SkillProvider) ListResources(ctx context.Context, tenantID, sessionID, 
 		if !on {
 			continue
 		}
-		out = append(out, p.synthesizeResources(ctx, s)...)
+		out = append(out, p.synthesizeResources(s)...)
 	}
 	return out, nil
 }
@@ -75,7 +75,7 @@ func (p *SkillProvider) ListResources(ctx context.Context, tenantID, sessionID, 
 // synthesizeResources generates the manifest, instructions, and
 // declared resource/prompt files as protocol.Resource entries. Bytes
 // are NOT loaded here — that happens lazily in ReadResource.
-func (p *SkillProvider) synthesizeResources(ctx context.Context, s *Skill) []protocol.Resource {
+func (p *SkillProvider) synthesizeResources(s *Skill) []protocol.Resource {
 	if s == nil || s.Manifest == nil {
 		return nil
 	}

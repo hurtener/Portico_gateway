@@ -47,6 +47,13 @@ func NewPromptAggregator(m clientFleet, cache *ResourceAggregator, log *slog.Log
 }
 
 // ListAll fans out prompts/list and returns a single namespaced list.
+//
+// Linter note: the body is a flat fan-out + merge that grew an extra
+// branch when the Phase 4 skill provider was wired in. Splitting it
+// would obscure the order without removing real complexity, so the
+// function carries a gocyclo waiver.
+//
+//nolint:gocyclo
 func (a *PromptAggregator) ListAll(ctx context.Context, sess *Session, cursor string) (*protocol.ListPromptsResult, error) {
 	if a.cache != nil {
 		if cached, ok := a.cache.lookupCache(sess.ID, "prompts", cursor); ok {

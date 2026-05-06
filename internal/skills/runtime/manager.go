@@ -107,19 +107,22 @@ func (m *Manager) Start(ctx context.Context, sources []source.Source) error {
 	}
 	m.indexGen.InvalidateAll()
 
-	wctx, cancel := context.WithCancel(context.Background())
+	// The watch loop must outlive the caller's start ctx (which may be
+	// the request context, not the gateway's lifetime). Spawn a fresh
+	// context cancelled only by Stop().
+	wctx, cancel := context.WithCancel(context.Background()) //nolint:contextcheck
 	m.mu.Lock()
 	m.stop = cancel
 	m.mu.Unlock()
 
 	for _, src := range sources {
-		ch, err := src.Watch(wctx)
+		ch, err := src.Watch(wctx) //nolint:contextcheck
 		if err != nil || ch == nil {
 			m.log.Info("source does not support watching; skipping", "source", src.Name(), "err", err)
 			continue
 		}
 		m.wg.Add(1)
-		go m.watchLoop(wctx, src, ch)
+		go m.watchLoop(wctx, src, ch) //nolint:contextcheck
 	}
 	return nil
 }
@@ -156,25 +159,33 @@ func (m *Manager) handleEvent(ctx context.Context, src source.Source, ev source.
 		m.catalog.Remove(ev.Ref.ID)
 		m.indexGen.InvalidateAll()
 		m.log.Info("skill removed", "skill_id", ev.Ref.ID)
+	case source.EventAdded, source.EventUpdated:
+		m.reloadSkill(ctx, src, ev.Ref)
 	default:
-		// Treat Added/Updated identically — re-load and validate.
-		res := m.loader.LoadOne(ctx, src, ev.Ref)
-		if len(res.Errors) > 0 {
-			m.log.Warn("skill reload failed; keeping previous version",
-				"skill_id", ev.Ref.ID,
-				"errors", errSliceToString(res.Errors),
-				"warnings", res.Warnings)
-			return
-		}
-		m.catalog.Set(&Skill{
-			Manifest: res.Manifest,
-			Source:   src,
-			Ref:      res.Ref,
-			Warnings: res.Warnings,
-		})
-		m.indexGen.InvalidateAll()
-		m.log.Info("skill reloaded", "skill_id", res.Manifest.ID, "version", res.Manifest.Version)
+		m.log.Debug("unknown skill event; ignoring", "kind", ev.Kind, "skill_id", ev.Ref.ID)
 	}
+}
+
+// reloadSkill re-validates a single pack and atomically swaps it in;
+// on validation failure the previous version stays active (the spec's
+// "typo shouldn't take down a tenant" guarantee).
+func (m *Manager) reloadSkill(ctx context.Context, src source.Source, ref source.Ref) {
+	res := m.loader.LoadOne(ctx, src, ref)
+	if len(res.Errors) > 0 {
+		m.log.Warn("skill reload failed; keeping previous version",
+			"skill_id", ref.ID,
+			"errors", errSliceToString(res.Errors),
+			"warnings", res.Warnings)
+		return
+	}
+	m.catalog.Set(&Skill{
+		Manifest: res.Manifest,
+		Source:   src,
+		Ref:      res.Ref,
+		Warnings: res.Warnings,
+	})
+	m.indexGen.InvalidateAll()
+	m.log.Info("skill reloaded", "skill_id", res.Manifest.ID, "version", res.Manifest.Version)
 }
 
 func errSliceToString(errs []error) []string {
