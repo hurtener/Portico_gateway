@@ -294,11 +294,14 @@ func TestServer_ConsoleHomeRenders(t *testing.T) {
 
 func TestServer_StaticAssetServed(t *testing.T) {
 	s := startDevServer(t)
-	resp, body := s.get("/static/portico.css", nil)
+	// The Console SPA bundles its own static assets via SvelteKit's
+	// adapter-static. /favicon.svg is the canonical example: bundled
+	// at build time, served unauthenticated, embedded in the binary.
+	resp, body := s.get("/favicon.svg", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
 	if len(body) == 0 {
-		t.Error("css body empty")
+		t.Error("favicon body empty")
 	}
 }

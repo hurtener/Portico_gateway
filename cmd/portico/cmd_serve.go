@@ -41,12 +41,22 @@ func runServe(ctx context.Context, args []string) error {
 		return err
 	}
 
-	return runWithConfig(ctx, cfg)
+	return runWithConfig(ctx, cfg, *configPath)
 }
 
 // runWithConfig is shared by serve/dev. Owns the full boot sequence:
 // logger, storage, auth validator, HTTP server, graceful shutdown.
-func runWithConfig(ctx context.Context, cfg *config.Config) error {
+//
+// configPath is non-empty only for `serve` (where the file is the source
+// of truth and warrants a hot-reload watcher). `dev` synthesises a
+// config in-memory and passes "".
+//
+// Linter note: this is a deliberate flat boot sequence — pulling the
+// branches into helpers obscures the order without removing real
+// complexity, so the function carries a gocyclo waiver.
+//
+//nolint:gocyclo
+func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) error {
 	logger := telemetry.NewLogger(telemetry.LoggerConfig{
 		Level:  cfg.Logging.Level,
 		Format: cfg.Logging.Format,
@@ -129,6 +139,32 @@ func runWithConfig(ctx context.Context, cfg *config.Config) error {
 	dispatcher := mcpgw.NewDispatcher(manager, logger)
 	sessions := mcpgw.NewSessionRegistry()
 
+	// Subscribe the supervisor to registry change events so spec edits
+	// (via /v1/servers/{id}/reload, hot-reload, or admin POST) drain the
+	// affected instances.
+	reactor := registry.NewReactor(reg, supervisor, logger)
+
+	// Phase 2: optional config hot-reload. Only `serve --config` exposes
+	// a file path; `dev` synthesises the config in memory.
+	var watcher *config.Watcher
+	if configPath != "" {
+		w, err := config.NewWatcher(configPath, cfg, func(_, newCfg *config.Config) error {
+			seedRegistryFromConfig(ctx, reg, newCfg, logger)
+			return nil
+		}, logger)
+		if err != nil {
+			logger.Warn("config watcher disabled", "err", err)
+		} else {
+			watcher = w
+			go func() {
+				if err := w.Start(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					logger.Warn("config watcher exited", "err", err)
+				}
+			}()
+		}
+	}
+	_ = watcher // kept for future inspection; lifecycle owned by ctx
+
 	deps := api.Deps{
 		Logger:      logger,
 		Validator:   validator,
@@ -179,6 +215,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config) error {
 	if err := manager.CloseAll(shutdownCtx); err != nil {
 		logger.Warn("southbound shutdown errors", "err", err)
 	}
+	reactor.Stop()
 	reg.CloseAll()
 	return nil
 }

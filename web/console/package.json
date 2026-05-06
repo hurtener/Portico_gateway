@@ -1,0 +1,37 @@
+{
+  "name": "portico-console",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "lint": "prettier --check . && eslint .",
+    "format": "prettier --write .",
+    "postinstall": "node -e \"require('fs').writeFileSync('node_modules/go.mod','module ignored\\n')\"",
+    "postbuild": "node -e \"require('fs').writeFileSync('build/.gitkeep','# placeholder so //go:embed succeeds even with no build output\\n')\""
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.5",
+    "@sveltejs/kit": "^2.5.18",
+    "@sveltejs/vite-plugin-svelte": "^3.1.1",
+    "@types/node": "^22.5.4",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-svelte": "^2.43.0",
+    "prettier": "^3.3.3",
+    "prettier-plugin-svelte": "^3.2.6",
+    "svelte": "^4.2.18",
+    "svelte-check": "^3.8.4",
+    "svelte-eslint-parser": "^0.41.0",
+    "tslib": "^2.6.3",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.2"
+  },
+  "dependencies": {}
+}

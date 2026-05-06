@@ -239,7 +239,7 @@ func TestMiddleware_StaticAssetsAllowed(t *testing.T) {
 		Validator: v, TenantStore: store,
 	})
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/static/portico.css", nil)
+	req := httptest.NewRequest(http.MethodGet, "/_app/immutable/start.js", nil)
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d", rec.Code)

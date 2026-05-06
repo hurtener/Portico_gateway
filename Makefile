@@ -10,12 +10,14 @@ COVER_OUT := coverage.out
 
 GO_PRESENT := $(shell test -f go.mod && echo yes || echo no)
 
-.PHONY: help build mockmcp test vet lint clean docker preflight install-hooks check-mirror
+.PHONY: help build mockmcp test vet lint clean docker preflight install-hooks check-mirror frontend frontend-check
 
 help:
 	@echo "Targets:"
 	@echo "  build           Build the portico binary (no-op if no Go code yet)"
 	@echo "  mockmcp         Build the standalone mock MCP server (Phase 1+)"
+	@echo "  frontend        npm ci + npm run build inside web/console/"
+	@echo "  frontend-check  npm run check + npm run lint inside web/console/"
 	@echo "  test            Run go test with race detector"
 	@echo "  vet             go vet"
 	@echo "  lint            golangci-lint run"
@@ -88,5 +90,20 @@ else
 	@echo "docker: go.mod absent — skipping (pre-Go-code)"
 endif
 
+frontend:
+	@if [ -f web/console/package.json ]; then \
+		cd web/console && npm ci && npm run build; \
+	else \
+		echo "frontend: web/console/package.json absent — skipping"; \
+	fi
+
+frontend-check:
+	@if [ -f web/console/package.json ]; then \
+		cd web/console && npm ci && npm run check && npm run lint; \
+	else \
+		echo "frontend-check: web/console/package.json absent — skipping"; \
+	fi
+
 clean:
-	rm -rf bin $(COVER_OUT) coverage.html
+	rm -rf bin $(COVER_OUT) coverage.html web/console/build/_app web/console/build/index.html web/console/build/favicon.svg
+	@find web/console/build -type f ! -name '.gitkeep' -delete 2>/dev/null || true
