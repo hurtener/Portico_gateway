@@ -55,3 +55,32 @@ func TestSession_EmitNotification_AfterClose(t *testing.T) {
 		t.Errorf("expected dropped=true after Close")
 	}
 }
+
+// TestSessionRegistry_OnCloseFiresOnExplicitCloseAndCloseAll verifies the
+// OnClose hook is invoked for both single-session Close and bulk
+// CloseAll paths. The dispatcher relies on these hooks to drop
+// per-session caches.
+func TestSessionRegistry_OnCloseFiresOnExplicitCloseAndCloseAll(t *testing.T) {
+	r := NewSessionRegistry()
+	var mu sync.Mutex
+	closed := map[string]int{}
+	r.OnClose(func(id string) {
+		mu.Lock()
+		defer mu.Unlock()
+		closed[id]++
+	})
+
+	a := r.Create("acme", "u1")
+	b := r.Create("acme", "u2")
+	r.Close(a.ID)
+	r.CloseAll()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if closed[a.ID] != 1 {
+		t.Errorf("session %s: OnClose fired %d times; want 1", a.ID, closed[a.ID])
+	}
+	if closed[b.ID] != 1 {
+		t.Errorf("session %s: OnClose fired %d times; want 1", b.ID, closed[b.ID])
+	}
+}

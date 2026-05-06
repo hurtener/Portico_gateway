@@ -22,6 +22,13 @@ type Config struct {
 type ServerConfig struct {
 	Bind          string        `yaml:"bind"`           // e.g. "127.0.0.1:8080"
 	ShutdownGrace time.Duration `yaml:"shutdown_grace"` // default 10s
+
+	// AllowedOrigins is the allow-list applied to the Streamable HTTP
+	// Origin guard (MCP spec 2025-11-25 requires 403 on invalid Origin).
+	// Empty by default — programmatic clients without an Origin header
+	// are always permitted; browser clients must be explicitly allowed.
+	// Wildcard "*" allows any. Dev mode auto-permits localhost.
+	AllowedOrigins []string `yaml:"allowed_origins,omitempty"`
 }
 
 // AuthConfig groups all authentication strategy configuration. Phase 0 ships JWT only.

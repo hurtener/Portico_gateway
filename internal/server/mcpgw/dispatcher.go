@@ -71,6 +71,23 @@ func (d *Dispatcher) Resources() *ResourceAggregator { return d.resources }
 // Prompts returns the prompt aggregator (nil if not configured).
 func (d *Dispatcher) Prompts() *PromptAggregator { return d.prompts }
 
+// InvalidateSession drops every per-session cache the dispatcher and
+// its aggregators hold. The caller (typically a SessionRegistry.OnClose
+// hook) must arrange this so cache entries don't leak past session
+// shutdown — particularly relevant for long-lived gateways with high
+// session churn.
+func (d *Dispatcher) InvalidateSession(sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	d.cacheMu.Lock()
+	delete(d.toolsCache, sessionID)
+	d.cacheMu.Unlock()
+	if d.resources != nil {
+		d.resources.InvalidateSession(sessionID)
+	}
+}
+
 // HandleRequest is the main entry point used by the northbound transport.
 // It returns either a Result body to encode or an *Error.
 func (d *Dispatcher) HandleRequest(ctx context.Context, sess *Session, req *protocol.Request) (json.RawMessage, *protocol.Error) {
@@ -179,8 +196,9 @@ func (d *Dispatcher) handleInitialize(ctx context.Context, sess *Session, req *p
 		ProtocolVersion: protocol.ProtocolVersion,
 		Capabilities:    srv,
 		ServerInfo: protocol.Implementation{
-			Name:    "portico-gateway",
-			Version: "phase-2",
+			Name:        "portico-gateway",
+			Version:     "phase-3.5",
+			Description: "Portico — multi-tenant MCP gateway and Skill runtime",
 		},
 	}
 	body, err := json.Marshal(res)

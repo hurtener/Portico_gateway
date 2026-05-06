@@ -46,6 +46,12 @@ type Deps struct {
 	// Phase 3 addition: MCP Apps registry (ui:// resource index).
 	// Optional — handlers gate on nil so tests can omit it.
 	Apps *apps.Registry
+
+	// AllowedOrigins is the operator-configured allow-list passed
+	// through to the northbound HTTP transport's Origin guard
+	// (spec 2025-11-25). Empty in dev mode is fine; localhost is auto-
+	// allowed when DevMode is true.
+	AllowedOrigins []string
 }
 
 // NewRouter wires the full HTTP routing surface.
@@ -106,7 +112,10 @@ func NewRouter(d Deps) http.Handler {
 		// Phase 1: northbound MCP transport. Mounted under the auth group so the
 		// dev-mode bypass + JWT path both produce a tenant identity for the session.
 		if d.Sessions != nil && d.Dispatcher != nil {
-			h := mcpnb.NewHandler(d.Sessions, d.Dispatcher, d.Logger)
+			h := mcpnb.NewHandlerWithConfig(d.Sessions, d.Dispatcher, d.Logger, mcpnb.HandlerConfig{
+				AllowedOrigins:        d.AllowedOrigins,
+				AllowLocalhostOrigins: d.DevMode,
+			})
 			r.Method("POST", "/mcp", h)
 			r.Method("GET", "/mcp", h)
 			r.Method("DELETE", "/mcp", h)

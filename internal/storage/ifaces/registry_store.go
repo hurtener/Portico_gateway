@@ -52,8 +52,10 @@ type RegistryStore interface {
 	DeleteServer(ctx context.Context, tenantID, id string) error
 	UpdateServerStatus(ctx context.Context, tenantID, id, status, detail string) error
 
-	// Instance CRUD
+	// Instance CRUD. DeleteInstance takes tenantID per CLAUDE.md §6 —
+	// instance ids alone are random but the storage layer must enforce
+	// the tenant invariant.
 	UpsertInstance(ctx context.Context, i *InstanceRecord) error
-	DeleteInstance(ctx context.Context, id string) error
+	DeleteInstance(ctx context.Context, tenantID, id string) error
 	ListInstances(ctx context.Context, tenantID, serverID string) ([]*InstanceRecord, error)
 }

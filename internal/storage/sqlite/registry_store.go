@@ -159,11 +159,12 @@ func (s *registryStore) UpsertInstance(ctx context.Context, i *ifaces.InstanceRe
 	return nil
 }
 
-func (s *registryStore) DeleteInstance(ctx context.Context, id string) error {
-	if id == "" {
-		return errors.New("sqlite: instance id is required")
+func (s *registryStore) DeleteInstance(ctx context.Context, tenantID, id string) error {
+	if tenantID == "" || id == "" {
+		return errors.New("sqlite: tenant_id and instance id are required")
 	}
-	res, err := s.db.ExecContext(ctx, `DELETE FROM server_instances WHERE id = ?`, id)
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM server_instances WHERE tenant_id = ? AND id = ?`, tenantID, id)
 	if err != nil {
 		return fmt.Errorf("sqlite: delete instance %q: %w", id, err)
 	}

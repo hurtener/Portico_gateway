@@ -139,6 +139,7 @@ func startMcpDevServer(t *testing.T, specs []config.ServerSpec) (*httptest.Serve
 		listChangedMux.OnDownstream(ctx, serverID, n)
 	})
 	sess.OnClose(listChangedMux.ForgetSession)
+	sess.OnClose(disp.InvalidateSession)
 
 	t.Cleanup(func() {
 		sess.CloseAll()

@@ -5,6 +5,7 @@ type Prompt struct {
 	Name        string           `json:"name"`
 	Description string           `json:"description,omitempty"`
 	Arguments   []PromptArgument `json:"arguments,omitempty"`
+	Icons       []Icon           `json:"icons,omitempty"` // 2025-11-25
 }
 
 // PromptArgument describes one slot in a prompt template.

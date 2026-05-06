@@ -219,8 +219,8 @@ func (r *Registry) UpsertInstance(ctx context.Context, i *ifaces.InstanceRecord)
 	return r.store.UpsertInstance(ctx, i)
 }
 
-func (r *Registry) DeleteInstance(ctx context.Context, id string) error {
-	return r.store.DeleteInstance(ctx, id)
+func (r *Registry) DeleteInstance(ctx context.Context, tenantID, id string) error {
+	return r.store.DeleteInstance(ctx, tenantID, id)
 }
 
 // Subscribe returns a channel that receives every mutation. Buffered (32);

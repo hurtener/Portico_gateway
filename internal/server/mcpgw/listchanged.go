@@ -182,7 +182,11 @@ func (m *ListChangedMux) dispatch(serverID string, n protocol.Notification) {
 func (m *ListChangedMux) rewriteForClient(serverID string, n protocol.Notification) protocol.Notification {
 	root := map[string]any{}
 	if len(n.Params) > 0 {
-		_ = json.Unmarshal(n.Params, &root)
+		if err := json.Unmarshal(n.Params, &root); err != nil {
+			m.log.Warn("malformed downstream notification params; falling back to empty",
+				"server_id", serverID, "method", n.Method, "err", err)
+			root = map[string]any{}
+		}
 	}
 	meta, _ := root["_meta"].(map[string]any)
 	if meta == nil {

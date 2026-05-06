@@ -40,12 +40,14 @@ type Client struct {
 	log *slog.Logger
 
 	// process state
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	stdout  io.ReadCloser
-	stderr  io.ReadCloser
-	wg      sync.WaitGroup
-	closeCh chan struct{}
+	cmd            *exec.Cmd
+	stdin          io.WriteCloser
+	stdout         io.ReadCloser
+	stderr         io.ReadCloser
+	wg             sync.WaitGroup
+	closeCh        chan struct{}
+	closeOnce      sync.Once // guards close(closeCh)
+	notifCloseOnce sync.Once // guards close(notifCh)
 
 	// JSON-RPC bookkeeping
 	idCounter  atomic.Int64
@@ -545,12 +547,12 @@ func (c *Client) Close(ctx context.Context) error {
 }
 
 func (c *Client) shutdown() error {
-	select {
-	case <-c.closeCh:
-		// already closing
-	default:
+	// closeOnce guards both closeCh and notifCh: closeCh is the signal
+	// to in-flight RPCs that the client is gone; notifCh is closed
+	// AFTER readLoop has stopped publishing so we never send-on-closed.
+	c.closeOnce.Do(func() {
 		close(c.closeCh)
-	}
+	})
 	if c.stdin != nil {
 		_ = c.stdin.Close()
 	}
@@ -570,5 +572,6 @@ func (c *Client) shutdown() error {
 		}
 	}
 	c.wg.Wait()
+	c.notifCloseOnce.Do(func() { close(c.notifCh) })
 	return nil
 }

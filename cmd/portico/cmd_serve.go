@@ -153,6 +153,9 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		listChangedMux.OnDownstream(ctx, serverID, n)
 	})
 	sessions.OnClose(listChangedMux.ForgetSession)
+	// Drop per-session caches on session termination so long-running
+	// gateways don't leak memory in proportion to session churn.
+	sessions.OnClose(dispatcher.InvalidateSession)
 
 	// Subscribe the supervisor to registry change events so spec edits
 	// (via /v1/servers/{id}/reload, hot-reload, or admin POST) drain the
@@ -181,19 +184,20 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	_ = watcher // kept for future inspection; lifecycle owned by ctx
 
 	deps := api.Deps{
-		Logger:      logger,
-		Validator:   validator,
-		DevMode:     cfg.IsDevMode(),
-		DevTenant:   devTenantOrEnv(cfg.IsDevMode()),
-		Tenants:     tenants,
-		Audit:       audit,
-		Version:     version,
-		BuildCommit: buildCommit,
-		Sessions:    sessions,
-		Dispatcher:  dispatcher,
-		Manager:     manager,
-		Registry:    reg,
-		Apps:        appsReg,
+		Logger:         logger,
+		Validator:      validator,
+		DevMode:        cfg.IsDevMode(),
+		DevTenant:      devTenantOrEnv(cfg.IsDevMode()),
+		Tenants:        tenants,
+		Audit:          audit,
+		Version:        version,
+		BuildCommit:    buildCommit,
+		Sessions:       sessions,
+		Dispatcher:     dispatcher,
+		Manager:        manager,
+		Registry:       reg,
+		Apps:           appsReg,
+		AllowedOrigins: cfg.Server.AllowedOrigins,
 	}
 
 	handler := api.NewRouter(deps)
