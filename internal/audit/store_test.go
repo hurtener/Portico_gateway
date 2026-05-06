@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hurtener/Portico_gateway/internal/audit"
 	_ "modernc.org/sqlite"
+
+	"github.com/hurtener/Portico_gateway/internal/audit"
 )
 
 func newAuditDB(t *testing.T) *sql.DB {

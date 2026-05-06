@@ -112,10 +112,10 @@ type scanner interface {
 
 func scanApproval(s scanner) (*ifaces.ApprovalRecord, error) {
 	var (
-		a                                  ifaces.ApprovalRecord
-		sess, user, args, risk, decided    sql.NullString
-		metadata                            sql.NullString
-		created, expires                    string
+		a                               ifaces.ApprovalRecord
+		sess, user, args, risk, decided sql.NullString
+		metadata                        sql.NullString
+		created, expires                string
 	)
 	if err := s.Scan(&a.ID, &a.TenantID, &sess, &user, &a.Tool, &args, &risk,
 		&a.Status, &created, &decided, &expires, &metadata); err != nil {

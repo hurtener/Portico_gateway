@@ -19,6 +19,8 @@ import (
 
 // Strategy names. Configuration files reference these constants via the
 // AuthSpec.Strategy field; the registry validates the value at parse time.
+//
+//nolint:gosec // strategy labels, not credentials
 const (
 	StrategyEnvInject       = "env_inject"
 	StrategyHTTPHeader      = "http_header_inject"

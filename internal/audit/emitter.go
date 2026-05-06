@@ -22,18 +22,23 @@ import (
 )
 
 // Common event types. Other packages reference these constants instead of
-// raw strings.
+// raw strings. The values look credential-shaped to gosec (they contain
+// the word "credential" / "vault"); the rule is silenced inline because
+// these are event labels, not secrets.
 const (
-	EventToolCallStart        = "tool_call.start"
-	EventToolCallComplete     = "tool_call.complete"
-	EventToolCallFailed       = "tool_call.failed"
-	EventPolicyAllowed        = "policy.allowed"
-	EventPolicyDenied         = "policy.denied"
-	EventApprovalPending      = "approval.pending"
-	EventApprovalDecided      = "approval.decided"
-	EventApprovalExpired      = "approval.expired"
-	EventCredentialInjected   = "credential.injected"
+	EventToolCallStart    = "tool_call.start"
+	EventToolCallComplete = "tool_call.complete"
+	EventToolCallFailed   = "tool_call.failed"
+	EventPolicyAllowed    = "policy.allowed"
+	EventPolicyDenied     = "policy.denied"
+	EventApprovalPending  = "approval.pending"
+	EventApprovalDecided  = "approval.decided"
+	EventApprovalExpired  = "approval.expired"
+	//nolint:gosec // event label, not a credential
+	EventCredentialInjected = "credential.injected"
+	//nolint:gosec // event label, not a credential
 	EventCredentialExchangeOK = "credential.exchange.success"
+	//nolint:gosec // event label, not a credential
 	EventCredentialExchangeNG = "credential.exchange.failed"
 	EventVaultGet             = "vault.get"
 	EventVaultPut             = "vault.put"

@@ -23,12 +23,18 @@ import (
 )
 
 // GrantTypeTokenExchange is RFC 8693's grant_type value.
+//
+//nolint:gosec // RFC 8693 IRI literal, not a credential
 const GrantTypeTokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange"
 
 // SubjectTokenTypeJWT identifies the incoming JWT as the subject token.
+//
+//nolint:gosec // RFC 8693 IRI literal, not a credential
 const SubjectTokenTypeJWT = "urn:ietf:params:oauth:token-type:jwt"
 
 // RequestedTokenTypeAccessToken is the canonical "access_token" type IRI.
+//
+//nolint:gosec // RFC 8693 IRI literal, not a credential
 const RequestedTokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token"
 
 // ErrNoSubjectToken is returned when the dispatcher cannot supply the raw
@@ -114,11 +120,10 @@ type ExchangeConfig struct {
 // Exchanger performs Token Exchange + caches results. Safe for concurrent
 // callers across a fleet of incoming requests.
 type Exchanger struct {
-	cfg    ExchangeConfig
-	http   *http.Client
-	cache  *cache
-	now    func() time.Time // injectable clock for tests
-	logger func(format string, args ...any)
+	cfg   ExchangeConfig
+	http  *http.Client
+	cache *cache
+	now   func() time.Time // injectable clock for tests
 }
 
 // New constructs an Exchanger. cfg.TokenURL and cfg.ClientID are required;
@@ -194,6 +199,7 @@ func (e *Exchanger) Exchange(ctx context.Context, tenantID, userID, subjectToken
 		if errors.As(err, &xe) && xe.Retryable() {
 			// Single retry with jitter. Honor ctx cancellation while
 			// waiting.
+			//nolint:gosec // jitter for retry backoff; non-cryptographic
 			delay := 200*time.Millisecond + time.Duration(rand.Int63n(int64(100*time.Millisecond)))
 			t := time.NewTimer(delay)
 			select {

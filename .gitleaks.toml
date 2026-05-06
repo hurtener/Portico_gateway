@@ -1,0 +1,16 @@
+# Portico gitleaks configuration.
+#
+# Extends the default rule set; only adds path allow-lists so the redactor
+# test corpus (which intentionally embeds known token shapes to assert the
+# redactor catches them) does not trigger leak findings on PRs.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Repo-specific allowlist for known synthetic token shapes."
+paths = [
+  # The redactor test corpus is the *purpose* of these strings — they
+  # exercise every credential pattern the audit redactor must catch.
+  '''internal/audit/redact_test\.go''',
+]

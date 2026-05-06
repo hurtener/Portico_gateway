@@ -115,7 +115,9 @@
 </section>
 
 <style>
-  .page-head { margin-bottom: var(--space-4); }
+  .page-head {
+    margin-bottom: var(--space-4);
+  }
   .form-card {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
@@ -142,14 +144,22 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
   }
-  table { width: 100%; border-collapse: collapse; }
-  th, td {
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th,
+  td {
     padding: var(--space-2) var(--space-3);
     text-align: left;
     border-bottom: 1px solid var(--color-border);
   }
-  .muted { color: var(--color-text-muted); }
-  .error { color: var(--color-danger); }
+  .muted {
+    color: var(--color-text-muted);
+  }
+  .error {
+    color: var(--color-danger);
+  }
   .btn {
     padding: var(--space-1) var(--space-3);
     border-radius: var(--radius-sm);

@@ -13,7 +13,11 @@
     loading = true;
     error = '';
     try {
-      const res = await api.queryAudit({ type: typeFilter || undefined, cursor: append ? cursor : undefined, limit: 50 });
+      const res = await api.queryAudit({
+        type: typeFilter || undefined,
+        cursor: append ? cursor : undefined,
+        limit: 50
+      });
       cursor = res.next_cursor || '';
       events = append ? [...events, ...res.events] : res.events;
     } catch (e) {
@@ -103,7 +107,8 @@
     width: 100%;
     border-collapse: collapse;
   }
-  th, td {
+  th,
+  td {
     padding: var(--space-2) var(--space-3);
     text-align: left;
     border-bottom: 1px solid var(--color-border);
@@ -116,8 +121,12 @@
     white-space: pre-wrap;
     word-break: break-all;
   }
-  .muted { color: var(--color-text-muted); }
-  .error { color: var(--color-danger); }
+  .muted {
+    color: var(--color-text-muted);
+  }
+  .error {
+    color: var(--color-danger);
+  }
   .btn {
     padding: var(--space-1) var(--space-3);
     border-radius: var(--radius-sm);
@@ -125,5 +134,7 @@
     background: var(--color-surface);
     cursor: pointer;
   }
-  .load-more { margin-top: var(--space-4); }
+  .load-more {
+    margin-top: var(--space-4);
+  }
 </style>

@@ -100,7 +100,8 @@
     width: 100%;
     border-collapse: collapse;
   }
-  th, td {
+  th,
+  td {
     padding: var(--space-2) var(--space-3);
     text-align: left;
     border-bottom: 1px solid var(--color-border);
@@ -138,7 +139,8 @@
     font-size: var(--font-sm);
     background: var(--color-surface-alt);
   }
-  .risk-destructive, .risk-external_side_effect {
+  .risk-destructive,
+  .risk-external_side_effect {
     background: var(--color-warning-bg, #fff3cd);
     color: var(--color-warning-fg, #856404);
   }

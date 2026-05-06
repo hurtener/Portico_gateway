@@ -293,18 +293,14 @@ export const api = {
   },
   listSecrets: () => request<SecretRef[]>('/v1/admin/secrets'),
   putSecret: (tenant: string, name: string, value: string) =>
-    request<void>(
-      `/v1/admin/secrets/${encodeURIComponent(tenant)}/${encodeURIComponent(name)}`,
-      {
-        method: 'PUT',
-        body: JSON.stringify({ value })
-      }
-    ),
+    request<void>(`/v1/admin/secrets/${encodeURIComponent(tenant)}/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value })
+    }),
   deleteSecret: (tenant: string, name: string) =>
-    request<void>(
-      `/v1/admin/secrets/${encodeURIComponent(tenant)}/${encodeURIComponent(name)}`,
-      { method: 'DELETE' }
-    )
+    request<void>(`/v1/admin/secrets/${encodeURIComponent(tenant)}/${encodeURIComponent(name)}`, {
+      method: 'DELETE'
+    })
 };
 
 export interface Approval {

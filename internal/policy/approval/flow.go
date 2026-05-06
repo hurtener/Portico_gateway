@@ -35,18 +35,18 @@ const (
 
 // Approval mirrors one row of the `approvals` table.
 type Approval struct {
-	ID           string
-	TenantID     string
-	SessionID    string
-	UserID       string
-	Tool         string
-	ArgsSummary  string
-	RiskClass    string
-	Status       string
-	CreatedAt    time.Time
-	DecidedAt    *time.Time
-	ExpiresAt    time.Time
-	Metadata     map[string]any
+	ID          string
+	TenantID    string
+	SessionID   string
+	UserID      string
+	Tool        string
+	ArgsSummary string
+	RiskClass   string
+	Status      string
+	CreatedAt   time.Time
+	DecidedAt   *time.Time
+	ExpiresAt   time.Time
+	Metadata    map[string]any
 }
 
 // Outcome is what the dispatcher gets back. Approved/Denied/Expired are
@@ -89,11 +89,11 @@ type SessionLookup interface {
 // CallContext is the snapshot of the tools/call params the flow needs to
 // build a useful elicitation prompt + audit row. The dispatcher fills it.
 type CallContext struct {
-	Tool        string
-	Arguments   json.RawMessage
-	SkillID     string
-	RiskClass   string
-	ApprovalID  string // optional pre-generated id; flow generates one if empty
+	Tool       string
+	Arguments  json.RawMessage
+	SkillID    string
+	RiskClass  string
+	ApprovalID string // optional pre-generated id; flow generates one if empty
 }
 
 // Flow orchestrates the approval lifecycle. Cheap to construct; safe for
@@ -219,9 +219,9 @@ func (f *Flow) ResolveManually(ctx context.Context, tenantID, id, status, actorU
 		return nil, err
 	}
 	f.emit(ctx, audit.EventApprovalDecided, a, map[string]any{
-		"decision":    status,
-		"decided_by":  actorUserID,
-		"channel":     "manual",
+		"decision":   status,
+		"decided_by": actorUserID,
+		"channel":    "manual",
 	})
 	return a, nil
 }

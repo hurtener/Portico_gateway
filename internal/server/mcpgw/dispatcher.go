@@ -30,8 +30,8 @@ type Dispatcher struct {
 	prompts   *PromptAggregator
 	mux       *ListChangedMux
 
-	policy   *PolicyPipeline
-	emitter  audit.Emitter
+	policy  *PolicyPipeline
+	emitter audit.Emitter
 
 	cacheMu          sync.Mutex
 	toolsCache       map[string]toolsCacheEntry // sessionID -> tools
@@ -289,6 +289,15 @@ func (d *Dispatcher) handleToolsList(ctx context.Context, sess *Session, _ *prot
 	return body, nil
 }
 
+// handleToolsCall is the single hot path that runs the policy →
+// approval → credentials → southbound chain. It carries a gocyclo
+// waiver because each of the seven sequential branches is a real
+// distinct concern (params parse, policy gate, approval gate, manager
+// lookup, southbound acquire, progress wiring, audit emit) — splitting
+// any of them into helpers would obscure the order operators rely on
+// when reading a stack trace.
+//
+//nolint:gocyclo
 func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *protocol.Request) (json.RawMessage, *protocol.Error) {
 	var params protocol.CallToolParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {

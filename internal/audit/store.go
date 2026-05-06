@@ -198,6 +198,9 @@ func (s *Store) Query(ctx context.Context, q Query) ([]Event, string, error) {
 		args = append(args, q.Cursor)
 	}
 	args = append(args, q.Limit)
+	// G202 false positive: `where` is built from a fixed-shape clause
+	// list above; only values flow through `args` via placeholders.
+	//nolint:gosec // dynamic clause assembly with parameterised values
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, tenant_id, type, session_id, user_id, occurred_at, trace_id, span_id, payload_json
 		 FROM audit_events `+where+`
@@ -211,10 +214,10 @@ func (s *Store) Query(ctx context.Context, q Query) ([]Event, string, error) {
 	var lastID string
 	for rows.Next() {
 		var (
-			id, ttype, occurred       string
-			sessID, userID            sql.NullString
-			traceID, spanID, payload  sql.NullString
-			tenantID                  string
+			id, ttype, occurred      string
+			sessID, userID           sql.NullString
+			traceID, spanID, payload sql.NullString
+			tenantID                 string
 		)
 		if err := rows.Scan(&id, &tenantID, &ttype, &sessID, &userID, &occurred, &traceID, &spanID, &payload); err != nil {
 			return nil, "", err

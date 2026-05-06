@@ -42,10 +42,10 @@ const (
 	ReasonApprovalTimeout = "approval_timeout"
 )
 
-// PolicyResolver returns the per-tenant policy snapshot. The runtime
+// Resolver returns the per-tenant policy snapshot. The runtime
 // builds it from configured TenantConfig.Policy at boot and refreshes on
 // hot-reload; tests pass a fixed map.
-type PolicyResolver func(tenantID string) Policy
+type Resolver func(tenantID string) Policy
 
 // Policy is the per-tenant override layer applied on top of registry +
 // skill defaults.
@@ -75,14 +75,14 @@ type Engine struct {
 	servers    ServerLookup
 	skills     *runtime.Catalog
 	enable     *runtime.Enablement
-	policies   PolicyResolver
+	policies   Resolver
 	cfg        EngineConfig
 	defaultTOL time.Duration
 }
 
 // New constructs an Engine. servers/skills/enable may be nil only in
 // tests that exercise narrow policy paths (e.g. allowlist matching).
-func New(servers ServerLookup, skills *runtime.Catalog, enable *runtime.Enablement, policies PolicyResolver, cfg EngineConfig) *Engine {
+func New(servers ServerLookup, skills *runtime.Catalog, enable *runtime.Enablement, policies Resolver, cfg EngineConfig) *Engine {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}

@@ -30,7 +30,7 @@ func (f *fakeVault) Put(_ context.Context, tenantID, name, value string) error {
 	f.m[tenantID+"/"+name] = value
 	return nil
 }
-func (f *fakeVault) Delete(_ context.Context, _, _ string) error    { return nil }
+func (f *fakeVault) Delete(_ context.Context, _, _ string) error        { return nil }
 func (f *fakeVault) List(_ context.Context, _ string) ([]string, error) { return nil, nil }
 func (f *fakeVault) Close() error                                       { return nil }
 func (f *fakeVault) RotateKey(_ context.Context, _ []byte) error        { return nil }

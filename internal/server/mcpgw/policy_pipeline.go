@@ -67,9 +67,9 @@ func NewPolicyPipeline(cfg PipelineConfig) *PolicyPipeline {
 // and Outcome to know whether to allow / deny / emit -32001; PrepTarget
 // is non-nil iff the call should proceed.
 type PipelineResult struct {
-	Decision    policy.Decision
-	Outcome     approval.Outcome
-	PrepTarget  *inject.PrepTarget
+	Decision        policy.Decision
+	Outcome         approval.Outcome
+	PrepTarget      *inject.PrepTarget
 	StructuredError *protocol.Error // populated when Allow=false; ready to return
 }
 

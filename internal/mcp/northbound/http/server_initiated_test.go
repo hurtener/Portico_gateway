@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	nethttp "net/http"
 	"net/http/httptest"
@@ -28,7 +27,8 @@ func (stubDispatcher) HandleRequest(_ context.Context, _ *mcpgw.Session, req *pr
 	}
 	return json.RawMessage(`{}`), nil
 }
-func (stubDispatcher) HandleNotification(_ context.Context, _ *mcpgw.Session, _ *protocol.Notification) {}
+func (stubDispatcher) HandleNotification(_ context.Context, _ *mcpgw.Session, _ *protocol.Notification) {
+}
 
 func TestServerInitiated_Roundtrip(t *testing.T) {
 	sessions := mcpgw.NewSessionRegistry()
@@ -276,11 +276,9 @@ func TestServerInitiated_StopRejectsPending(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	requester.Stop()
 	select {
-	case err := <-errCh:
-		if err == nil || errors.Is(err, context.DeadlineExceeded) {
-			// Either an explicit shutdown error or the response we delivered.
-			// Both acceptable.
-		}
+	case <-errCh:
+		// Either an explicit shutdown error or the response we delivered.
+		// Both are acceptable; we just want Send to unblock.
 	case <-time.After(2 * time.Second):
 		t.Errorf("Send did not return after Stop")
 	}

@@ -16,9 +16,9 @@ import (
 
 // Session is the per-connection state tracked by the gateway.
 type Session struct {
-	ID         string
-	TenantID   string
-	UserID     string
+	ID       string
+	TenantID string
+	UserID   string
 	// SubjectToken is the raw bearer JWT the client presented at session
 	// creation. Phase 5's OAuth token-exchange strategy reuses it as the
 	// RFC 8693 subject_token. Sensitive: never log, persist, or surface.
