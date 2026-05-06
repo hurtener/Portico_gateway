@@ -1,6 +1,6 @@
 # Portico Implementation Plans — Index
 
-This directory contains seven self-contained implementation plans, one per phase, that take Portico from an empty repo to V1.
+This directory contains the self-contained implementation plans that take Portico from an empty repo to V1, plus a V1.5 extension. Phases 0–6 build the engine; Phase 7 lands the design system; Phases 8–11 build the operator surface (skill sources, Console CRUD, playground, telemetry replay); Phase 12 ships V1; Phase 13 (V1.5) adds the LLM gateway.
 
 ## How to use these plans
 
@@ -21,6 +21,18 @@ This directory contains seven self-contained implementation plans, one per phase
 | 4 | [phase-4-skills-runtime-virtual-directory.md](./phase-4-skills-runtime-virtual-directory.md) | Skill manifest format + JSON Schema, `SkillSource` interface + `LocalDir`, virtual directory exposed as `skill://` resources/prompts, per-session enablement, four reference packs. |
 | 5 | [phase-5-auth-policy-credentials-approval.md](./phase-5-auth-policy-credentials-approval.md) | Real vault (AES-256-GCM), OAuth 2.0 token exchange, credential injection strategies, policy engine with risk classes, approval flow (elicitation + structured-error fallback), persisted audit store. |
 | 6 | [phase-6-catalog-snapshots-observability.md](./phase-6-catalog-snapshots-observability.md) | Per-session catalog snapshots, schema fingerprinting + drift detection, OpenTelemetry tracing end-to-end, session inspector UI. |
+| 7 | [phase-7-design-system-implementation.md](./phase-7-design-system-implementation.md) | Token-driven Console design system: light + dark mode, component library, Inter / JetBrains Mono / Newsreader self-hosted, brand placement, accessibility pass. |
+| 8 | [phase-8-skill-sources-first-class.md](./phase-8-skill-sources-first-class.md) | Skill sources first-class: Git + HTTP drivers + in-Portico authored skills, REST + Console CRUD, hot-reload propagation, validation pipeline with JSON-Pointer errors. |
+| 9 | [phase-9-console-crud.md](./phase-9-console-crud.md) | Console CRUD for servers, tenants, secrets, policy editor; hot-reload everywhere; destructive actions go through the approval flow; permission scopes enforced. |
+| 10 | [phase-10-playground.md](./phase-10-playground.md) | Interactive MCP playground: catalog browser, schema-driven tool call composer, streamed response, live trace + audit + policy + drift correlation, saved cases + replay. |
+| 11 | [phase-11-telemetry-replay.md](./phase-11-telemetry-replay.md) | Self-contained span store, session bundle exporter/importer, time-travel inspector with state-at-time scrubber, cross-session pivots, FTS audit search, replay-from-inspector. |
+| 12 | [phase-12-onboarding-distribution.md](./phase-12-onboarding-distribution.md) | First-run wizard, `portico init`, in-Console help system, embedded docs site, OpenAPI extractor, `make release` multi-arch + signed artifacts, MCP conformance suite. **V1 ships at the end of this phase.** |
+
+## Phase order (V1.5)
+
+| # | Plan                                                          | Phase summary                                                       |
+|---|---------------------------------------------------------------|---------------------------------------------------------------------|
+| 13 | [phase-13-llm-gateway.md](./phase-13-llm-gateway.md) | LLM gateway via `kreuzberg-dev/liter-llm`: OpenAI-compatible northbound, per-tenant provider + model registry, vault-backed keys, tool-use bridging into the MCP gateway, quotas + cost telemetry, OpenAI conformance suite. |
 
 ## Cross-cutting conventions all plans assume
 
@@ -101,17 +113,29 @@ Each plan ends with "Hand-off to Phase N+1" naming exactly what the next phase i
 
 ## Things deliberately NOT in V1
 
-Cross-reference against the RFC §15 boundary:
+Cross-reference against the RFC §15 boundary. Note that several items in the original RFC §15 list move into V1 in Phases 8–12 (Git + HTTP skill sources land in Phase 8; LLM-quota-style enforcement lands in Phase 13's surface). What remains genuinely post-V1:
 
 - Postgres as default store (post-V1).
-- Kubernetes deployment artifacts (post-V1).
+- Kubernetes deployment artifacts (post-V1; Compose example ships in Phase 12).
 - Redis-backed multi-instance coordination (post-V1).
 - Sidecar / per_request runtime modes (post-V1).
-- Quota enforcement (post-V1).
 - Async approval channels (Slack, email, ticketing) (post-V1).
 - Container / microVM stdio isolation (post-V1).
-- Git / OCI / HTTP skill sources (post-V1).
+- OCI skill source (post-V1; HTTP + Git ship in Phase 8).
 - Hosted SaaS (post-V1).
 - Alternative auth backends (mTLS, SSO direct) (post-V1).
+- Cross-instance distributed tracing / replay (post-V1; Phase 11 covers single-instance).
+- Visual / drag-drop manifest builder for skills (post-V1).
+- Per-user (sub-tenant) RBAC (post-V1).
+- Mobile-first Console layouts (post-V1).
+- LLM gateway extras: fine-tuning APIs, multimodal, hosted vector indices (post-V1.5).
 
-These have placeholder hooks in V1 (interfaces ready) so they're additive when picked up.
+These have placeholder hooks in V1 (interfaces ready, factories registered) so they're additive when picked up.
+
+## V1 vs. V1.5 boundary
+
+V1 is feature-complete with Phase 12. The binary that ships at the end of Phase 12 is the artifact a public V1 announcement points at: full MCP gateway, multi-tenant operator surface, observability stack, polished Console + docs + conformance suite + signed multi-arch release.
+
+V1.5 (Phase 13) is the LLM gateway extension. It is additive — V1 deployments continue working untouched; operators who want LLM gateway capabilities upgrade to V1.5 and start configuring providers + models. The same single-binary, single-listener, single-DB story holds.
+
+Phases beyond V1.5 are not pre-planned. They are negotiated when the work is queued, drawing on the patterns these plans establish.
