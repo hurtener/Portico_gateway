@@ -1,10 +1,23 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type ServerSummary } from '$lib/api';
+  import { Badge, Button, EmptyState, PageHeader, Table } from '$lib/components';
+  import { t } from '$lib/i18n';
+  import IconRefreshCw from 'lucide-svelte/icons/refresh-cw';
 
   let servers: ServerSummary[] = [];
   let loading = true;
   let error = '';
+
+  type StatusTone = 'success' | 'danger' | 'warning' | 'neutral' | 'info';
+  function statusTone(s: string): StatusTone {
+    const v = s.toLowerCase();
+    if (v === 'ready' || v === 'running') return 'success';
+    if (v === 'crashed' || v === 'error') return 'danger';
+    if (v === 'circuit_open' || v === 'backoff') return 'warning';
+    if (v === 'starting') return 'info';
+    return 'neutral';
+  }
 
   async function refresh() {
     loading = true;
@@ -33,150 +46,77 @@
   }
 
   onMount(refresh);
+
+  function gotoServer(row: ServerSummary) {
+    window.location.href = `/servers/${encodeURIComponent(row.id)}`;
+  }
+
+  $: columns = [
+    { key: 'id', label: $t('servers.col.id'), mono: true },
+    { key: 'display_name', label: $t('servers.col.displayName') },
+    { key: 'transport', label: $t('servers.col.transport') },
+    { key: 'runtime_mode', label: $t('servers.col.mode') },
+    { key: 'status', label: $t('servers.col.status') },
+    { key: 'enabled', label: $t('servers.col.enabled'), align: 'center' as const },
+    { key: 'actions', label: '', align: 'right' as const, width: '120px' }
+  ];
 </script>
 
-<header class="page-head">
-  <h1>Servers</h1>
-  <button class="btn" on:click={refresh} disabled={loading}>Refresh</button>
-</header>
+<PageHeader title={$t('servers.title')} description={$t('servers.description')}>
+  <div slot="actions">
+    <Button variant="secondary" on:click={refresh} {loading}>
+      <IconRefreshCw slot="leading" size={14} />
+      {$t('common.refresh')}
+    </Button>
+  </div>
+</PageHeader>
 
 {#if error}
   <p class="error">{error}</p>
 {/if}
 
-{#if loading && servers.length === 0}
-  <p class="muted">Loading…</p>
-{:else if servers.length === 0}
-  <p class="muted">No servers registered.</p>
-{:else}
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Display name</th>
-        <th>Transport</th>
-        <th>Mode</th>
-        <th>Status</th>
-        <th>Enabled</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each servers as s (s.id)}
-        <tr>
-          <td><a href={`/servers/${encodeURIComponent(s.id)}`}>{s.id}</a></td>
-          <td>{s.display_name ?? ''}</td>
-          <td><code>{s.transport}</code></td>
-          <td><code>{s.runtime_mode}</code></td>
-          <td>
-            <span class="status status-{s.status}">{s.status}</span>
-          </td>
-          <td>{s.enabled ? 'yes' : 'no'}</td>
-          <td>
-            <button class="btn btn-secondary" on:click={() => toggle(s)}>
-              {s.enabled ? 'Disable' : 'Enable'}
-            </button>
-          </td>
-        </tr>
-      {/each}
-    </tbody>
-  </table>
-{/if}
+<Table {columns} rows={servers} empty="No servers registered." onRowClick={gotoServer}>
+  <svelte:fragment slot="cell" let:row let:column let:value>
+    {#if column.key === 'id'}
+      <a href={`/servers/${encodeURIComponent(row.id)}`}>{row.id}</a>
+    {:else if column.key === 'transport'}
+      <Badge tone="neutral" mono>{row.transport}</Badge>
+    {:else if column.key === 'runtime_mode'}
+      <Badge tone="neutral" mono>{row.runtime_mode}</Badge>
+    {:else if column.key === 'status'}
+      <Badge tone={statusTone(row.status)}>{row.status}</Badge>
+    {:else if column.key === 'enabled'}
+      <Badge tone={row.enabled ? 'success' : 'neutral'}>
+        {row.enabled ? $t('common.yes') : $t('common.no')}
+      </Badge>
+    {:else if column.key === 'actions'}
+      <Button
+        size="sm"
+        variant="ghost"
+        on:click={(e) => {
+          e.stopPropagation();
+          toggle(row);
+        }}
+      >
+        {row.enabled ? $t('common.disable') : $t('common.enable')}
+      </Button>
+    {:else}
+      {value ?? ''}
+    {/if}
+  </svelte:fragment>
+  <svelte:fragment slot="empty">
+    <EmptyState
+      title={$t('servers.empty.title')}
+      description={$t('servers.empty.description')}
+      compact
+    />
+  </svelte:fragment>
+</Table>
 
 <style>
-  .page-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-4);
-    margin-bottom: var(--space-6);
-  }
-  h1 {
-    margin: 0;
-    font-size: var(--text-2xl);
-    font-weight: var(--weight-semibold);
-  }
-  .muted {
-    color: var(--color-text-muted);
-  }
   .error {
     color: var(--color-danger);
     margin: 0 0 var(--space-4) 0;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--text-sm);
-  }
-  thead th {
-    text-align: left;
-    padding: var(--space-2) var(--space-3);
-    border-bottom: 1px solid var(--color-border);
-    color: var(--color-text-muted);
-    font-weight: var(--weight-medium);
-  }
-  tbody td {
-    padding: var(--space-3);
-    border-bottom: 1px solid var(--color-border);
-    vertical-align: middle;
-  }
-  code {
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    background: var(--color-surface-2);
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-  }
-
-  .status {
-    display: inline-block;
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-pill);
-    font-size: var(--text-xs);
-    font-family: var(--font-mono);
-    background: var(--color-surface-2);
-    color: var(--color-text-muted);
-  }
-  .status-ready,
-  .status-running {
-    background: var(--color-success-soft);
-    color: var(--color-success);
-  }
-  .status-crashed,
-  .status-error {
-    background: var(--color-danger-soft);
-    color: var(--color-danger);
-  }
-  .status-circuit_open,
-  .status-backoff {
-    background: var(--color-warning-soft);
-    color: var(--color-warning);
-  }
-
-  .btn {
-    border: 1px solid var(--color-brand);
-    background: var(--color-brand);
-    color: var(--color-on-brand);
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
-    cursor: pointer;
-    transition: background var(--motion-fast) var(--ease-standard);
-  }
-  .btn:hover:not(:disabled) {
-    background: var(--color-brand-hover);
-  }
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .btn-secondary {
-    background: var(--color-surface);
-    color: var(--color-text);
-    border-color: var(--color-border-strong);
-  }
-  .btn-secondary:hover:not(:disabled) {
-    background: var(--color-surface-2);
+    font-size: var(--font-size-body-sm);
   }
 </style>

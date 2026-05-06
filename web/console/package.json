@@ -33,5 +33,10 @@
     "typescript": "^5.5.0",
     "vite": "^5.4.2"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.1.0",
+    "@fontsource-variable/jetbrains-mono": "^5.1.0",
+    "@fontsource-variable/newsreader": "^5.1.0",
+    "lucide-svelte": "^0.460.0"
+  }
 }

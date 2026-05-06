@@ -1,9 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, type SecretRef } from '$lib/api';
+  import { api, isFeatureUnavailable, type SecretRef } from '$lib/api';
+  import { Badge, Button, EmptyState, Input, PageHeader, Table, toast } from '$lib/components';
+  import { t } from '$lib/i18n';
+  import IconPlus from 'lucide-svelte/icons/plus';
+  import IconTrash from 'lucide-svelte/icons/trash-2';
+  import IconLock from 'lucide-svelte/icons/lock';
+
+  type State = 'loading' | 'ready' | 'unavailable';
 
   let secrets: SecretRef[] = [];
-  let loading = true;
+  let state: State = 'loading';
   let error = '';
   let formTenant = '';
   let formName = '';
@@ -11,118 +18,164 @@
   let saving = false;
 
   async function refresh() {
-    loading = true;
     try {
       secrets = await api.listSecrets();
+      state = 'ready';
       error = '';
     } catch (e) {
+      if (isFeatureUnavailable(e)) {
+        state = 'unavailable';
+        return;
+      }
       error = (e as Error).message;
-    } finally {
-      loading = false;
+      state = 'ready';
     }
   }
 
   async function createSecret() {
     if (!formTenant || !formName || !formValue) {
-      error = 'tenant, name, and value are all required';
+      error = $t('secrets.form.required');
       return;
     }
     saving = true;
+    error = '';
     try {
       await api.putSecret(formTenant, formName, formValue);
+      toast.success(
+        $t('secrets.toast.saved.title'),
+        $t('secrets.toast.saved.description', { tenant: formTenant, name: formName })
+      );
       formValue = '';
       await refresh();
     } catch (e) {
-      error = (e as Error).message;
+      const msg = (e as Error).message;
+      error = msg;
+      toast.danger($t('secrets.toast.saveFailed.title'), msg);
     } finally {
       saving = false;
     }
   }
 
   async function deleteSecret(s: SecretRef) {
-    if (!confirm(`Delete ${s.tenant_id}/${s.name}? This cannot be undone.`)) return;
+    if (!confirm($t('secrets.confirmDelete', { tenant: s.tenant_id, name: s.name }))) return;
     try {
       await api.deleteSecret(s.tenant_id, s.name);
+      toast.info(
+        $t('secrets.toast.deleted.title'),
+        $t('secrets.toast.deleted.description', { tenant: s.tenant_id, name: s.name })
+      );
       await refresh();
     } catch (e) {
-      error = (e as Error).message;
+      const msg = (e as Error).message;
+      error = msg;
+      toast.danger($t('secrets.toast.deleteFailed.title'), msg);
     }
   }
 
   onMount(refresh);
+
+  $: columns = [
+    { key: 'tenant_id', label: $t('secrets.col.tenant') },
+    { key: 'name', label: $t('secrets.col.name'), mono: true },
+    { key: 'actions', label: '', align: 'right' as const, width: '120px' }
+  ];
 </script>
 
-<header class="page-head">
-  <h1>Vault secrets (admin)</h1>
-</header>
+<PageHeader title={$t('secrets.title')} description={$t('secrets.description')} />
 
-<p class="muted">
-  Values are never displayed. The vault stores AES-256-GCM-encrypted payloads with HKDF-derived
-  per-value keys; only references (tenant + name) are listed here.
-</p>
+{#if state === 'unavailable'}
+  <EmptyState
+    title={$t('secrets.unavailable.title')}
+    description={$t('secrets.unavailable.description')}
+  >
+    <span slot="illustration"><IconLock size={56} aria-hidden="true" /></span>
+  </EmptyState>
+{:else}
+  <section class="form-card">
+    <h2 class="form-title">{$t('secrets.form.title')}</h2>
+    <form on:submit|preventDefault={createSecret}>
+      <Input
+        bind:value={formTenant}
+        label={$t('secrets.form.tenant')}
+        placeholder={$t('secrets.form.tenant.placeholder')}
+        required
+        block={false}
+      />
+      <Input
+        bind:value={formName}
+        label={$t('secrets.form.name')}
+        placeholder={$t('secrets.form.name.placeholder')}
+        required
+        block={false}
+      />
+      <Input
+        bind:value={formValue}
+        type="password"
+        label={$t('secrets.form.value')}
+        placeholder={$t('secrets.form.value.placeholder')}
+        required
+        block={false}
+      />
+      <Button type="submit" loading={saving}>
+        <IconPlus slot="leading" size={14} />
+        {$t('common.save')}
+      </Button>
+    </form>
+  </section>
 
-{#if error}
-  <p class="error">{error}</p>
+  {#if error}<p class="error">{error}</p>{/if}
+
+  <section>
+    <h2 class="section-title">{$t('secrets.section.existing')}</h2>
+    <Table {columns} rows={secrets} empty={$t('common.empty')}>
+      <svelte:fragment slot="cell" let:row let:column>
+        {#if column.key === 'tenant_id'}
+          <Badge tone="neutral">{row.tenant_id}</Badge>
+        {:else if column.key === 'actions'}
+          <Button
+            size="sm"
+            variant="ghost"
+            on:click={(e) => {
+              e.stopPropagation();
+              deleteSecret(row);
+            }}
+          >
+            <IconTrash slot="leading" size={14} />
+            {$t('common.delete')}
+          </Button>
+        {:else}
+          {row[column.key] ?? ''}
+        {/if}
+      </svelte:fragment>
+      <svelte:fragment slot="empty">
+        <EmptyState
+          title={$t('secrets.empty.title')}
+          description={$t('secrets.empty.description')}
+          compact
+        />
+      </svelte:fragment>
+    </Table>
+  </section>
 {/if}
 
-<section class="form-card">
-  <h2>Add secret</h2>
-  <form on:submit|preventDefault={createSecret}>
-    <label>
-      <span>Tenant</span>
-      <input type="text" bind:value={formTenant} placeholder="acme" required />
-    </label>
-    <label>
-      <span>Name</span>
-      <input type="text" bind:value={formName} placeholder="github_token" required />
-    </label>
-    <label>
-      <span>Value</span>
-      <input type="password" bind:value={formValue} placeholder="•••••••••" required />
-    </label>
-    <button class="btn" type="submit" disabled={saving}>Save</button>
-  </form>
-</section>
-
-<section>
-  <h2>Existing secrets</h2>
-  {#if loading && secrets.length === 0}
-    <p class="muted">Loading…</p>
-  {:else if secrets.length === 0}
-    <p class="muted">No secrets stored.</p>
-  {:else}
-    <table>
-      <thead>
-        <tr>
-          <th>Tenant</th>
-          <th>Name</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each secrets as s, i (i)}
-          <tr>
-            <td>{s.tenant_id}</td>
-            <td><code>{s.name}</code></td>
-            <td>
-              <button class="btn btn-danger" on:click={() => deleteSecret(s)}>Delete</button>
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  {/if}
-</section>
-
 <style>
-  .page-head {
-    margin-bottom: var(--space-4);
+  .error {
+    color: var(--color-danger);
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--font-size-body-sm);
   }
   .form-card {
-    border: 1px solid var(--color-border);
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border-soft);
     border-radius: var(--radius-md);
-    padding: var(--space-4);
+    padding: var(--space-5);
     margin-bottom: var(--space-6);
+  }
+  .form-title {
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--font-size-title);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
   }
   .form-card form {
     display: grid;
@@ -130,46 +183,15 @@
     gap: var(--space-3);
     align-items: end;
   }
-  .form-card label {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
+  @media (max-width: 880px) {
+    .form-card form {
+      grid-template-columns: 1fr;
+    }
   }
-  .form-card label span {
-    font-size: var(--font-sm);
-    color: var(--color-text-muted);
-  }
-  input {
-    padding: var(--space-1) var(--space-2);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  th,
-  td {
-    padding: var(--space-2) var(--space-3);
-    text-align: left;
-    border-bottom: 1px solid var(--color-border);
-  }
-  .muted {
-    color: var(--color-text-muted);
-  }
-  .error {
-    color: var(--color-danger);
-  }
-  .btn {
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    cursor: pointer;
-  }
-  .btn-danger {
-    background: var(--color-danger);
-    color: var(--color-on-danger);
-    border-color: var(--color-danger);
+  .section-title {
+    font-size: var(--font-size-title);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+    margin: 0 0 var(--space-3) 0;
   }
 </style>

@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type AuditEvent } from '$lib/api';
+  import { Badge, Button, EmptyState, Input, PageHeader, Table } from '$lib/components';
+  import { t } from '$lib/i18n';
+  import IconSearch from 'lucide-svelte/icons/search';
 
   let events: AuditEvent[] = [];
   let cursor = '';
@@ -34,107 +37,100 @@
   }
 
   onMount(() => search(false));
+
+  const columns = [
+    { key: 'occurred_at', label: 'When', width: '180px' },
+    { key: 'type', label: 'Type', mono: true },
+    { key: 'tenant_id', label: 'Tenant' },
+    { key: 'session_id', label: 'Session', mono: true },
+    { key: 'payload', label: 'Payload' }
+  ];
+
+  function fmt(t: string): string {
+    try {
+      return new Date(t).toLocaleString();
+    } catch {
+      return t;
+    }
+  }
 </script>
 
-<header class="page-head">
-  <h1>Audit log</h1>
-  <form class="filters" on:submit|preventDefault={applyFilter}>
-    <input
-      type="text"
-      placeholder="event type (e.g. tool_call.complete)"
+<PageHeader title={$t('audit.title')} description={$t('audit.description')}>
+  <form slot="actions" class="filters" on:submit|preventDefault={applyFilter}>
+    <Input
       bind:value={pendingType}
-    />
-    <button class="btn" type="submit" disabled={loading}>Search</button>
+      placeholder={$t('audit.filter.placeholder')}
+      size="md"
+      block={false}
+    >
+      <IconSearch slot="leading" size={14} />
+    </Input>
+    <Button type="submit" {loading}>{$t('common.search')}</Button>
   </form>
-</header>
+</PageHeader>
 
-{#if error}
-  <p class="error">{error}</p>
-{/if}
+{#if error}<p class="error">{error}</p>{/if}
 
-{#if events.length === 0 && !loading}
-  <p class="muted">No events match.</p>
-{:else}
-  <table>
-    <thead>
-      <tr>
-        <th>When</th>
-        <th>Type</th>
-        <th>Tenant</th>
-        <th>Session</th>
-        <th>Payload</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each events as e, i (i)}
-        <tr>
-          <td class="muted">{new Date(e.occurred_at).toLocaleString()}</td>
-          <td><code>{e.type}</code></td>
-          <td class="muted">{e.tenant_id}</td>
-          <td class="muted">{e.session_id ?? '—'}</td>
-          <td><pre>{JSON.stringify(e.payload ?? {}, null, 0)}</pre></td>
-        </tr>
-      {/each}
-    </tbody>
-  </table>
-{/if}
+<Table {columns} rows={events} empty="No events match.">
+  <svelte:fragment slot="cell" let:row let:column>
+    {#if column.key === 'occurred_at'}
+      <span class="muted">{fmt(row.occurred_at)}</span>
+    {:else if column.key === 'type'}
+      <Badge tone="neutral" mono>{row.type}</Badge>
+    {:else if column.key === 'tenant_id'}
+      <span class="muted">{row.tenant_id}</span>
+    {:else if column.key === 'session_id'}
+      <span class="muted">{row.session_id ?? '—'}</span>
+    {:else if column.key === 'payload'}
+      <pre class="payload">{JSON.stringify(row.payload ?? {}, null, 0)}</pre>
+    {:else}
+      {row[column.key] ?? ''}
+    {/if}
+  </svelte:fragment>
+  <svelte:fragment slot="empty">
+    <EmptyState
+      title={$t('audit.empty.title')}
+      description={$t('audit.empty.description')}
+      compact
+    />
+  </svelte:fragment>
+</Table>
 
 {#if cursor}
-  <button class="btn load-more" on:click={() => search(true)} disabled={loading}>
-    Load more
-  </button>
+  <div class="more">
+    <Button variant="secondary" {loading} on:click={() => search(true)}>
+      {$t('common.loadMore')}
+    </Button>
+  </div>
 {/if}
 
 <style>
-  .page-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-4);
-    gap: var(--space-3);
-  }
   .filters {
-    display: flex;
+    display: inline-flex;
+    align-items: center;
     gap: var(--space-2);
   }
-  .filters input {
-    min-width: 18rem;
-    padding: var(--space-1) var(--space-2);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
+  .error {
+    color: var(--color-danger);
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--font-size-body-sm);
   }
-  table {
-    width: 100%;
-    border-collapse: collapse;
+  .muted {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-label);
   }
-  th,
-  td {
-    padding: var(--space-2) var(--space-3);
-    text-align: left;
-    border-bottom: 1px solid var(--color-border);
-    vertical-align: top;
-  }
-  pre {
+  .payload {
     margin: 0;
-    font-size: var(--font-sm);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-mono-sm);
+    color: var(--color-text-secondary);
     max-width: 32rem;
     white-space: pre-wrap;
     word-break: break-all;
   }
-  .muted {
-    color: var(--color-text-muted);
-  }
-  .error {
-    color: var(--color-danger);
-  }
-  .btn {
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    cursor: pointer;
-  }
-  .load-more {
+  .more {
     margin-top: var(--space-4);
+    display: flex;
+    justify-content: center;
   }
 </style>

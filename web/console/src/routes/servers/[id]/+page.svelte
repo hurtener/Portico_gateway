@@ -2,6 +2,17 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api, type ServerSpec, type InstanceRecord } from '$lib/api';
+  import {
+    Badge,
+    Breadcrumbs,
+    Button,
+    EmptyState,
+    KeyValueGrid,
+    PageHeader,
+    StatusDot
+  } from '$lib/components';
+  import { t } from '$lib/i18n';
+  import IconRefreshCw from 'lucide-svelte/icons/refresh-cw';
 
   let server: ServerSpec | null = null;
   let instances: InstanceRecord[] = [];
@@ -36,62 +47,91 @@
   }
 
   onMount(refresh);
+
+  type Tone = 'success' | 'danger' | 'warning' | 'neutral' | 'info';
+  function statusTone(s?: string): Tone {
+    const v = (s ?? '').toLowerCase();
+    if (v === 'ready' || v === 'running') return 'success';
+    if (v === 'crashed' || v === 'error') return 'danger';
+    if (v === 'circuit_open' || v === 'backoff') return 'warning';
+    if (v === 'starting') return 'info';
+    return 'neutral';
+  }
+
+  function instanceTone(s: string): Tone {
+    return statusTone(s);
+  }
+
+  $: specItems = server
+    ? [
+        { label: 'Transport', value: server.transport, mono: true },
+        { label: 'Runtime mode', value: server.runtime_mode, mono: true },
+        { label: 'Status', value: server.status },
+        { label: 'Enabled', value: server.enabled ? 'yes' : 'no' },
+        ...(server.stdio?.command
+          ? [{ label: 'Command', value: server.stdio.command, mono: true, full: true as const }]
+          : []),
+        ...(server.stdio?.args && server.stdio.args.length > 0
+          ? [
+              {
+                label: 'Args',
+                value: server.stdio.args.join(' '),
+                mono: true,
+                full: true as const
+              }
+            ]
+          : []),
+        ...(server.http?.url
+          ? [{ label: 'URL', value: server.http.url, mono: true, full: true as const }]
+          : [])
+      ]
+    : [];
 </script>
 
-<header class="page-head">
-  <div>
-    <a href="/servers" class="back">← All servers</a>
-    <h1>{server?.display_name || id}</h1>
-    <p class="muted"><code>{id}</code></p>
+<PageHeader title={server?.display_name || id} description={server ? undefined : ''}>
+  <Breadcrumbs
+    slot="breadcrumbs"
+    items={[{ label: $t('nav.servers'), href: '/servers' }, { label: id }]}
+  />
+  <div slot="meta">
+    <Badge tone="neutral" mono>{id}</Badge>
+    {#if server}<Badge tone={statusTone(server.status)}>{server.status}</Badge>{/if}
   </div>
-  <div class="actions">
-    <button class="btn btn-secondary" on:click={refresh} disabled={loading}>Refresh</button>
-    <button class="btn" on:click={reload}>Drain & reload</button>
+  <div slot="actions">
+    <Button variant="secondary" on:click={refresh} {loading}>
+      <IconRefreshCw slot="leading" size={14} />
+      {$t('common.refresh')}
+    </Button>
+    {#if server}
+      <Button on:click={reload}>{$t('serverDetail.action.reload')}</Button>
+    {/if}
   </div>
-</header>
+</PageHeader>
 
-{#if error}
-  <p class="error">{error}</p>
-{/if}
+{#if error}<p class="error">{error}</p>{/if}
 
 {#if server}
   <section class="grid">
-    <article>
-      <h2>Spec</h2>
-      <dl>
-        <dt>Transport</dt>
-        <dd><code>{server.transport}</code></dd>
-        <dt>Runtime mode</dt>
-        <dd><code>{server.runtime_mode}</code></dd>
-        <dt>Status</dt>
-        <dd>{server.status}</dd>
-        <dt>Enabled</dt>
-        <dd>{server.enabled ? 'yes' : 'no'}</dd>
-        {#if server.stdio}
-          <dt>Command</dt>
-          <dd><code>{server.stdio.command}</code></dd>
-          {#if server.stdio.args && server.stdio.args.length > 0}
-            <dt>Args</dt>
-            <dd><code>{server.stdio.args.join(' ')}</code></dd>
-          {/if}
-        {/if}
-        {#if server.http}
-          <dt>URL</dt>
-          <dd><code>{server.http.url}</code></dd>
-        {/if}
-      </dl>
+    <article class="card">
+      <h2>{$t('serverDetail.spec')}</h2>
+      <KeyValueGrid items={specItems} columns={2} />
     </article>
 
-    <article>
-      <h2>Instances ({instances.length})</h2>
+    <article class="card">
+      <h2>{$t('serverDetail.instances', { count: instances.length })}</h2>
       {#if instances.length === 0}
-        <p class="muted">No active instances.</p>
+        <EmptyState
+          title={$t('serverDetail.instances.empty.title')}
+          description={$t('serverDetail.instances.empty.description')}
+          compact
+        />
       {:else}
         <ul class="instance-list">
           {#each instances as i (i.instance_key)}
             <li>
-              <code>{i.instance_key}</code>
-              <span class="status">{i.state}</span>
+              <StatusDot tone={instanceTone(i.state)} />
+              <code class="key">{i.instance_key}</code>
+              <Badge tone={instanceTone(i.state)}>{i.state}</Badge>
               {#if i.pid}<span class="pid">pid {i.pid}</span>{/if}
             </li>
           {/each}
@@ -100,82 +140,40 @@
     </article>
   </section>
 {:else if !loading}
-  <p class="muted">Server not found.</p>
+  <EmptyState
+    title={$t('serverDetail.notFound.title')}
+    description={$t('serverDetail.notFound.description', { id })}
+  />
 {/if}
 
 <style>
-  .page-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--space-4);
-    margin-bottom: var(--space-6);
-  }
-  .back {
-    font-size: var(--text-sm);
-    color: var(--color-text-muted);
-  }
-  h1 {
-    margin: var(--space-1) 0 var(--space-1) 0;
-    font-size: var(--text-2xl);
-    font-weight: var(--weight-semibold);
-  }
-  .muted {
-    color: var(--color-text-muted);
-    margin: 0;
-  }
-  .actions {
-    display: flex;
-    gap: var(--space-2);
-  }
   .error {
     color: var(--color-danger);
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--font-size-body-sm);
   }
-
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--space-6);
+    gap: var(--space-4);
   }
-  @media (max-width: 700px) {
+  @media (max-width: 880px) {
     .grid {
       grid-template-columns: 1fr;
     }
   }
-  article {
-    border: 1px solid var(--color-border);
+  .card {
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border-soft);
     border-radius: var(--radius-md);
-    background: var(--color-surface);
     padding: var(--space-5);
   }
-  article h2 {
+  .card h2 {
     margin: 0 0 var(--space-4) 0;
-    font-size: var(--text-lg);
-    font-weight: var(--weight-semibold);
+    font-size: var(--font-size-title);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
   }
-
-  dl {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: var(--space-2) var(--space-4);
-    margin: 0;
-  }
-  dt {
-    color: var(--color-text-muted);
-    font-size: var(--text-sm);
-  }
-  dd {
-    margin: 0;
-    font-size: var(--text-sm);
-  }
-  code {
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    background: var(--color-surface-2);
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-  }
-
   .instance-list {
     list-style: none;
     padding: 0;
@@ -188,43 +186,17 @@
     display: flex;
     gap: var(--space-2);
     align-items: center;
-    font-size: var(--text-sm);
+    font-size: var(--font-size-body-sm);
+    flex-wrap: wrap;
   }
-  .status {
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-pill);
-    font-size: var(--text-xs);
-    background: var(--color-surface-2);
-    color: var(--color-text-muted);
+  .key {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-mono-sm);
+    color: var(--color-text-secondary);
   }
   .pid {
     font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    color: var(--color-text-subtle);
-  }
-
-  .btn {
-    border: 1px solid var(--color-brand);
-    background: var(--color-brand);
-    color: var(--color-on-brand);
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
-    cursor: pointer;
-  }
-  .btn:hover:not(:disabled) {
-    background: var(--color-brand-hover);
-  }
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .btn-secondary {
-    background: var(--color-surface);
-    color: var(--color-text);
-    border-color: var(--color-border-strong);
-  }
-  .btn-secondary:hover:not(:disabled) {
-    background: var(--color-surface-2);
+    font-size: var(--font-size-mono-sm);
+    color: var(--color-text-tertiary);
   }
 </style>

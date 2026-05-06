@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type Snapshot } from '$lib/api';
+  import { Badge, Button, EmptyState, PageHeader, Table } from '$lib/components';
+  import { t } from '$lib/i18n';
+  import IconRefreshCw from 'lucide-svelte/icons/refresh-cw';
 
   let snapshots: Snapshot[] = [];
   let cursor = '';
@@ -25,85 +28,91 @@
   }
 
   onMount(() => refresh(false));
+
+  const columns = [
+    { key: 'id', label: 'ID', mono: true, width: '180px' },
+    { key: 'tenant_id', label: 'Tenant' },
+    { key: 'session_id', label: 'Session', mono: true, width: '160px' },
+    { key: 'tools', label: 'Tools', align: 'right' as const, width: '80px' },
+    { key: 'created_at', label: 'Created' },
+    { key: 'overall_hash', label: 'Hash', mono: true, width: '160px' }
+  ];
+
+  function fmt(t: string): string {
+    try {
+      return new Date(t).toLocaleString();
+    } catch {
+      return t;
+    }
+  }
 </script>
 
-<header class="page-head">
-  <h1>Catalog snapshots</h1>
-  <button class="btn" on:click={() => refresh(false)} disabled={loading}>Refresh</button>
-</header>
+<PageHeader title={$t('snapshots.title')} description={$t('snapshots.description')}>
+  <div slot="actions">
+    <Button variant="secondary" on:click={() => refresh(false)} {loading}>
+      <IconRefreshCw slot="leading" size={14} />
+      {$t('common.refresh')}
+    </Button>
+  </div>
+</PageHeader>
 
-{#if error}
-  <p class="error">{error}</p>
-{/if}
+{#if error}<p class="error">{error}</p>{/if}
 
-{#if loading && snapshots.length === 0}
-  <p class="muted">Loading…</p>
-{:else if snapshots.length === 0}
-  <p class="muted">No snapshots yet — create a session against the gateway to materialize one.</p>
-{:else}
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Tenant</th>
-        <th>Session</th>
-        <th>Tools</th>
-        <th>Created</th>
-        <th>Hash</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each snapshots as s, i (i)}
-        <tr>
-          <td><a href="/snapshots/{s.id}"><code>{s.id}</code></a></td>
-          <td>{s.tenant_id}</td>
-          <td class="muted">{s.session_id ?? '—'}</td>
-          <td>{s.tools.length}</td>
-          <td class="muted">{new Date(s.created_at).toLocaleString()}</td>
-          <td><code>{s.overall_hash.slice(0, 12)}…</code></td>
-        </tr>
-      {/each}
-    </tbody>
-  </table>
-{/if}
+<Table
+  {columns}
+  rows={snapshots}
+  empty="No snapshots yet."
+  onRowClick={(row) => (window.location.href = `/snapshots/${row.id}`)}
+>
+  <svelte:fragment slot="cell" let:row let:column>
+    {#if column.key === 'id'}
+      <a href={`/snapshots/${row.id}`}><code class="mono">{row.id}</code></a>
+    {:else if column.key === 'session_id'}
+      <span class="muted">{row.session_id ?? '—'}</span>
+    {:else if column.key === 'tools'}
+      <Badge tone="neutral">{row.tools.length}</Badge>
+    {:else if column.key === 'created_at'}
+      <span class="muted">{fmt(row.created_at)}</span>
+    {:else if column.key === 'overall_hash'}
+      <code class="mono">{row.overall_hash.slice(0, 12)}…</code>
+    {:else}
+      {row[column.key] ?? ''}
+    {/if}
+  </svelte:fragment>
+  <svelte:fragment slot="empty">
+    <EmptyState
+      title={$t('snapshots.empty.title')}
+      description={$t('snapshots.empty.description')}
+      compact
+    />
+  </svelte:fragment>
+</Table>
 
 {#if cursor}
-  <button class="btn load-more" on:click={() => refresh(true)} disabled={loading}>
-    Load more
-  </button>
+  <div class="more">
+    <Button variant="secondary" {loading} on:click={() => refresh(true)}>
+      {$t('common.loadMore')}
+    </Button>
+  </div>
 {/if}
 
 <style>
-  .page-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-4);
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  th,
-  td {
-    padding: var(--space-2) var(--space-3);
-    text-align: left;
-    border-bottom: 1px solid var(--color-border);
-  }
-  .muted {
-    color: var(--color-text-muted);
-  }
   .error {
     color: var(--color-danger);
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--font-size-body-sm);
   }
-  .btn {
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    cursor: pointer;
+  .mono {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-mono-sm);
+    color: var(--color-text-secondary);
   }
-  .load-more {
+  .muted {
+    color: var(--color-text-tertiary);
+  }
+  .more {
     margin-top: var(--space-4);
+    display: flex;
+    justify-content: center;
   }
 </style>

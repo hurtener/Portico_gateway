@@ -1,12 +1,47 @@
 <!doctype html>
-<html lang="en" data-theme="portico">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" href="%sveltekit.assets%/favicon.svg" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+    <link rel="alternate icon" href="%sveltekit.assets%/favicon.png" type="image/png" />
     <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Portico Console — multi-tenant MCP gateway." />
     <title>Portico Console</title>
     %sveltekit.head%
+    <script>
+      // Pre-paint theme + locale + sidebar bootstrap. Runs synchronously
+      // before first paint so we never flash the wrong theme, language,
+      // or sidebar width. Source of truth: localStorage.
+      (function () {
+        try {
+          var theme = localStorage.getItem('portico:theme');
+          var resolved;
+          if (theme === 'light' || theme === 'dark') {
+            resolved = theme;
+          } else {
+            resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', resolved);
+          document.documentElement.style.colorScheme = resolved;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+        try {
+          var loc = localStorage.getItem('portico:locale');
+          document.documentElement.setAttribute('lang', loc === 'es' ? 'es' : 'en');
+        } catch (e) {
+          document.documentElement.setAttribute('lang', 'en');
+        }
+        try {
+          if (localStorage.getItem('portico:sidebarCollapsed') === '1') {
+            document.documentElement.setAttribute('data-sidebar', 'collapsed');
+          }
+        } catch (e) {
+          /* default expanded */
+        }
+      })();
+    </script>
   </head>
   <body data-sveltekit-preload-data="hover">
     <div style="display: contents">%sveltekit.body%</div>

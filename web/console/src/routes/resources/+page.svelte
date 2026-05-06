@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type Resource } from '$lib/api';
+  import { Badge, Button, EmptyState, PageHeader, Table } from '$lib/components';
+  import { t } from '$lib/i18n';
+  import IconRefreshCw from 'lucide-svelte/icons/refresh-cw';
 
   let resources: Resource[] = [];
   let loading = true;
@@ -28,100 +31,54 @@
     }
   }
   onMount(refresh);
+
+  $: columns = [
+    { key: 'server', label: $t('resources.col.server'), mono: true, width: '160px' },
+    { key: 'uri', label: $t('resources.col.uri'), mono: true },
+    { key: 'name', label: $t('resources.col.name') },
+    { key: 'mimeType', label: $t('resources.col.mime'), mono: true, width: '160px' }
+  ];
+
+  $: rows = resources.map((r) => ({
+    server: serverIDFor(r),
+    uri: r.uri,
+    name: r.name ?? '',
+    mimeType: r.mimeType ?? ''
+  }));
 </script>
 
-<header class="page-head">
-  <h1>Resources</h1>
-  <button class="btn" on:click={refresh} disabled={loading}>Refresh</button>
-</header>
+<PageHeader title={$t('resources.title')} description={$t('resources.description')}>
+  <div slot="actions">
+    <Button variant="secondary" on:click={refresh} {loading}>
+      <IconRefreshCw slot="leading" size={14} />
+      {$t('common.refresh')}
+    </Button>
+  </div>
+</PageHeader>
 
 {#if error}<p class="error">{error}</p>{/if}
 
-{#if loading && resources.length === 0}
-  <p class="muted">Loading…</p>
-{:else if resources.length === 0}
-  <p class="muted">No resources discovered.</p>
-{:else}
-  <table>
-    <thead>
-      <tr>
-        <th>Server</th>
-        <th>URI</th>
-        <th>Name</th>
-        <th>MIME</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each resources as r (r.uri)}
-        <tr>
-          <td><code>{serverIDFor(r)}</code></td>
-          <td><code class="uri">{r.uri}</code></td>
-          <td>{r.name ?? ''}</td>
-          <td><code>{r.mimeType ?? ''}</code></td>
-        </tr>
-      {/each}
-    </tbody>
-  </table>
-{/if}
+<Table {columns} {rows} empty={$t('common.empty')}>
+  <svelte:fragment slot="cell" let:row let:column let:value>
+    {#if column.key === 'server'}
+      <Badge tone="neutral" mono>{row.server}</Badge>
+    {:else}
+      {value ?? ''}
+    {/if}
+  </svelte:fragment>
+  <svelte:fragment slot="empty">
+    <EmptyState
+      title={$t('resources.empty.title')}
+      description={$t('resources.empty.description')}
+      compact
+    />
+  </svelte:fragment>
+</Table>
 
 <style>
-  .page-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: var(--space-6);
-  }
-  h1 {
-    margin: 0;
-    font-size: var(--text-2xl);
-    font-weight: var(--weight-semibold);
-  }
-  .muted {
-    color: var(--code-muted, var(--color-text-muted));
-  }
   .error {
     color: var(--color-danger);
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--text-sm);
-  }
-  thead th {
-    text-align: left;
-    padding: var(--space-2) var(--space-3);
-    border-bottom: 1px solid var(--color-border);
-    color: var(--color-text-muted);
-    font-weight: var(--weight-medium);
-  }
-  tbody td {
-    padding: var(--space-3);
-    border-bottom: 1px solid var(--color-border);
-  }
-  code {
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    background: var(--color-surface-2);
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-  }
-  code.uri {
-    word-break: break-all;
-  }
-  .btn {
-    border: 1px solid var(--color-brand);
-    background: var(--color-brand);
-    color: var(--color-on-brand);
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
-    cursor: pointer;
-  }
-  .btn:hover:not(:disabled) {
-    background: var(--color-brand-hover);
-  }
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--font-size-body-sm);
   }
 </style>

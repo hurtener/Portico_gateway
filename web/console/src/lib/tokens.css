@@ -1,105 +1,222 @@
 /*
  * Portico design tokens — the single source of truth for visual primitives.
- * Components reference these CSS custom properties; raw color/spacing/type
- * literals in .svelte files are forbidden (CLAUDE.md §4.5).
  *
- * Brand swap or theme work edits this file alone.
+ * Soft architectural minimalism: mineral neutrals, muted teal accent,
+ * Inter + JetBrains Mono + Newsreader, restrained shadows, surfaces (not
+ * cards everywhere). Components reference these CSS custom properties;
+ * raw color/spacing/type literals in .svelte files are forbidden
+ * (CLAUDE.md §4.5).
+ *
+ * Brand swap or theme work edits this file alone. Light mode is :root;
+ * dark mode is `[data-theme="dark"]` on <html>. The pre-paint script in
+ * app.html sets that attribute synchronously before the first paint so
+ * we never flash the wrong theme.
+ *
+ * Token taxonomy mirrors docs/Design/design-system.md §5–§9.
  */
 
 :root {
-  /* Color — neutrals (slate ramp) */
-  --color-bg: #ffffff;
-  --color-surface: #f8fafc;
-  --color-surface-2: #f1f5f9;
-  --color-border: #e2e8f0;
-  --color-border-strong: #cbd5e1;
-  --color-text: #0f172a;
-  --color-text-muted: #475569;
-  --color-text-subtle: #64748b;
+  /* === Color: light mode (default) ===================================== */
 
-  /* Color — brand */
-  --color-brand: #2563eb;
-  --color-brand-hover: #1d4ed8;
-  --color-brand-soft: #dbeafe;
-  --color-on-brand: #ffffff;
+  /* Surfaces — mineral neutrals (stone / parchment) */
+  --color-bg-canvas: #f6f4ef;
+  --color-bg-surface: #fbfaf7;
+  --color-bg-elevated: #ffffff;
+  --color-bg-subtle: #f1eee8;
 
-  /* Color — semantic */
-  --color-success: #16a34a;
-  --color-success-soft: #dcfce7;
-  --color-warning: #ca8a04;
-  --color-warning-soft: #fef9c3;
-  --color-danger: #dc2626;
-  --color-danger-soft: #fee2e2;
-  --color-info: #0891b2;
-  --color-info-soft: #cffafe;
+  /* Borders */
+  --color-border-soft: #e7e1d8;
+  --color-border-default: #d9d1c5;
+  --color-border-strong: #bdaf9e;
 
-  /* Spacing — 4px scale */
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-10: 2.5rem;
-  --space-12: 3rem;
+  /* Text */
+  --color-text-primary: #1f252b;
+  --color-text-secondary: #58616b;
+  --color-text-tertiary: #7a848e;
+  --color-text-muted: #98a1a8;
+  --color-text-inverse: #ffffff;
 
-  /* Type scale */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.25rem;
-  --text-2xl: 1.5rem;
-  --text-3xl: 1.875rem;
-  --line-tight: 1.25;
-  --line-normal: 1.5;
-  --weight-regular: 400;
-  --weight-medium: 500;
-  --weight-semibold: 600;
-  --weight-bold: 700;
+  /* Icons */
+  --color-icon-default: #5e6872;
+  --color-icon-subtle: #8c959d;
 
-  /* Radii */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
+  /* Brand accent — muted teal */
+  --color-accent-primary: #2d6f73;
+  --color-accent-primary-hover: #245d61;
+  --color-accent-primary-active: #1d4d50;
+  --color-accent-primary-soft: #d8eae8;
+  --color-accent-primary-subtle: #eaf4f3;
+  --color-accent-on-primary: #ffffff;
+
+  /* Warm support accent — subtle bronze */
+  --color-accent-warm: #9a7653;
+  --color-accent-warm-soft: #eee3d8;
+  --color-accent-warm-subtle: #f7f1eb;
+  --color-accent-on-warm: #ffffff;
+
+  /* Semantic status */
+  --color-success: #2f7a55;
+  --color-success-soft: #ddefe4;
+  --color-warning: #a36a1b;
+  --color-warning-soft: #f5e7cd;
+  --color-danger: #b24a3b;
+  --color-danger-soft: #f6dfdb;
+  --color-info: #356e9a;
+  --color-info-soft: #dceaf4;
+
+  /* === Typography ====================================================== */
+
+  --font-sans:
+    'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    sans-serif;
+  --font-mono:
+    'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo,
+    Consolas, monospace;
+  --font-serif: 'Newsreader Variable', 'Newsreader', ui-serif, Georgia, serif;
+
+  /* Type scale: size / line-height pairs from design-system.md §6 */
+  --font-size-display-xl: 3.5rem; /* 56 */
+  --font-line-display-xl: 1.143;
+  --font-size-display-lg: 2.75rem; /* 44 */
+  --font-line-display-lg: 1.182;
+  --font-size-heading-1: 2.25rem; /* 36 */
+  --font-line-heading-1: 1.222;
+  --font-size-heading-2: 1.875rem; /* 30 */
+  --font-line-heading-2: 1.267;
+  --font-size-heading-3: 1.5rem; /* 24 */
+  --font-line-heading-3: 1.333;
+  --font-size-heading-4: 1.25rem; /* 20 */
+  --font-line-heading-4: 1.4;
+  --font-size-title: 1.125rem; /* 18 */
+  --font-line-title: 1.444;
+  --font-size-body-lg: 1.0625rem; /* 17 */
+  --font-line-body-lg: 1.647;
+  --font-size-body-md: 0.9375rem; /* 15 */
+  --font-line-body-md: 1.6;
+  --font-size-body-sm: 0.875rem; /* 14 */
+  --font-line-body-sm: 1.571;
+  --font-size-label: 0.8125rem; /* 13 */
+  --font-line-label: 1.385;
+  --font-size-mono-sm: 0.8125rem; /* 13 */
+  --font-line-mono-sm: 1.538;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* === Spacing — 4 px base, 8 px rhythm ================================ */
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* === Radius =========================================================== */
+
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
   --radius-pill: 999px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
-  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  /* === Shadows ========================================================== */
 
-  /* Motion */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.06);
+  --shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.08);
+  --ring-focus: 0 0 0 3px rgba(45, 111, 115, 0.18);
+
+  /* === Motion =========================================================== */
+
   --motion-fast: 120ms;
-  --motion-medium: 200ms;
-  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-default: 180ms;
+  --motion-panel: 220ms;
+  --ease-default: cubic-bezier(0.2, 0, 0, 1);
 
-  /* Layout */
-  --layout-max-width: 1100px;
-  --layout-header-height: 3.5rem;
+  /* === Layout (Console-specific shell) ================================= */
+
+  --layout-sidebar-width: 240px;
+  --layout-sidebar-width-collapsed: 64px;
+  --layout-topbar-height: 56px;
+  --layout-content-max-width: 1320px;
+
+  /* === Z-index scale =================================================== */
+
+  --z-sidebar: 10;
+  --z-topbar: 15;
+  --z-sticky: 20;
+  --z-popover: 40;
+  --z-modal: 50;
+  --z-toast: 70;
 }
 
-@media (prefers-color-scheme: dark) {
+/* === Dark mode ========================================================= */
+
+[data-theme='dark'] {
+  --color-bg-canvas: #111417;
+  --color-bg-surface: #171c20;
+  --color-bg-elevated: #1d2328;
+  --color-bg-subtle: #222a31;
+
+  --color-border-soft: #2a333b;
+  --color-border-default: #36414a;
+  --color-border-strong: #4a5864;
+
+  --color-text-primary: #f3f5f6;
+  --color-text-secondary: #c7ced3;
+  --color-text-tertiary: #97a3ad;
+  --color-text-muted: #73808b;
+  --color-text-inverse: #111417;
+
+  --color-icon-default: #a7b1b8;
+  --color-icon-subtle: #7e8a94;
+
+  /* Accent — slight tonal lift for legibility on dark surfaces */
+  --color-accent-primary: #4d9a9f;
+  --color-accent-primary-hover: #5fb0b5;
+  --color-accent-primary-active: #6cbfc4;
+  --color-accent-primary-soft: #1f3839;
+  --color-accent-primary-subtle: #182a2b;
+  --color-accent-on-primary: #0c1819;
+
+  --color-accent-warm: #b59070;
+  --color-accent-warm-soft: #2c2218;
+  --color-accent-warm-subtle: #1f1812;
+  --color-accent-on-warm: #1f140b;
+
+  /* Semantic status — slightly desaturated for dark surfaces */
+  --color-success: #6cb38f;
+  --color-success-soft: #183726;
+  --color-warning: #d9a45a;
+  --color-warning-soft: #3a2a15;
+  --color-danger: #d97a6a;
+  --color-danger-soft: #44211d;
+  --color-info: #6ba6ce;
+  --color-info-soft: #1b3446;
+
+  /* Shadows — subtler in dark mode (rely more on borders) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.42);
+  --ring-focus: 0 0 0 3px rgba(77, 154, 159, 0.32);
+}
+
+/* === Reduced-motion preference ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
   :root {
-    --color-bg: #0b1220;
-    --color-surface: #111a2c;
-    --color-surface-2: #172238;
-    --color-border: #1f2a44;
-    --color-border-strong: #2c3a5a;
-    --color-text: #f1f5f9;
-    --color-text-muted: #94a3b8;
-    --color-text-subtle: #64748b;
-
-    --color-brand: #60a5fa;
-    --color-brand-hover: #93c5fd;
-    --color-brand-soft: #1e3a8a;
-    --color-on-brand: #0b1220;
-
-    --color-success-soft: #14532d;
-    --color-warning-soft: #713f12;
-    --color-danger-soft: #7f1d1d;
-    --color-info-soft: #155e75;
+    --motion-fast: 1ms;
+    --motion-default: 1ms;
+    --motion-panel: 1ms;
   }
 }
