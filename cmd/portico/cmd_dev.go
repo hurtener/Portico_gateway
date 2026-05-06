@@ -55,7 +55,7 @@ func runDev(ctx context.Context, args []string) error {
 
 func isLocalhostBind(bind string) bool {
 	bind = strings.ToLower(bind)
-	host, _, _ := splitHostPort(bind)
+	host, _ := splitHostPort(bind)
 	switch host {
 	case "127.0.0.1", "::1", "localhost", "[::1]":
 		return true
@@ -65,18 +65,18 @@ func isLocalhostBind(bind string) bool {
 }
 
 // splitHostPort tolerates IPv6 bracketed form and bare host.
-func splitHostPort(s string) (host, port string, ok bool) {
+func splitHostPort(s string) (host, port string) {
 	if strings.HasPrefix(s, "[") {
 		if end := strings.Index(s, "]"); end > 0 {
 			host = s[1:end]
 			if end+1 < len(s) && s[end+1] == ':' {
 				port = s[end+2:]
 			}
-			return host, port, true
+			return host, port
 		}
 	}
 	if i := strings.LastIndex(s, ":"); i > 0 {
-		return s[:i], s[i+1:], true
+		return s[:i], s[i+1:]
 	}
-	return s, "", true
+	return s, ""
 }

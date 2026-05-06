@@ -58,10 +58,9 @@ func (k *testKey) writeJWKS(t *testing.T) string {
 }
 
 // signClaims builds + signs an RS256 JWT.
-func (k *testKey) signClaims(t *testing.T, c jwtv5.MapClaims, alg string) string {
+func (k *testKey) signClaims(t *testing.T, c jwtv5.MapClaims) string {
 	t.Helper()
-	method := jwtv5.GetSigningMethod(alg)
-	tok := jwtv5.NewWithClaims(method, c)
+	tok := jwtv5.NewWithClaims(jwtv5.SigningMethodRS256, c)
 	tok.Header["kid"] = k.kid
 	signed, err := tok.SignedString(k.priv)
 	if err != nil {
@@ -99,7 +98,7 @@ func TestValidate_ValidRS256(t *testing.T) {
 		Audiences:  []string{"portico"},
 		StaticJWKS: jwks,
 	})
-	tok := k.signClaims(t, defaultClaims(time.Now()), "RS256")
+	tok := k.signClaims(t, defaultClaims(time.Now()))
 	c, err := v.Validate(context.Background(), tok)
 	if err != nil {
 		t.Fatalf("expected valid token, err: %v", err)
@@ -125,7 +124,7 @@ func TestValidate_ExpiredToken(t *testing.T) {
 	})
 	c := defaultClaims(time.Now().Add(-2 * time.Hour))
 	c["exp"] = time.Now().Add(-time.Hour).Unix()
-	tok := k.signClaims(t, c, "RS256")
+	tok := k.signClaims(t, c)
 	if _, err := v.Validate(context.Background(), tok); err == nil {
 		t.Fatal("expected expired-token error, got nil")
 	}
@@ -140,7 +139,7 @@ func TestValidate_BadSignature(t *testing.T) {
 		Audiences:  []string{"portico"},
 		StaticJWKS: k.writeJWKS(t),
 	})
-	tok := other.signClaims(t, defaultClaims(time.Now()), "RS256")
+	tok := other.signClaims(t, defaultClaims(time.Now()))
 	if _, err := v.Validate(context.Background(), tok); err == nil {
 		t.Fatal("expected signature error")
 	}
@@ -180,7 +179,7 @@ func TestValidate_BadIssuer(t *testing.T) {
 	})
 	c := defaultClaims(time.Now())
 	c["iss"] = "https://attacker.example.com/"
-	tok := k.signClaims(t, c, "RS256")
+	tok := k.signClaims(t, c)
 	if _, err := v.Validate(context.Background(), tok); err == nil {
 		t.Fatal("expected issuer mismatch error")
 	}
@@ -195,7 +194,7 @@ func TestValidate_MissingTenantClaim(t *testing.T) {
 	})
 	c := defaultClaims(time.Now())
 	delete(c, "tenant")
-	tok := k.signClaims(t, c, "RS256")
+	tok := k.signClaims(t, c)
 	if _, err := v.Validate(context.Background(), tok); err == nil {
 		t.Fatal("expected missing-tenant-claim error")
 	} else if !strings.Contains(err.Error(), "tenant") {
@@ -214,7 +213,7 @@ func TestValidate_ClockSkew(t *testing.T) {
 	c := defaultClaims(time.Now())
 	// Expired by 30s; with 60s skew, accepted.
 	c["exp"] = time.Now().Add(-30 * time.Second).Unix()
-	tok := k.signClaims(t, c, "RS256")
+	tok := k.signClaims(t, c)
 	if _, err := v.Validate(context.Background(), tok); err != nil {
 		t.Fatalf("expected acceptance within skew, got %v", err)
 	}

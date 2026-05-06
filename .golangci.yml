@@ -122,6 +122,7 @@ issues:
         - bodyclose       # tests use httptest helpers that defer-close inline
         - govet           # variable shadowing in test scaffolding is fine
         - unused          # test-only helpers
+        - unparam         # test helpers often have always-same params
     - path: cmd/
       linters:
         - forbidigo       # CLI tools legitimately use fmt.Print* for stdout

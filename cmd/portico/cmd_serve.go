@@ -158,8 +158,8 @@ func ensureDataDir(dsn string, logger interface {
 	Info(msg string, args ...any)
 	Warn(msg string, args ...any)
 }) error {
-	path, ok := sqlitePathFromDSN(dsn)
-	if !ok || path == ":memory:" {
+	path := sqlitePathFromDSN(dsn)
+	if path == ":memory:" {
 		return nil
 	}
 	dir := filepath.Dir(path)
@@ -173,7 +173,7 @@ func ensureDataDir(dsn string, logger interface {
 	return nil
 }
 
-func sqlitePathFromDSN(dsn string) (string, bool) {
+func sqlitePathFromDSN(dsn string) string {
 	const prefix = "file:"
 	s := dsn
 	if len(s) > len(prefix) && s[:len(prefix)] == prefix {
@@ -181,10 +181,10 @@ func sqlitePathFromDSN(dsn string) (string, bool) {
 	}
 	for i, r := range s {
 		if r == '?' {
-			return s[:i], true
+			return s[:i]
 		}
 	}
-	return s, true
+	return s
 }
 
 func firstNonEmpty(ss ...string) string {
