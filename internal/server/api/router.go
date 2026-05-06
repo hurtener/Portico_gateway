@@ -17,6 +17,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
 	mcpnb "github.com/hurtener/Portico_gateway/internal/mcp/northbound/http"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
+	"github.com/hurtener/Portico_gateway/internal/registry"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	"github.com/hurtener/Portico_gateway/internal/server/ui"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
@@ -37,6 +38,9 @@ type Deps struct {
 	Sessions   *mcpgw.SessionRegistry
 	Dispatcher *mcpgw.Dispatcher
 	Manager    *southboundmgr.Manager
+
+	// Phase 2 addition: server registry. Optional in tests (nil = no /v1/servers).
+	Registry *registry.Registry
 }
 
 // NewRouter wires the full HTTP routing surface.
@@ -66,6 +70,20 @@ func NewRouter(d Deps) http.Handler {
 
 		// REST: tenant-scoped audit (Phase 5 fills the body)
 		r.Get("/v1/audit/events", auditQueryHandler(d))
+
+		// REST: tenant-scoped server registry (Phase 2). Mounted only when
+		// the registry dependency is provided so test scaffolding can omit it.
+		if d.Registry != nil {
+			r.Get("/v1/servers", listServersHandler(d))
+			r.Post("/v1/servers", upsertServerHandler(d, false))
+			r.Get("/v1/servers/{id}", getServerHandler(d))
+			r.Put("/v1/servers/{id}", upsertServerHandler(d, true))
+			r.Delete("/v1/servers/{id}", deleteServerHandler(d))
+			r.Post("/v1/servers/{id}/reload", reloadServerHandler(d))
+			r.Post("/v1/servers/{id}/enable", enableServerHandler(d, true))
+			r.Post("/v1/servers/{id}/disable", enableServerHandler(d, false))
+			r.Get("/v1/servers/{id}/instances", listInstancesHandler(d))
+		}
 
 		// Phase 1: northbound MCP transport. Mounted under the auth group so the
 		// dev-mode bypass + JWT path both produce a tenant identity for the session.

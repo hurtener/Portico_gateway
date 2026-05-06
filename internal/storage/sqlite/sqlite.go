@@ -89,6 +89,11 @@ func (d *DB) Audit() ifaces.AuditStore {
 	return &auditStore{db: d.sql}
 }
 
+// Registry returns a RegistryStore backed by this DB.
+func (d *DB) Registry() ifaces.RegistryStore {
+	return &registryStore{db: d.sql}
+}
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {

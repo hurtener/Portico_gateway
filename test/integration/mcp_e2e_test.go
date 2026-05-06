@@ -21,6 +21,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/config"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
+	"github.com/hurtener/Portico_gateway/internal/registry"
 	"github.com/hurtener/Portico_gateway/internal/server/api"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	"github.com/hurtener/Portico_gateway/internal/storage"
@@ -105,10 +106,12 @@ func startMcpDevServer(t *testing.T, specs []config.ServerSpec) (*httptest.Serve
 	mgr := southboundmgr.NewManager(cfg.Servers, logger)
 	disp := mcpgw.NewDispatcher(mgr, logger)
 	sess := mcpgw.NewSessionRegistry()
+	reg := registry.New(backend.Registry(), logger)
 
 	t.Cleanup(func() {
 		sess.CloseAll()
 		_ = mgr.CloseAll(context.Background())
+		reg.CloseAll()
 	})
 
 	handler := api.NewRouter(api.Deps{
@@ -120,6 +123,7 @@ func startMcpDevServer(t *testing.T, specs []config.ServerSpec) (*httptest.Serve
 		Sessions:   sess,
 		Dispatcher: disp,
 		Manager:    mgr,
+		Registry:   reg,
 	})
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)

@@ -13,6 +13,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
 	"github.com/hurtener/Portico_gateway/internal/config"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
+	"github.com/hurtener/Portico_gateway/internal/registry"
 	"github.com/hurtener/Portico_gateway/internal/server/api"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	"github.com/hurtener/Portico_gateway/internal/storage"
@@ -100,6 +101,14 @@ func runWithConfig(ctx context.Context, cfg *config.Config) error {
 	dispatcher := mcpgw.NewDispatcher(manager, logger)
 	sessions := mcpgw.NewSessionRegistry()
 
+	// Phase 2: registry over the storage backend. Persists ServerSpecs
+	// per-tenant and broadcasts change events that the supervisor (also
+	// added in Phase 2) consumes.
+	reg := registry.New(backend.Registry(), logger)
+	if err := seedRegistryFromConfig(ctx, reg, cfg, logger); err != nil {
+		return err
+	}
+
 	deps := api.Deps{
 		Logger:      logger,
 		Validator:   validator,
@@ -112,6 +121,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config) error {
 		Sessions:    sessions,
 		Dispatcher:  dispatcher,
 		Manager:     manager,
+		Registry:    reg,
 	}
 
 	handler := api.NewRouter(deps)
@@ -149,7 +159,69 @@ func runWithConfig(ctx context.Context, cfg *config.Config) error {
 	if err := manager.CloseAll(shutdownCtx); err != nil {
 		logger.Warn("southbound shutdown errors", "err", err)
 	}
+	reg.CloseAll()
 	return nil
+}
+
+// seedRegistryFromConfig materialises every server in the YAML config into
+// the registry under each known tenant. Phase 2 ships a per-tenant view
+// from a single global config block; per-tenant overrides arrive in a
+// follow-up. Skips servers that fail validation with a warn.
+func seedRegistryFromConfig(ctx context.Context, reg *registry.Registry, cfg *config.Config, log interface {
+	Warn(msg string, args ...any)
+}) error {
+	if len(cfg.Servers) == 0 {
+		return nil
+	}
+	tenantIDs := make([]string, 0, len(cfg.Tenants))
+	for _, t := range cfg.Tenants {
+		tenantIDs = append(tenantIDs, t.ID)
+	}
+	if cfg.IsDevMode() {
+		dev := devTenantOrEnv(true)
+		if dev != "" {
+			tenantIDs = append(tenantIDs, dev)
+		}
+	}
+	if len(tenantIDs) == 0 {
+		return nil
+	}
+	for _, ts := range cfg.Servers {
+		spec := configServerSpecToRegistry(ts)
+		for _, tid := range tenantIDs {
+			if _, err := reg.Upsert(ctx, tid, spec); err != nil {
+				log.Warn("registry: failed to seed server",
+					"tenant_id", tid, "server_id", spec.ID, "err", err)
+			}
+		}
+	}
+	return nil
+}
+
+func configServerSpecToRegistry(c config.ServerSpec) *registry.ServerSpec {
+	out := &registry.ServerSpec{
+		ID:          c.ID,
+		DisplayName: c.DisplayName,
+		Transport:   c.Transport,
+		RuntimeMode: c.RuntimeMode,
+	}
+	if c.Stdio != nil {
+		out.Stdio = &registry.StdioSpec{
+			Command:      c.Stdio.Command,
+			Args:         append([]string(nil), c.Stdio.Args...),
+			Env:          append([]string(nil), c.Stdio.Env...),
+			Cwd:          c.Stdio.Cwd,
+			StartTimeout: registry.Duration(c.StartTimeout),
+		}
+	}
+	if c.HTTP != nil {
+		out.HTTP = &registry.HTTPSpec{
+			URL:        c.HTTP.URL,
+			AuthHeader: c.HTTP.AuthHeader,
+			Timeout:    registry.Duration(c.HTTP.Timeout),
+		}
+	}
+	return out
 }
 
 // ensureDataDir extracts a directory from a SQLite DSN like
