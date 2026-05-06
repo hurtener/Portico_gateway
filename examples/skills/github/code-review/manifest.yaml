@@ -1,0 +1,29 @@
+id: github.code-review
+title: GitHub Code Review
+version: 0.1.0
+spec: skills/v1
+description: Review a GitHub PR following Portico's recommended sequence.
+instructions: SKILL.md
+resources:
+  - resources/guide.md
+  - resources/examples.json
+prompts:
+  - prompts/review_pr.md
+  - prompts/summarize_diff.md
+binding:
+  server_dependencies: [github]
+  required_tools:
+    - github.get_pull_request
+    - github.get_pull_request_diff
+    - github.get_file_contents
+  optional_tools:
+    - github.create_review_comment
+  policy:
+    requires_approval:
+      - github.create_review_comment
+    risk_classes:
+      github.create_review_comment: external_side_effect
+  ui:
+    resource_uri: ui://github/code-review-panel.html
+  entitlements:
+    plans: [pro, enterprise]

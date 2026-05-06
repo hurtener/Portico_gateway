@@ -94,6 +94,11 @@ func (d *DB) Registry() ifaces.RegistryStore {
 	return &registryStore{db: d.sql}
 }
 
+// Skills returns a SkillEnablementStore backed by this DB.
+func (d *DB) Skills() ifaces.SkillEnablementStore {
+	return &skillStore{db: d.sql}
+}
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {

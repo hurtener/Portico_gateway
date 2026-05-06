@@ -1,0 +1,18 @@
+id: filesystem.search
+title: Filesystem Search
+version: 0.1.0
+spec: skills/v1
+description: Read-only navigation of a mounted filesystem.
+instructions: SKILL.md
+prompts:
+  - prompts/find.md
+binding:
+  server_dependencies: [fs]
+  required_tools:
+    - fs.list
+    - fs.read
+  policy:
+    risk_classes:
+      fs.read: read
+  entitlements:
+    plans: [free, pro, enterprise]

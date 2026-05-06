@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -41,9 +42,7 @@ func runDev(ctx context.Context, args []string) error {
 			Format: "text",
 		},
 		Skills: config.SkillsConfig{
-			Sources: []config.SkillSourceConfig{
-				{Type: "local", Path: "./skills"},
-			},
+			Sources: devSkillSources(),
 		},
 	}
 	if err := cfg.Validate(); err != nil {
@@ -62,6 +61,20 @@ func isLocalhostBind(bind string) bool {
 	default:
 		return false
 	}
+}
+
+// devSkillSources returns the local-dir sources to load in dev mode.
+// Searches `./skills` first, then `./examples/skills` so a fresh
+// checkout has skills loaded out of the box. When neither directory
+// exists the returned slice is empty and the runtime stays disabled.
+func devSkillSources() []config.SkillSourceConfig {
+	out := make([]config.SkillSourceConfig, 0, 2)
+	for _, p := range []string{"./skills", "./examples/skills"} {
+		if info, err := os.Stat(p); err == nil && info.IsDir() {
+			out = append(out, config.SkillSourceConfig{Type: "local", Path: p})
+		}
+	}
+	return out
 }
 
 // splitHostPort tolerates IPv6 bracketed form and bare host.

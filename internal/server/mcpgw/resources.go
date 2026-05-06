@@ -41,6 +41,24 @@ type clientFleet interface {
 	Acquire(ctx context.Context, req southboundmgr.AcquireRequest) (southbound.Client, error)
 }
 
+// SkillProvider is the resource + prompt surface contributed by the
+// skills runtime. Implemented by internal/skills/runtime.SkillProvider;
+// declared here as an interface so mcpgw stays decoupled from the
+// skills package.
+type SkillProvider interface {
+	ListResources(ctx context.Context, tenantID, sessionID, plan string, ents []string) ([]protocol.Resource, error)
+	ReadResource(ctx context.Context, tenantID, sessionID, uri string) (*protocol.ReadResourceResult, error)
+	ListPrompts(ctx context.Context, tenantID, sessionID, plan string, ents []string) ([]protocol.Prompt, error)
+	GetPrompt(ctx context.Context, tenantID, sessionID, name string, args map[string]string) (*protocol.GetPromptResult, error)
+}
+
+// TenantContext supplies plan + entitlements when the aggregator
+// invokes the skill provider. Phase 4 ships a stub resolver that
+// returns ("", []string{"*"}); Phase 5 wires real per-tenant overrides.
+type TenantContext interface {
+	Resolve(tenantID string) (plan string, entitlements []string)
+}
+
 // ResourceAggregator implements `resources/list`, `resources/read`, and
 // `resources/templates/list` over the configured downstream fleet. Tied
 // to a Manager (for client acquisition), the registry (to discover
@@ -51,6 +69,9 @@ type ResourceAggregator struct {
 	apps    *apps.Registry
 	limits  ResourceLimits
 	timeout time.Duration
+
+	skills    SkillProvider // optional Phase 4 surface
+	tenantCtx TenantContext // optional plan + entitlements resolver
 
 	cacheMu sync.Mutex
 	// cache is keyed by (sessionID, kind, cursor) and stores the rendered
@@ -88,6 +109,26 @@ func NewResourceAggregator(m clientFleet, appReg *apps.Registry, limits Resource
 		timeout: 5 * time.Second,
 		cache:   make(map[cacheKey]cacheEntry),
 	}
+}
+
+// SetSkillProvider plugs the Phase 4 skills surface into the
+// aggregator. Pass nil to disable. tc resolves per-tenant plan +
+// entitlements; pass nil for the unrestricted default.
+func (a *ResourceAggregator) SetSkillProvider(p SkillProvider, tc TenantContext) {
+	a.skills = p
+	a.tenantCtx = tc
+	a.cacheMu.Lock()
+	a.cache = make(map[cacheKey]cacheEntry)
+	a.cacheMu.Unlock()
+}
+
+// resolveTenant returns the plan + entitlements for the given tenant,
+// defaulting to ("", ["*"]) when no resolver is configured.
+func (a *ResourceAggregator) resolveTenant(tenantID string) (string, []string) {
+	if a.tenantCtx == nil {
+		return "", []string{"*"}
+	}
+	return a.tenantCtx.Resolve(tenantID)
 }
 
 // InvalidateSession removes every cached entry for sessionID. Called by
@@ -172,6 +213,21 @@ func (a *ResourceAggregator) ListAll(ctx context.Context, sess *Session, cursor 
 		}
 	}
 	sort.Slice(combined, func(i, j int) bool { return combined[i].URI < combined[j].URI })
+
+	// Phase 4: append skill:// resources after the per-server fan-out.
+	// Skills sort last alphabetically because the "skill://" prefix
+	// comes after "mcp+server://" lexically — clients that want a
+	// stable order get one out of the box.
+	if a.skills != nil {
+		plan, ents := a.resolveTenant(sess.TenantID)
+		skillRes, err := a.skills.ListResources(listCtx, sess.TenantID, sess.ID, plan, ents)
+		if err != nil {
+			a.log.Warn("skills/list partial failure", "err", err, "event_type", "skill_list_partial_failure")
+		} else {
+			combined = append(combined, skillRes...)
+			sort.Slice(combined, func(i, j int) bool { return combined[i].URI < combined[j].URI })
+		}
+	}
 
 	out := &protocol.ListResourcesResult{
 		Resources: combined,
@@ -264,6 +320,17 @@ func (a *ResourceAggregator) ListTemplates(ctx context.Context, sess *Session, c
 // Read routes a namespaced URI back to its origin server, fetches the
 // content, and applies size limits + CSP wrapping (for ui:// HTML).
 func (a *ResourceAggregator) Read(ctx context.Context, sess *Session, uri string) (*protocol.ReadResourceResult, error) {
+	// Phase 4: skill:// scheme is owned by the skills runtime.
+	if strings.HasPrefix(uri, "skill://") {
+		if a.skills == nil {
+			return nil, protocol.NewError(protocol.ErrInvalidParams, "skills runtime not configured", map[string]string{"uri": uri})
+		}
+		res, err := a.skills.ReadResource(ctx, sess.TenantID, sess.ID, uri)
+		if err != nil {
+			return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, err.Error(), map[string]string{"uri": uri})
+		}
+		return res, nil
+	}
 	serverID, original, isUI, ok := namespace.RestoreResourceURI(uri)
 	if !ok {
 		return nil, protocol.NewError(protocol.ErrInvalidParams, "uri is not in the gateway namespace", map[string]string{"uri": uri})

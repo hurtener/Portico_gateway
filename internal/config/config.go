@@ -71,9 +71,13 @@ type Entitlements struct {
 	MaxSessions int      `yaml:"max_sessions"`
 }
 
-// SkillsConfig groups skill-source declarations.
+// SkillsConfig groups skill-source declarations + runtime knobs.
 type SkillsConfig struct {
 	Sources []SkillSourceConfig `yaml:"sources"`
+	// EnablementDefault is "opt-in" (must call enable to use) or
+	// "auto" (every entitled skill enabled by default). Empty defaults
+	// to opt-in.
+	EnablementDefault string `yaml:"enablement_default,omitempty"`
 }
 
 // SkillSourceConfig declares one skill source. Phase 4 wires this; Phase 0 parses.

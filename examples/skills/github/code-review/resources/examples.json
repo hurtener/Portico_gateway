@@ -1,0 +1,12 @@
+{
+  "examples": [
+    {
+      "title": "small PR",
+      "comment": "Stylistic nits + spell-check; mark approved if tests pass."
+    },
+    {
+      "title": "large PR with mixed concerns",
+      "comment": "Ask the author to split into self-contained commits before deeper review."
+    }
+  ]
+}

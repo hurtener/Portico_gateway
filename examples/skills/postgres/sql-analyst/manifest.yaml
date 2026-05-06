@@ -1,0 +1,19 @@
+id: postgres.sql-analyst
+title: Postgres SQL Analyst
+version: 0.1.0
+spec: skills/v1
+description: Investigate Postgres schemas and run analytical SELECTs.
+instructions: SKILL.md
+prompts:
+  - prompts/explore.md
+binding:
+  server_dependencies: [postgres]
+  required_tools:
+    - postgres.run_sql
+    - postgres.list_schemas
+    - postgres.describe_table
+  policy:
+    risk_classes:
+      postgres.run_sql: read
+  entitlements:
+    plans: [free, pro, enterprise]

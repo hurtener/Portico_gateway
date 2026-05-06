@@ -52,7 +52,16 @@ type Deps struct {
 	// (spec 2025-11-25). Empty in dev mode is fine; localhost is auto-
 	// allowed when DevMode is true.
 	AllowedOrigins []string
+
+	// Phase 4 addition: skills runtime. Optional — when nil, /v1/skills
+	// returns 503.
+	Skills SkillsManager
 }
+
+// SkillsManager is the API-facing surface of the skills runtime. The
+// real type is internal/skills/runtime.Manager; declared as an
+// interface so this package doesn't import the runtime directly.
+type SkillsManager = skillsManager
 
 // NewRouter wires the full HTTP routing surface.
 func NewRouter(d Deps) http.Handler {
@@ -107,6 +116,19 @@ func NewRouter(d Deps) http.Handler {
 		}
 		if d.Apps != nil {
 			r.Get("/v1/apps", listAppsHandler(d))
+		}
+
+		// Phase 4: skills runtime APIs.
+		if d.Skills != nil {
+			r.Get("/v1/skills", listSkillsHandler(d))
+			r.Get("/v1/skills/{id}", getSkillHandler(d))
+			r.Get("/v1/skills/{id}/manifest.yaml", getSkillManifestYAML(d))
+			r.Post("/v1/skills/{id}/enable", enableSkillHandler(d, true))
+			r.Post("/v1/skills/{id}/disable", enableSkillHandler(d, false))
+
+			r.Get("/v1/sessions/{session_id}/skills", listSessionSkillsHandler(d))
+			r.Post("/v1/sessions/{session_id}/skills/enable", sessionSkillEnableHandler(d, true))
+			r.Post("/v1/sessions/{session_id}/skills/disable", sessionSkillEnableHandler(d, false))
 		}
 
 		// Phase 1: northbound MCP transport. Mounted under the auth group so the
