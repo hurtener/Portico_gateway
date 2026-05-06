@@ -27,6 +27,12 @@ type Session struct {
 	// notifCh is the outbound notification channel served to the long-lived
 	// SSE GET /mcp stream (and in Phase 5 to the server-initiated request
 	// path). Bounded; oldest dropped on overflow.
+	//
+	// notifMu guards the channel against the close-vs-send race: Close()
+	// must not close the channel while a concurrent EmitNotification is
+	// selecting on it. All sends happen under notifMu; Close() closes it
+	// under the same lock.
+	notifMu sync.Mutex
 	notifCh chan protocol.Notification
 
 	cancelMu sync.Mutex
@@ -59,8 +65,13 @@ func (s *Session) Notifications() <-chan protocol.Notification {
 }
 
 // EmitNotification queues a notification for the session's SSE consumer.
-// Drops oldest on backpressure (caller logs a warn).
+// Drops oldest on backpressure and reports it to the caller for logging.
+//
+// Holds notifMu for the duration of the send so a concurrent Close() cannot
+// close the channel mid-send. Close() acquires the same lock before closing.
 func (s *Session) EmitNotification(n protocol.Notification) (dropped bool) {
+	s.notifMu.Lock()
+	defer s.notifMu.Unlock()
 	if s.closed.Load() {
 		return true
 	}
@@ -109,7 +120,8 @@ func (s *Session) Cancel(id string) bool {
 }
 
 // Close marks the session terminated and closes the notification channel.
-// Idempotent.
+// Idempotent. Acquires notifMu so it cannot race a concurrent
+// EmitNotification.
 func (s *Session) Close() {
 	if s.closed.Swap(true) {
 		return
@@ -120,7 +132,9 @@ func (s *Session) Close() {
 	}
 	s.cancels = nil
 	s.cancelMu.Unlock()
+	s.notifMu.Lock()
 	close(s.notifCh)
+	s.notifMu.Unlock()
 }
 
 // SessionRegistry holds active sessions, keyed by their public session id.

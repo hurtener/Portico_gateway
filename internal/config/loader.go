@@ -23,6 +23,11 @@ const (
 // alphanumeric plus underscore/dash, 1-64 chars.
 var tenantIDRegexp = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
+// serverIDRegexp matches the allowed server ID format. Same shape as the
+// namespace package's regexp (kept in sync) so the namespace JoinTool/
+// SplitTool always sees a well-formed prefix.
+var serverIDRegexp = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,31}$`)
+
 // Load parses + validates a portico.yaml from disk.
 func Load(path string) (*Config, error) {
 	raw, err := os.ReadFile(path) //nolint:gosec // operator-supplied path; this is the entire purpose
@@ -94,6 +99,42 @@ func (c *Config) Validate() error {
 			return fieldErr(fmt.Sprintf("tenants[%d].id", i), fmt.Sprintf("duplicate tenant id %q", t.ID))
 		}
 		seen[t.ID] = struct{}{}
+	}
+
+	// Servers — Phase 1 validates id shape, transport, and that the
+	// transport-specific block is populated. Phase 2 extends this with
+	// runtime_mode + lifecycle defaults.
+	seenServer := make(map[string]struct{})
+	for i, s := range c.Servers {
+		if s.ID == "" {
+			return fieldErr(fmt.Sprintf("servers[%d].id", i), "is required")
+		}
+		if !serverIDRegexp.MatchString(s.ID) {
+			return fieldErr(fmt.Sprintf("servers[%d].id", i),
+				fmt.Sprintf("invalid format %q (must match %s)", s.ID, serverIDRegexp.String()))
+		}
+		if _, dup := seenServer[s.ID]; dup {
+			return fieldErr(fmt.Sprintf("servers[%d].id", i),
+				fmt.Sprintf("duplicate server id %q", s.ID))
+		}
+		seenServer[s.ID] = struct{}{}
+		switch s.Transport {
+		case "stdio":
+			if s.Stdio == nil || s.Stdio.Command == "" {
+				return fieldErr(fmt.Sprintf("servers[%d].stdio.command", i),
+					"is required when transport=stdio")
+			}
+		case "http":
+			if s.HTTP == nil || s.HTTP.URL == "" {
+				return fieldErr(fmt.Sprintf("servers[%d].http.url", i),
+					"is required when transport=http")
+			}
+		case "":
+			return fieldErr(fmt.Sprintf("servers[%d].transport", i), "is required")
+		default:
+			return fieldErr(fmt.Sprintf("servers[%d].transport", i),
+				fmt.Sprintf("unsupported transport %q", s.Transport))
+		}
 	}
 
 	// Logging

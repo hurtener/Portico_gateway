@@ -108,11 +108,14 @@ func (d *Dispatcher) handleInitialize(ctx context.Context, sess *Session, req *p
 		caps = append(caps, c.Capabilities())
 	}
 	srv := protocol.AggregateServerCaps(caps)
-	// Always advertise gateway-level tools cap so list_changed is honored.
+	// Always advertise the tools capability — Phase 1 always exposes tools
+	// even when no downstream is configured. ListChanged is NOT advertised
+	// because the dispatcher does not yet emit
+	// notifications/tools/list_changed; Phase 2 wires it once the registry
+	// publishes change events.
 	if srv.Tools == nil {
 		srv.Tools = &protocol.ToolsCapability{}
 	}
-	srv.Tools.ListChanged = true
 
 	res := protocol.InitializeResult{
 		ProtocolVersion: protocol.ProtocolVersion,
@@ -211,11 +214,17 @@ func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *pr
 	if len(progressToken) > 0 {
 		progressCB = func(p protocol.ProgressParams) {
 			body, _ := json.Marshal(p)
-			sess.EmitNotification(protocol.Notification{
+			dropped := sess.EmitNotification(protocol.Notification{
 				JSONRPC: protocol.JSONRPCVersion,
 				Method:  protocol.NotifProgress,
 				Params:  body,
 			})
+			if dropped {
+				d.log.Warn("progress notification dropped (sse backpressure or session closed)",
+					"session_id", sess.ID,
+					"server_id", serverID,
+					"tool", toolName)
+			}
 		}
 	}
 

@@ -188,7 +188,8 @@ func (c *Client) call(ctx context.Context, method string, params any) (json.RawM
 	}
 	defer resp.Body.Close()
 
-	// Capture session id from initialize response.
+	// Capture / refresh the session id on every response. Per MCP spec a
+	// downstream may rotate it; clients must echo the latest value.
 	if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" {
 		c.mu.Lock()
 		c.sessionID = sid

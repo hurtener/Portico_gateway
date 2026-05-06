@@ -108,18 +108,24 @@ func (h *Handler) handlePost(w nethttp.ResponseWriter, r *nethttp.Request) {
 }
 
 // resolveSession returns the active session for the request. For initialize
-// requests without an existing Mcp-Session-Id header, it creates a new one.
+// requests it always creates a fresh session; for any other method, it
+// requires a Mcp-Session-Id header pointing at a known session. Sessions
+// cannot be implicitly created by non-initialize requests.
 func (h *Handler) resolveSession(r *nethttp.Request, req protocol.Request) (sess *mcpgw.Session, isNew bool) {
 	sid := r.Header.Get(headerSessionID)
 	if sid != "" {
 		if existing, ok := h.sessions.Get(sid); ok {
 			return existing, false
 		}
-		// Header was supplied but the session is unknown — only initialize is
-		// allowed in that state (recreate fresh).
+		// Header was supplied but the session is unknown. Only initialize
+		// is allowed to bootstrap a fresh session in that state.
 		if req.Method != protocol.MethodInitialize {
 			return nil, false
 		}
+	} else if req.Method != protocol.MethodInitialize {
+		// No session id and not an initialize: reject. Per MCP spec the
+		// client must complete the handshake before any other method.
+		return nil, false
 	}
 	tenantID, userID := identityFrom(r)
 	return h.sessions.Create(tenantID, userID), true

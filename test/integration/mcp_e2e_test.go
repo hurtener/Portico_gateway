@@ -454,3 +454,23 @@ func TestE2E_HTTPDownstream(t *testing.T) {
 		t.Errorf("call result = %+v", callResult)
 	}
 }
+
+// TestE2E_RequiresInitializeBeforeOtherMethods verifies that a POST without a
+// Mcp-Session-Id and method != initialize is rejected with 404. Previously
+// the resolveSession helper would create a fresh session for any method,
+// allowing clients to skip the MCP handshake.
+func TestE2E_RequiresInitializeBeforeOtherMethods(t *testing.T) {
+	srv, _ := startMcpDevServer(t, nil)
+
+	body, _ := json.Marshal(newReq(1, protocol.MethodToolsList, struct{}{}))
+	httpReq, _ := http.NewRequest(http.MethodPost, srv.URL+"/mcp", bytes.NewReader(body))
+	httpReq.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404 (session required); got %d", res.StatusCode)
+	}
+}
