@@ -16,6 +16,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/registry"
 	"github.com/hurtener/Portico_gateway/internal/secrets"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
+	"github.com/hurtener/Portico_gateway/internal/telemetry"
 )
 
 // Supervisor lifecycle states. Persisted on InstanceRecord.State.
@@ -368,6 +369,12 @@ func (s *Supervisor) spawnStdio(ctx context.Context, inst *instance) (southbound
 	// injector already resolved any {{secret:name}} references).
 	for k, v := range inst.authEnv {
 		env = append(env, k+"="+v)
+	}
+	// Phase 6: pass the active traceparent into the child process so
+	// downstream MCP servers that honor it (most do via OTel autoinstrumentation)
+	// link their spans to ours. Best-effort — child may ignore.
+	if tp := telemetry.TraceparentFor(ctx); tp != "" {
+		env = append(env, "MCP_TRACEPARENT="+tp, "TRACEPARENT="+tp)
 	}
 	if len(env) > 0 {
 		resolved, err := s.resolver.Resolve(ctx, inst.tenantID, env)

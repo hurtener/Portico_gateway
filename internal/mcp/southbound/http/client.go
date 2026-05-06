@@ -20,6 +20,7 @@ import (
 
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	"github.com/hurtener/Portico_gateway/internal/mcp/southbound"
+	"github.com/hurtener/Portico_gateway/internal/telemetry"
 )
 
 // Config configures an HTTP Client.
@@ -280,6 +281,9 @@ func (c *Client) call(ctx context.Context, method string, params any) (json.RawM
 			httpReq.Header.Set(k, v)
 		}
 	}
+	// Phase 6: inject the active trace context so the downstream MCP
+	// server sees `traceparent` and can link its spans to ours.
+	telemetry.InjectIntoHTTP(ctx, httpReq.Header)
 	c.mu.Lock()
 	if c.sessionID != "" {
 		httpReq.Header.Set("Mcp-Session-Id", c.sessionID)
@@ -352,6 +356,7 @@ func (c *Client) notify(ctx context.Context, method string, params any) error {
 			httpReq.Header.Set(k, v)
 		}
 	}
+	telemetry.InjectIntoHTTP(ctx, httpReq.Header)
 	c.mu.Lock()
 	if c.sessionID != "" {
 		httpReq.Header.Set("Mcp-Session-Id", c.sessionID)

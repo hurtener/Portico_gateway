@@ -32,6 +32,9 @@ type Backend interface {
 	// Approvals returns the per-tenant approval store.
 	Approvals() ApprovalStore
 
+	// Snapshots returns the catalog-snapshot + fingerprint store.
+	Snapshots() SnapshotStore
+
 	// Health pings the underlying connection. Returns error if the backend
 	// is not reachable. Used by /readyz and tests.
 	Health(ctx context.Context) error

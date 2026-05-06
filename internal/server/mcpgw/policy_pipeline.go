@@ -13,6 +13,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/policy/approval"
 	"github.com/hurtener/Portico_gateway/internal/registry"
 	"github.com/hurtener/Portico_gateway/internal/secrets/inject"
+	"github.com/hurtener/Portico_gateway/internal/telemetry"
 )
 
 // PolicyPipeline wires together the policy engine, approval flow, and
@@ -78,7 +79,19 @@ func (p *PolicyPipeline) Evaluate(ctx context.Context, sess *Session, params pro
 	if p == nil || p.engine == nil {
 		return nil, errors.New("policy pipeline: engine not configured")
 	}
-	dec, err := p.engine.EvaluateToolCall(ctx, sess.TenantID, sess.ID, sess.UserID, params.Name)
+	policyCtx, policySpan := telemetry.StartSpan(ctx, telemetry.SpanPolicyEvaluate,
+		telemetry.String(telemetry.AttrTool, params.Name),
+		telemetry.String(telemetry.AttrTenantID, sess.TenantID),
+		telemetry.String(telemetry.AttrSessionID, sess.ID),
+	)
+	dec, err := p.engine.EvaluateToolCall(policyCtx, sess.TenantID, sess.ID, sess.UserID, params.Name)
+	policySpan.SetAttributes(
+		telemetry.Bool(telemetry.AttrPolicyAllow, dec.Allow),
+		telemetry.String(telemetry.AttrPolicyReason, dec.Reason),
+		telemetry.Bool(telemetry.AttrPolicyRequiresApproval, dec.RequiresApproval),
+		telemetry.String(telemetry.AttrPolicyRiskClass, dec.RiskClass),
+	)
+	policySpan.End()
 	if err != nil {
 		return nil, err
 	}
@@ -115,12 +128,24 @@ func (p *PolicyPipeline) Evaluate(ctx context.Context, sess *Session, params pro
 
 	// Approval gate.
 	if dec.RequiresApproval && p.approvals != nil {
-		out, err := p.approvals.Run(ctx, sess.TenantID, sess.ID, sess.UserID, dec, approval.CallContext{
+		approvalCtx, approvalSpan := telemetry.StartSpan(ctx, telemetry.SpanApprovalFlow,
+			telemetry.String(telemetry.AttrTool, dec.Tool),
+			telemetry.String(telemetry.AttrPolicyRiskClass, dec.RiskClass),
+		)
+		out, err := p.approvals.Run(approvalCtx, sess.TenantID, sess.ID, sess.UserID, dec, approval.CallContext{
 			Tool:      dec.Tool,
 			Arguments: params.Arguments,
 			SkillID:   dec.SkillID,
 			RiskClass: dec.RiskClass,
 		})
+		if out.Approval != nil {
+			approvalSpan.SetAttributes(telemetry.String(telemetry.AttrApprovalID, out.Approval.ID))
+		}
+		approvalSpan.SetAttributes(
+			telemetry.Bool(telemetry.AttrApprovalElicit, !out.FallbackRequired()),
+			telemetry.String(telemetry.AttrApprovalOutcome, out.Decision),
+		)
+		approvalSpan.End()
 		if err != nil {
 			return nil, err
 		}
@@ -144,7 +169,11 @@ func (p *PolicyPipeline) Evaluate(ctx context.Context, sess *Session, params pro
 	}
 
 	// Credentials.
-	target, err := p.resolveCredentials(ctx, sess, dec)
+	credCtx, credSpan := telemetry.StartSpan(ctx, telemetry.SpanCredentialResolve,
+		telemetry.String(telemetry.AttrServerID, dec.ServerID),
+	)
+	target, err := p.resolveCredentials(credCtx, sess, dec)
+	credSpan.End()
 	if err != nil {
 		// Map credential lookup failure to a structured policy error.
 		res.Decision.Allow = false

@@ -25,6 +25,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
+	"github.com/hurtener/Portico_gateway/internal/telemetry"
 )
 
 const (
@@ -179,16 +180,22 @@ func (h *Handler) handlePost(w nethttp.ResponseWriter, r *nethttp.Request) {
 	}
 	sess.Touch()
 
+	// Phase 6: extract any traceparent the client supplied at the HTTP
+	// layer so dispatcher spans link to the upstream trace. Per-method
+	// `_meta.traceparent` (when carried in params) is read by the
+	// dispatcher itself once it has the typed params.
+	r = r.WithContext(telemetry.ExtractFromHTTP(r.Context(), r.Header))
+
 	// Notifications never produce a body.
 	if req.IsNotification() {
 		var n protocol.Notification
 		_ = json.Unmarshal(body, &n)
-		h.dispatcher.HandleNotification(r.Context(), sess, &n)
+		h.dispatcher.HandleNotification(r.Context(), sess, &n) //nolint:contextcheck // r.Context after WithContext is the new ctx
 		w.WriteHeader(nethttp.StatusAccepted)
 		return
 	}
 
-	result, errBody := h.dispatcher.HandleRequest(r.Context(), sess, &req)
+	result, errBody := h.dispatcher.HandleRequest(r.Context(), sess, &req) //nolint:contextcheck // r.Context after WithContext is the new ctx
 
 	if isNew {
 		w.Header().Set(headerSessionID, sess.ID)

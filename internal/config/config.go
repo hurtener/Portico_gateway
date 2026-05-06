@@ -8,14 +8,60 @@ import "time"
 
 // Config is the top-level shape of portico.yaml.
 type Config struct {
-	Server  ServerConfig   `yaml:"server"`
-	Auth    *AuthConfig    `yaml:"auth,omitempty"` // nil => dev mode (must be combined with localhost bind)
-	Storage StorageConfig  `yaml:"storage"`
-	Tenants []TenantConfig `yaml:"tenants"`
-	Skills  SkillsConfig   `yaml:"skills"`
-	Logging LoggingConfig  `yaml:"logging"`
+	Server    ServerConfig    `yaml:"server"`
+	Auth      *AuthConfig     `yaml:"auth,omitempty"` // nil => dev mode (must be combined with localhost bind)
+	Storage   StorageConfig   `yaml:"storage"`
+	Tenants   []TenantConfig  `yaml:"tenants"`
+	Skills    SkillsConfig    `yaml:"skills"`
+	Logging   LoggingConfig   `yaml:"logging"`
+	Telemetry TelemetryConfig `yaml:"telemetry,omitempty"`
 	// Servers is consumed by Phase 1+. Phase 0 parses but does not act on it.
 	Servers []ServerSpec `yaml:"servers,omitempty"`
+}
+
+// TelemetryConfig wires the OpenTelemetry tracer + drift detector knobs.
+type TelemetryConfig struct {
+	Enabled       bool              `yaml:"enabled,omitempty"`
+	ServiceName   string            `yaml:"service_name,omitempty"`
+	Exporter      string            `yaml:"exporter,omitempty"` // otlp_grpc | otlp_http | stdout | none
+	OTLPEndpoint  string            `yaml:"otlp_endpoint,omitempty"`
+	OTLPHeaders   map[string]string `yaml:"otlp_headers,omitempty"`
+	SampleRate    float64           `yaml:"sample_rate,omitempty"`
+	ResourceAttrs map[string]string `yaml:"resource_attrs,omitempty"`
+	DriftInterval HumanDuration     `yaml:"drift_interval,omitempty"`
+}
+
+// HumanDuration accepts strings like "60s" / "5m" in YAML and falls back
+// to the supplied default in Go. Lives here rather than being a
+// time.Duration directly so YAML stays writeable without quoting.
+type HumanDuration time.Duration
+
+// Duration returns the underlying time.Duration, defaulting to 60s when
+// unset.
+func (h HumanDuration) Duration() time.Duration {
+	if h == 0 {
+		return 60 * time.Second
+	}
+	return time.Duration(h)
+}
+
+// UnmarshalYAML accepts both string ("60s") and integer (seconds) forms.
+func (h *HumanDuration) UnmarshalYAML(unmarshal func(any) error) error {
+	var s string
+	if err := unmarshal(&s); err == nil && s != "" {
+		d, err := time.ParseDuration(s)
+		if err != nil {
+			return err
+		}
+		*h = HumanDuration(d)
+		return nil
+	}
+	var n int64
+	if err := unmarshal(&n); err != nil {
+		return err
+	}
+	*h = HumanDuration(time.Duration(n) * time.Second)
+	return nil
 }
 
 // ServerConfig governs the HTTP listener.
