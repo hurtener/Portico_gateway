@@ -50,7 +50,8 @@ type Client struct {
 	// notifCh is the read-only notifications stream. Phase 3 HTTP transport
 	// doesn't subscribe to SSE yet, so the channel stays empty and is closed
 	// on Close — consumers can drain harmlessly.
-	notifCh chan protocol.Notification
+	notifCh        chan protocol.Notification
+	notifCloseOnce sync.Once
 }
 
 func New(cfg Config) *Client {
@@ -342,7 +343,10 @@ func (c *Client) notify(ctx context.Context, method string, params any) error {
 }
 
 // Close on HTTP transport sends DELETE /mcp to terminate the upstream session.
+// Always closes notifCh so consumers (notification pump) drain cleanly even
+// when the upstream DELETE fails.
 func (c *Client) Close(ctx context.Context) error {
+	defer c.notifCloseOnce.Do(func() { close(c.notifCh) })
 	c.mu.Lock()
 	sid := c.sessionID
 	c.mu.Unlock()

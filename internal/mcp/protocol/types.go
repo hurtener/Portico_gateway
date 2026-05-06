@@ -8,7 +8,14 @@ import "encoding/json"
 
 // ProtocolVersion is the MCP protocol revision Portico targets.
 // Bumping the version is an RFC change — see AGENTS.md §8.
-const ProtocolVersion = "2025-06-18"
+//
+// History:
+//   - 2025-06-18 (Phase 1)
+//   - 2025-11-25 (Phase 3.5) — adds icons metadata, Implementation.description,
+//     OIDC discovery hooks, Origin 403 requirement, Streamable HTTP SSE
+//     resumption clarifications. Portico does not yet implement tasks,
+//     elicitation URL mode, or sampling tool calling — those land in Phase 5+.
+const ProtocolVersion = "2025-11-25"
 
 // JSONRPCVersion is always "2.0".
 const JSONRPCVersion = "2.0"
@@ -75,8 +82,19 @@ type InitializeResult struct {
 }
 
 type Implementation struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	Description string `json:"description,omitempty"` // 2025-11-25
+}
+
+// Icon describes a visual representation of a tool, resource, prompt, or
+// the server itself. Hosts may use these for UI surfaces. Added in
+// protocol revision 2025-11-25.
+type Icon struct {
+	Source string `json:"source"`          // URL or data: URI
+	Sizes  string `json:"sizes,omitempty"` // e.g. "32x32 64x64" (W3C icons-style)
+	Type   string `json:"type,omitempty"`  // MIME type
+	Tag    string `json:"tag,omitempty"`   // optional disambiguator
 }
 
 // ----- Capabilities -------------------------------------------------------
@@ -126,6 +144,7 @@ type Tool struct {
 	Description string           `json:"description,omitempty"`
 	InputSchema json.RawMessage  `json:"inputSchema"`
 	Annotations *ToolAnnotations `json:"annotations,omitempty"`
+	Icons       []Icon           `json:"icons,omitempty"` // 2025-11-25
 }
 
 type ToolAnnotations struct {

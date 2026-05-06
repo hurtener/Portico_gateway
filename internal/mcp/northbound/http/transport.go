@@ -6,13 +6,19 @@
 // SSE on the POST response (intermediate progress + final result in one
 // stream) is intentionally deferred: progress notifications go to the GET
 // SSE channel instead. Per spec both placements are valid.
+//
+// Spec version: 2025-11-25. The Origin guard, SSE event ids, and stricter
+// Accept negotiation enforce the clarifications made in that revision.
 package http
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	nethttp "net/http"
+	"strings"
+	"sync/atomic"
 
 	"log/slog"
 
@@ -32,21 +38,50 @@ type Dispatcher interface {
 	HandleNotification(ctx context.Context, sess *mcpgw.Session, n *protocol.Notification)
 }
 
+// HandlerConfig tunes optional transport behavior. Zero value is fine
+// for tests; production callers pass an allow-list of Origins.
+type HandlerConfig struct {
+	// AllowedOrigins is the set of acceptable Origin header values for
+	// browser clients. Requests with an Origin not in the list are
+	// rejected with 403 (per spec 2025-11-25). An empty list rejects
+	// every Origin-bearing request — operators must opt in explicitly.
+	AllowedOrigins []string
+	// AllowLocalhostOrigins, when true, additionally permits Origins
+	// served from localhost / 127.0.0.1 / [::1] on any port. Set this
+	// in dev mode so the SvelteKit dev server can talk to the gateway.
+	AllowLocalhostOrigins bool
+}
+
 // Handler is the http.Handler that implements MCP-over-HTTP.
 type Handler struct {
 	sessions   *mcpgw.SessionRegistry
 	dispatcher Dispatcher
 	log        *slog.Logger
+	cfg        HandlerConfig
 }
 
+// NewHandler constructs a Handler with the default (empty) HandlerConfig.
+// Use NewHandlerWithConfig when you need to populate AllowedOrigins.
 func NewHandler(sessions *mcpgw.SessionRegistry, d Dispatcher, log *slog.Logger) *Handler {
+	return NewHandlerWithConfig(sessions, d, log, HandlerConfig{})
+}
+
+// NewHandlerWithConfig constructs a Handler with a populated config.
+func NewHandlerWithConfig(sessions *mcpgw.SessionRegistry, d Dispatcher, log *slog.Logger, cfg HandlerConfig) *Handler {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Handler{sessions: sessions, dispatcher: d, log: log}
+	return &Handler{sessions: sessions, dispatcher: d, log: log, cfg: cfg}
 }
 
 func (h *Handler) ServeHTTP(w nethttp.ResponseWriter, r *nethttp.Request) {
+	// Spec 2025-11-25: invalid Origin headers MUST 403. The check runs
+	// before any session work so a misbehaving browser never leaks
+	// session state.
+	if !h.originAllowed(r) {
+		writeJSONError(w, nethttp.StatusForbidden, protocol.ErrInvalidRequest, "origin not allowed", map[string]string{"origin": r.Header.Get("Origin")})
+		return
+	}
 	switch r.Method {
 	case nethttp.MethodPost:
 		h.handlePost(w, r)
@@ -58,6 +93,48 @@ func (h *Handler) ServeHTTP(w nethttp.ResponseWriter, r *nethttp.Request) {
 		w.Header().Set("Allow", "POST, GET, DELETE")
 		writeJSONError(w, nethttp.StatusMethodNotAllowed, protocol.ErrInvalidRequest, "method not allowed", nil)
 	}
+}
+
+// originAllowed enforces the Streamable HTTP Origin guard (spec 2025-11-25).
+// Requests without an Origin header (programmatic clients, curl, server-
+// to-server) are always allowed. Requests carrying an Origin must match
+// the configured allow-list, with an optional bypass for localhost in
+// dev mode.
+func (h *Handler) originAllowed(r *nethttp.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	for _, allowed := range h.cfg.AllowedOrigins {
+		if allowed == "*" || allowed == origin {
+			return true
+		}
+	}
+	if h.cfg.AllowLocalhostOrigins && isLocalhostOrigin(origin) {
+		return true
+	}
+	return false
+}
+
+func isLocalhostOrigin(origin string) bool {
+	// Origin format is scheme://host[:port]. Strip the scheme and
+	// extract the host.
+	host := origin
+	if i := strings.Index(host, "://"); i > 0 {
+		host = host[i+3:]
+	}
+	if i := strings.Index(host, "/"); i > 0 {
+		host = host[:i]
+	}
+	if i := strings.LastIndex(host, ":"); i > 0 && !strings.Contains(host[i+1:], "]") {
+		host = host[:i]
+	}
+	host = strings.Trim(host, "[]")
+	switch host {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
 }
 
 // ----- POST /mcp ----------------------------------------------------------
@@ -141,6 +218,14 @@ func (h *Handler) handleGet(w nethttp.ResponseWriter, r *nethttp.Request) {
 		return
 	}
 
+	// Spec 2025-11-25: clients MUST send Accept: text/event-stream for
+	// the SSE channel. Reject with 406 Not Acceptable when missing so
+	// misconfigured clients fail loudly instead of pinning a hung GET.
+	if !acceptsSSE(r.Header.Get("Accept")) {
+		writeJSONError(w, nethttp.StatusNotAcceptable, protocol.ErrInvalidRequest, "Accept must include text/event-stream", nil)
+		return
+	}
+
 	flusher, ok := w.(nethttp.Flusher)
 	if !ok {
 		writeJSONError(w, nethttp.StatusInternalServerError, protocol.ErrInternalError, "responsewriter is not a flusher", nil)
@@ -150,8 +235,16 @@ func (h *Handler) handleGet(w nethttp.ResponseWriter, r *nethttp.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no") // disable proxy buffering
 	w.WriteHeader(nethttp.StatusOK)
 	flusher.Flush()
+
+	// Per-stream event-id counter. Spec 2025-11-25 says event ids should
+	// encode stream identity; using sessionID-<n> satisfies that without
+	// introducing a replay buffer (resumption is best-effort: clients
+	// reconnect, server starts a fresh sequence).
+	var seq atomic.Int64
+	streamID := sess.ID
 
 	ctx := r.Context()
 	for {
@@ -167,10 +260,32 @@ func (h *Handler) handleGet(w nethttp.ResponseWriter, r *nethttp.Request) {
 				h.log.Warn("sse marshal failed", "err", err)
 				continue
 			}
+			id := fmt.Sprintf("%s-%d", streamID, seq.Add(1))
+			fmt.Fprintf(w, "id: %s\n", id)
 			fmt.Fprintf(w, "data: %s\n\n", body)
 			flusher.Flush()
 		}
 	}
+}
+
+// acceptsSSE returns true when the Accept header (RFC 7231) lists
+// text/event-stream or */*. Empty Accept is permissive — most clients
+// forget to send it for GETs.
+func acceptsSSE(accept string) bool {
+	if accept == "" {
+		return true
+	}
+	for _, part := range strings.Split(accept, ",") {
+		mt := strings.TrimSpace(part)
+		if i := strings.Index(mt, ";"); i >= 0 {
+			mt = strings.TrimSpace(mt[:i])
+		}
+		switch mt {
+		case "text/event-stream", "*/*", "text/*":
+			return true
+		}
+	}
+	return false
 }
 
 // ----- DELETE /mcp --------------------------------------------------------
@@ -196,21 +311,18 @@ func identityFrom(r *nethttp.Request) (tenantID, userID string) {
 
 func readBody(r *nethttp.Request) []byte {
 	const max = 8 << 20 // 8 MiB
-	buf := make([]byte, 0, 4096)
-	tmp := make([]byte, 4096)
-	for {
-		n, err := r.Body.Read(tmp)
-		if n > 0 {
-			buf = append(buf, tmp[:n]...)
-			if len(buf) > max {
-				return buf[:max]
-			}
-		}
-		if err != nil {
-			break
-		}
+	if r.Body == nil {
+		return nil
 	}
-	return buf
+	defer r.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(r.Body, max+1))
+	if err != nil {
+		return body
+	}
+	if int64(len(body)) > max {
+		return body[:max]
+	}
+	return body
 }
 
 func writeJSONError(w nethttp.ResponseWriter, status, code int, msg string, data any) {

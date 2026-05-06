@@ -474,7 +474,7 @@ func (s *Supervisor) Stop(ctx context.Context, key InstanceKey) error {
 		_ = client.Close(ctx)
 	}
 	if s.registry != nil {
-		_ = s.registry.DeleteInstance(ctx, inst.id)
+		_ = s.registry.DeleteInstance(ctx, inst.tenantID, inst.id)
 	}
 	return nil
 }
@@ -502,7 +502,7 @@ func (s *Supervisor) StopAll(ctx context.Context) error {
 			}
 		}
 		if s.registry != nil {
-			_ = s.registry.DeleteInstance(ctx, inst.id)
+			_ = s.registry.DeleteInstance(ctx, inst.tenantID, inst.id)
 		}
 	}
 	return errors.Join(errs...)

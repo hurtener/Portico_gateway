@@ -12,6 +12,7 @@ type Resource struct {
 	MimeType    string          `json:"mimeType,omitempty"`
 	Annotations *Annotations    `json:"annotations,omitempty"`
 	Size        *int64          `json:"size,omitempty"`
+	Icons       []Icon          `json:"icons,omitempty"` // 2025-11-25
 	Meta        json.RawMessage `json:"_meta,omitempty"`
 }
 
@@ -22,6 +23,7 @@ type ResourceTemplate struct {
 	Description string       `json:"description,omitempty"`
 	MimeType    string       `json:"mimeType,omitempty"`
 	Annotations *Annotations `json:"annotations,omitempty"`
+	Icons       []Icon       `json:"icons,omitempty"` // 2025-11-25
 }
 
 // Annotations is the MCP `annotations` block (audience + priority hints
