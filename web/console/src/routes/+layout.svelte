@@ -17,9 +17,12 @@
       <a href="/apps" class:active={isActive('/apps')}>Apps</a>
       <a href="/skills" class:active={isActive('/skills')}>Skills</a>
       <a href="/sessions" class:active={isActive('/sessions')}>Sessions</a>
+      <a href="/approvals" class:active={isActive('/approvals')}>Approvals</a>
+      <a href="/audit" class:active={isActive('/audit')}>Audit</a>
+      <a href="/admin/secrets" class:active={isActive('/admin/secrets')}>Secrets</a>
     </nav>
     <div class="meta">
-      <span class="badge">pre-V1</span>
+      <span class="badge">v0.5</span>
     </div>
   </header>
 

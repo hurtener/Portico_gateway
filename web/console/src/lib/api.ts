@@ -265,5 +265,84 @@ export const api = {
         method: 'POST',
         body: '{}'
       }
+    ),
+
+  // Phase 5: approvals + audit + admin secrets.
+  listApprovals: () => request<Approval[]>('/v1/approvals?status=pending'),
+  approveApproval: (id: string, note = '') =>
+    request<Approval>(`/v1/approvals/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ note })
+    }),
+  denyApproval: (id: string, note = '') =>
+    request<Approval>(`/v1/approvals/${encodeURIComponent(id)}/deny`, {
+      method: 'POST',
+      body: JSON.stringify({ note })
+    }),
+  queryAudit: (params: AuditQueryParams = {}) => {
+    const q = new URLSearchParams();
+    if (params.type) q.set('type', params.type);
+    if (params.since) q.set('since', params.since);
+    if (params.until) q.set('until', params.until);
+    if (params.limit) q.set('limit', String(params.limit));
+    if (params.cursor) q.set('cursor', params.cursor);
+    const qs = q.toString();
+    return request<{ events: AuditEvent[]; next_cursor: string }>(
+      `/v1/audit/events${qs ? `?${qs}` : ''}`
+    );
+  },
+  listSecrets: () => request<SecretRef[]>('/v1/admin/secrets'),
+  putSecret: (tenant: string, name: string, value: string) =>
+    request<void>(
+      `/v1/admin/secrets/${encodeURIComponent(tenant)}/${encodeURIComponent(name)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ value })
+      }
+    ),
+  deleteSecret: (tenant: string, name: string) =>
+    request<void>(
+      `/v1/admin/secrets/${encodeURIComponent(tenant)}/${encodeURIComponent(name)}`,
+      { method: 'DELETE' }
     )
 };
+
+export interface Approval {
+  id: string;
+  tenant_id: string;
+  session_id: string;
+  user_id?: string;
+  tool: string;
+  args_summary?: string;
+  risk_class: string;
+  status: string;
+  created_at: string;
+  decided_at?: string;
+  expires_at: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AuditEvent {
+  id?: string;
+  type: string;
+  tenant_id: string;
+  session_id?: string;
+  user_id?: string;
+  occurred_at: string;
+  trace_id?: string;
+  span_id?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface AuditQueryParams {
+  type?: string;
+  since?: string;
+  until?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface SecretRef {
+  tenant_id: string;
+  name: string;
+}

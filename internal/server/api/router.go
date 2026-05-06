@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
 	mcpnb "github.com/hurtener/Portico_gateway/internal/mcp/northbound/http"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
+	"github.com/hurtener/Portico_gateway/internal/policy/approval"
 	"github.com/hurtener/Portico_gateway/internal/registry"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	"github.com/hurtener/Portico_gateway/internal/server/ui"
@@ -56,6 +58,38 @@ type Deps struct {
 	// Phase 4 addition: skills runtime. Optional — when nil, /v1/skills
 	// returns 503.
 	Skills SkillsManager
+
+	// Phase 5 additions: approval store + flow + vault + server-initiated
+	// requester (the northbound transport routes JSON-RPC responses
+	// through it to wake pending elicitation calls).
+	Approvals    ifaces.ApprovalStore
+	ApprovalFlow *approvalFlow
+	Vault        VaultManager
+	ServerInit   *mcpnb.ServerInitiatedRequester
+}
+
+// approvalFlow is the slice of internal/policy/approval.Flow the API
+// package needs (just ResolveManually). Declared as a struct here to keep
+// the api package from importing approval directly.
+type approvalFlow struct {
+	resolveManually func(ctx context.Context, tenantID, id, status, actorUserID string) (*approval.Approval, error)
+}
+
+// NewApprovalFlowAdapter wraps a *internal/policy/approval.Flow's
+// ResolveManually so the api package can stay free of the approval
+// import beyond the DTO conversion. The cmd/portico wiring constructs
+// it.
+func NewApprovalFlowAdapter(resolve func(ctx context.Context, tenantID, id, status, actorUserID string) (*approval.Approval, error)) *approvalFlow {
+	return &approvalFlow{resolveManually: resolve}
+}
+
+// ResolveManually exposes the wrapped function with the approval flow's
+// signature — convenient for handlers.
+func (f *approvalFlow) ResolveManually(ctx context.Context, tenantID, id, status, actor string) (*approval.Approval, error) {
+	if f == nil || f.resolveManually == nil {
+		return nil, errors.New("approval flow not configured")
+	}
+	return f.resolveManually(ctx, tenantID, id, status, actor)
 }
 
 // SkillsManager is the API-facing surface of the skills runtime. The
@@ -118,6 +152,12 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/v1/apps", listAppsHandler(d))
 		}
 
+		// Phase 5: approvals (read-only — admin scope required for resolve).
+		if d.Approvals != nil {
+			r.Get("/v1/approvals", listApprovalsHandler(d))
+			r.Get("/v1/approvals/{id}", getApprovalHandler(d))
+		}
+
 		// Phase 4: skills runtime APIs.
 		if d.Skills != nil {
 			r.Get("/v1/skills", listSkillsHandler(d))
@@ -138,6 +178,9 @@ func NewRouter(d Deps) http.Handler {
 				AllowedOrigins:        d.AllowedOrigins,
 				AllowLocalhostOrigins: d.DevMode,
 			})
+			if d.ServerInit != nil {
+				h.SetServerInitiated(d.ServerInit)
+			}
 			r.Method("POST", "/mcp", h)
 			r.Method("GET", "/mcp", h)
 			r.Method("DELETE", "/mcp", h)
@@ -149,6 +192,17 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/v1/admin/tenants", listTenantsHandler(d))
 			r.Get("/v1/admin/tenants/{id}", getTenantHandler(d))
 			r.Post("/v1/admin/tenants", upsertTenantHandler(d))
+
+			// Phase 5: manual approval resolution + secrets management.
+			if d.ApprovalFlow != nil {
+				r.Post("/v1/approvals/{id}/approve", resolveApprovalHandler(d, approval.StatusApproved))
+				r.Post("/v1/approvals/{id}/deny", resolveApprovalHandler(d, approval.StatusDenied))
+			}
+			if d.Vault != nil {
+				r.Get("/v1/admin/secrets", listAdminSecretsHandler(d))
+				r.Put("/v1/admin/secrets/{tenant}/{name}", putAdminSecretHandler(d))
+				r.Delete("/v1/admin/secrets/{tenant}/{name}", deleteAdminSecretHandler(d))
+			}
 		})
 
 		// Console UI (HTML + static)

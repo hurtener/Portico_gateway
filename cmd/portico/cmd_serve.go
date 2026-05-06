@@ -12,13 +12,18 @@ import (
 	"time"
 
 	"github.com/hurtener/Portico_gateway/internal/apps"
+	auditpkg "github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
 	"github.com/hurtener/Portico_gateway/internal/config"
+	porticohttp "github.com/hurtener/Portico_gateway/internal/mcp/northbound/http"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
+	"github.com/hurtener/Portico_gateway/internal/policy"
+	"github.com/hurtener/Portico_gateway/internal/policy/approval"
 	"github.com/hurtener/Portico_gateway/internal/registry"
 	"github.com/hurtener/Portico_gateway/internal/runtime/process"
 	"github.com/hurtener/Portico_gateway/internal/secrets"
+	"github.com/hurtener/Portico_gateway/internal/secrets/inject"
 	"github.com/hurtener/Portico_gateway/internal/server/api"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	skillloader "github.com/hurtener/Portico_gateway/internal/skills/loader"
@@ -166,6 +171,39 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	// affected instances.
 	reactor := registry.NewReactor(reg, supervisor, logger)
 
+	// Phase 5: audit store, policy engine, approval flow, credential
+	// injectors, server-initiated requester. Wired BEFORE the skills
+	// manager builds so the engine can reference the catalog when it
+	// lands.
+	rawDB, err := rawSQLFromBackend(backend)
+	if err != nil {
+		return fmt.Errorf("phase-5 audit store: %w", err)
+	}
+	auditStore := auditpkg.NewStore(rawDB, logger.With("component", "audit"))
+	auditStore.Start()
+
+	auditEmitter := auditpkg.NewFanoutEmitter(auditpkg.SlogEmitter{Log: logger.With("component", "audit.fanout")}, auditStore)
+
+	approvalStorage := approval.NewStorageAdapter(backend.Approvals())
+	serverInit := porticohttp.NewServerInitiatedRequester(sessions)
+	approvalFlow := approval.New(approvalStorage,
+		serverInitSenderAdapter{r: serverInit},
+		sessionLookupAdapter{sessions: sessions},
+		auditEmitter,
+		logger.With("component", "approval"))
+
+	injectorRegistry := inject.NewRegistry()
+	if vault != nil {
+		injectorRegistry.Register(inject.NewEnvInjector(vault))
+		injectorRegistry.Register(inject.NewHTTPHeaderInjector(vault))
+		injectorRegistry.Register(inject.NewSecretRefInjector(vault))
+	}
+	injectorRegistry.Register(inject.NewShimInjector())
+	// OAuth injectors are constructed per-server (each has its own IdP).
+	// Wire them via the registry's seedRegistry hook below — for now we
+	// register a default single-exchanger injector that the dispatcher
+	// consults; a richer per-server lookup ships in a follow-up.
+
 	// Phase 4: skills runtime. Sources are constructed from cfg.Skills.
 	// The provider plugs into the resource + prompt aggregators; the
 	// index generator surfaces the per-tenant catalog.
@@ -188,6 +226,48 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 			logger.Warn("skills manager start failed", "err", err)
 		}
 	}
+
+	// Phase 5: now the catalog is alive, build the policy engine and
+	// install the pipeline + audit emitter on the dispatcher.
+	var policyCatalog *skillruntime.Catalog
+	var policyEnable *skillruntime.Enablement
+	if skillsMgr != nil {
+		policyCatalog = skillsMgr.Catalog()
+		policyEnable = skillsMgr.Enablement()
+	}
+	policyEngine := policy.New(manager, policyCatalog, policyEnable, nil, policy.EngineConfig{
+		DefaultRiskClass:       policy.RiskWrite,
+		DefaultApprovalTimeout: 5 * time.Minute,
+		Logger:                 logger.With("component", "policy"),
+	})
+	pipeline := mcpgw.NewPolicyPipeline(mcpgw.PipelineConfig{
+		Engine:    policyEngine,
+		Approvals: approvalFlow,
+		Injectors: injectorRegistry,
+		Emitter:   auditEmitter,
+		Registry:  reg,
+		Logger:    logger.With("component", "policy_pipeline"),
+	})
+	dispatcher.SetPolicyPipeline(pipeline)
+	dispatcher.SetAuditEmitter(auditEmitter)
+
+	// Sweep expired approvals every minute. The flow keeps the in-memory
+	// row consistent; the sweep flips persisted rows that were never
+	// resolved manually after a fallback.
+	go func() {
+		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if _, err := approvalFlow.Sweep(context.Background()); err != nil {
+					logger.Warn("approval sweep failed", "err", err)
+				}
+			}
+		}
+	}()
 
 	// Phase 2: optional config hot-reload. Only `serve --config` exposes
 	// a file path; `dev` synthesises the config in memory.
@@ -226,6 +306,10 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		Apps:           appsReg,
 		AllowedOrigins: cfg.Server.AllowedOrigins,
 		Skills:         skillsMgr,
+		Approvals:      backend.Approvals(),
+		ApprovalFlow:   api.NewApprovalFlowAdapter(approvalFlowResolverFor(approvalFlow)),
+		Vault:          vault,
+		ServerInit:     serverInit,
 	}
 
 	handler := api.NewRouter(deps)
@@ -265,6 +349,8 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	}
 	reactor.Stop()
 	reg.CloseAll()
+	serverInit.Stop()
+	auditStore.Stop()
 	return nil
 }
 
@@ -379,6 +465,37 @@ func configServerSpecToRegistry(c config.ServerSpec) *registry.ServerSpec {
 			AuthHeader: c.HTTP.AuthHeader,
 			Timeout:    registry.Duration(c.HTTP.Timeout),
 		}
+	}
+	if c.Auth != nil {
+		out.Auth = &registry.AuthSpec{
+			Strategy:         c.Auth.Strategy,
+			DefaultRiskClass: c.Auth.DefaultRiskClass,
+			Env:              append([]string(nil), c.Auth.Env...),
+			Headers:          copyStringMap(c.Auth.Headers),
+			SecretRef:        c.Auth.SecretRef,
+		}
+		if c.Auth.Exchange != nil {
+			out.Auth.Exchange = &registry.OAuthExchangeSpec{
+				TokenURL:        c.Auth.Exchange.TokenURL,
+				ClientID:        c.Auth.Exchange.ClientID,
+				ClientSecretRef: c.Auth.Exchange.ClientSecretRef,
+				Audience:        c.Auth.Exchange.Audience,
+				Scope:           c.Auth.Exchange.Scope,
+				GrantType:       c.Auth.Exchange.GrantType,
+				SubjectTokenSrc: c.Auth.Exchange.SubjectTokenSrc,
+			}
+		}
+	}
+	return out
+}
+
+func copyStringMap(in map[string]string) map[string]string {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
 	}
 	return out
 }
