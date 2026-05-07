@@ -30,6 +30,11 @@ import (
 	skillloader "github.com/hurtener/Portico_gateway/internal/skills/loader"
 	skillruntime "github.com/hurtener/Portico_gateway/internal/skills/runtime"
 	skillsource "github.com/hurtener/Portico_gateway/internal/skills/source"
+	"github.com/hurtener/Portico_gateway/internal/skills/source/authored"
+
+	// Side-effect: register the Phase 8 source drivers.
+	_ "github.com/hurtener/Portico_gateway/internal/skills/source/git"
+	_ "github.com/hurtener/Portico_gateway/internal/skills/source/http"
 	"github.com/hurtener/Portico_gateway/internal/storage"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 
@@ -228,6 +233,36 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		}
 	}
 
+	// Phase 8: authored skills store, source registry, REST adapters.
+	authoredStore := authored.NewStore(backend.AuthoredSkills(), logger.With("component", "skills.authored"))
+	dataDir := deriveDataDir(cfg.Storage.DSN)
+	skillSourceRegistry := skillsource.NewRegistry(
+		backend.SkillSources(),
+		authoredStore,
+		vaultLookupAdapter{vault: vault},
+		dataDir,
+		logger,
+		auditEmitterShim{em: auditEmitter},
+	)
+	skillSourcesCtl := newSkillSourcesAdapter(backend.SkillSources(), skillSourceRegistry, skillsMgr, auditEmitter, logger.With("component", "skills.sources"))
+	authoredCtl := newAuthoredSkillsAdapter(authoredStore, skillsMgr, skillSourceRegistry, auditEmitter, logger.With("component", "skills.authored"))
+	skillValidator, vErr := newSkillValidatorAdapter()
+	if vErr != nil {
+		logger.Warn("skill validator init failed", "err", vErr)
+	}
+	// Eagerly attach per-tenant sources for every configured tenant so
+	// the catalog reflects DB-backed sources at boot.
+	if skillsMgr != nil {
+		for _, t := range cfg.Tenants {
+			skillSourcesCtl.attachSources(ctx, t.ID)
+		}
+		if cfg.IsDevMode() {
+			if dev := devTenantOrEnv(true); dev != "" {
+				skillSourcesCtl.attachSources(ctx, dev)
+			}
+		}
+	}
+
 	// Phase 5: now the catalog is alive, build the policy engine and
 	// install the pipeline + audit emitter on the dispatcher.
 	var policyCatalog *skillruntime.Catalog
@@ -355,6 +390,10 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		ServerInit:     serverInit,
 		Snapshots:      snapshotService,
 		SnapshotBinder: snapshotBinder,
+
+		SkillSources:   skillSourcesCtl,
+		AuthoredSkills: authoredCtl,
+		SkillValidator: skillValidator,
 	}
 
 	handler := api.NewRouter(deps)

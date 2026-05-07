@@ -316,6 +316,75 @@ export const api = {
       method: 'DELETE'
     }),
 
+  // Phase 8: skill sources + authored skills.
+  listSkillSources: () => request<{ items: SkillSource[] }>('/api/skill-sources'),
+  getSkillSource: (name: string) =>
+    request<SkillSource>(`/api/skill-sources/${encodeURIComponent(name)}`),
+  upsertSkillSource: (s: Partial<SkillSource>) =>
+    request<SkillSource>('/api/skill-sources', {
+      method: 'POST',
+      body: JSON.stringify(s)
+    }),
+  putSkillSource: (name: string, s: Partial<SkillSource>) =>
+    request<SkillSource>(`/api/skill-sources/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify(s)
+    }),
+  deleteSkillSource: (name: string) =>
+    request<void>(`/api/skill-sources/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  refreshSkillSource: (name: string) =>
+    request<{ refreshed: string }>(`/api/skill-sources/${encodeURIComponent(name)}/refresh`, {
+      method: 'POST',
+      body: '{}'
+    }),
+  listSkillSourcePacks: (name: string) =>
+    request<{ items: SourcePack[] }>(`/api/skill-sources/${encodeURIComponent(name)}/packs`),
+
+  listAuthoredSkills: () => request<{ items: AuthoredSkillSummary[] }>('/api/skills/authored'),
+  getAuthoredSkill: (id: string) =>
+    request<AuthoredSkillDetail>(`/api/skills/authored/${encodeURIComponent(id)}`),
+  authoredSkillVersions: (id: string) =>
+    request<{ items: AuthoredSkillSummary[] }>(
+      `/api/skills/authored/${encodeURIComponent(id)}/versions`
+    ),
+  getAuthoredSkillVersion: (id: string, v: string) =>
+    request<AuthoredSkillDetail>(
+      `/api/skills/authored/${encodeURIComponent(id)}/versions/${encodeURIComponent(v)}`
+    ),
+  createAuthoredSkill: (req: AuthoredSkillRequest) =>
+    request<AuthoredSkillDetail>('/api/skills/authored', {
+      method: 'POST',
+      body: JSON.stringify(req)
+    }),
+  updateAuthoredSkillVersion: (id: string, v: string, req: AuthoredSkillRequest) =>
+    request<AuthoredSkillDetail>(
+      `/api/skills/authored/${encodeURIComponent(id)}/versions/${encodeURIComponent(v)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(req)
+      }
+    ),
+  publishAuthoredSkill: (id: string, v: string) =>
+    request<AuthoredSkillDetail>(
+      `/api/skills/authored/${encodeURIComponent(id)}/versions/${encodeURIComponent(v)}/publish`,
+      { method: 'POST', body: '{}' }
+    ),
+  archiveAuthoredSkill: (id: string, v: string) =>
+    request<void>(
+      `/api/skills/authored/${encodeURIComponent(id)}/versions/${encodeURIComponent(v)}/archive`,
+      { method: 'POST', body: '{}' }
+    ),
+  deleteAuthoredSkillDraft: (id: string, v: string) =>
+    request<void>(
+      `/api/skills/authored/${encodeURIComponent(id)}/versions/${encodeURIComponent(v)}`,
+      { method: 'DELETE' }
+    ),
+  validateSkillManifest: (req: AuthoredSkillRequest) =>
+    request<SkillValidationResult>('/api/skills/validate', {
+      method: 'POST',
+      body: JSON.stringify(req)
+    }),
+
   // Phase 6: snapshots + session inspector.
   listSnapshots: (params: { since?: string; cursor?: string; limit?: number } = {}) => {
     const q = new URLSearchParams();
@@ -457,4 +526,68 @@ export interface AuditQueryParams {
 export interface SecretRef {
   tenant_id: string;
   name: string;
+}
+
+// Phase 8: skill sources + authored.
+export interface SkillSource {
+  name: string;
+  driver: 'git' | 'http' | 'localdir' | 'authored' | string;
+  config: Record<string, unknown>;
+  credential_ref?: string;
+  refresh_seconds?: number;
+  priority?: number;
+  enabled: boolean;
+  created_at?: string;
+  updated_at?: string;
+  last_refresh_at?: string;
+  last_error?: string;
+}
+
+export interface SourcePack {
+  id: string;
+  version: string;
+  loc?: string;
+}
+
+export interface AuthoredSkillSummary {
+  skill_id: string;
+  version: string;
+  status: 'draft' | 'published' | 'archived' | string;
+  title?: string;
+  description?: string;
+  checksum: string;
+  author_user_id?: string;
+  created_at: string;
+  published_at?: string;
+}
+
+export interface AuthoredSkillFile {
+  relpath: string;
+  mime_type: string;
+  body: string;
+}
+
+export interface AuthoredSkillDetail extends AuthoredSkillSummary {
+  manifest: Record<string, unknown>;
+  files: AuthoredSkillFile[];
+}
+
+export interface AuthoredSkillRequest {
+  manifest: string;
+  files?: AuthoredSkillFile[];
+}
+
+export interface SkillValidationViolation {
+  pointer: string;
+  line?: number;
+  col?: number;
+  reason: string;
+  kind?: string;
+}
+
+export interface SkillValidationResult {
+  valid: boolean;
+  violations: SkillValidationViolation[];
+  checksum?: string;
+  validated?: string;
 }

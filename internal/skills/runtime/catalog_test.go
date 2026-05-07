@@ -41,11 +41,11 @@ func TestCatalog_ForTenant_GlobMatch(t *testing.T) {
 	c.Set(mkSkill("github.docs", "1.0.0", nil))
 	c.Set(mkSkill("postgres.sql", "1.0.0", nil))
 
-	got := c.ForTenant([]string{"github.*"}, "")
+	got := c.ForTenant("", []string{"github.*"}, "")
 	if len(got) != 2 {
 		t.Fatalf("github.* match got %d", len(got))
 	}
-	got = c.ForTenant([]string{"*"}, "")
+	got = c.ForTenant("", []string{"*"}, "")
 	if len(got) != 3 {
 		t.Errorf("* match got %d", len(got))
 	}
@@ -55,7 +55,7 @@ func TestCatalog_ForTenant_PlanMismatch(t *testing.T) {
 	c := NewCatalog()
 	c.Set(mkSkill("a.pro-only", "1.0.0", []string{"pro", "enterprise"}))
 	c.Set(mkSkill("a.free", "1.0.0", []string{"free"}))
-	got := c.ForTenant([]string{"*"}, "free")
+	got := c.ForTenant("", []string{"*"}, "free")
 	if len(got) != 1 || got[0].Manifest.ID != "a.free" {
 		t.Errorf("plan filter wrong: %+v", got)
 	}

@@ -52,6 +52,12 @@
 
 <PageHeader title={$t('skills.title')} description={$t('skills.description')}>
   <div slot="actions">
+    <Button variant="secondary" on:click={() => (window.location.href = '/skills/sources')}>
+      {$t('nav.sources')}
+    </Button>
+    <Button variant="secondary" on:click={() => (window.location.href = '/skills/authored')}>
+      {$t('nav.authored')}
+    </Button>
     <Button variant="secondary" on:click={refresh} {loading}>
       <IconRefreshCw slot="leading" size={14} />
       {$t('common.refresh')}

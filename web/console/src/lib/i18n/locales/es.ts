@@ -288,6 +288,75 @@ export default {
   'secrets.unavailable.description':
     'Configura PORTICO_VAULT_KEY antes de iniciar Portico para habilitar la gestión de secretos. El vault permanece deshabilitado en modo dev sin clave.',
 
+  // Skill sources (Phase 8)
+  'sources.title': 'Fuentes de skills',
+  'sources.description':
+    'Feeds Git/HTTP externos más el almacén de skills creados en Portico. Agrega o elimina fuentes sin reiniciar el gateway.',
+  'sources.col.name': 'Nombre',
+  'sources.col.driver': 'Driver',
+  'sources.col.priority': 'Prioridad',
+  'sources.col.enabled': 'Habilitada',
+  'sources.col.lastRefresh': 'Última actualización',
+  'sources.col.status': 'Estado',
+  'sources.action.add': 'Añadir fuente',
+  'sources.action.refresh': 'Actualizar ahora',
+  'sources.empty.title': 'Sin fuentes configuradas',
+  'sources.empty.description':
+    'Añade un feed Git o HTTP, o crea skills directamente desde el Console.',
+  'sources.form.name': 'Nombre',
+  'sources.form.driver': 'Driver',
+  'sources.form.config.url': 'URL',
+  'sources.form.config.branch': 'Rama (opcional)',
+  'sources.form.config.feedUrl': 'URL del feed',
+  'sources.form.config.subdir': 'Glob de subdir (opcional)',
+  'sources.form.credentialRef': 'Credencial del vault (opcional)',
+  'sources.form.priority': 'Prioridad',
+  'sources.form.refresh': 'Segundos entre refresh',
+  'sources.form.required': 'Se requieren nombre y driver',
+  'sources.toast.saved.title': 'Fuente guardada',
+  'sources.toast.deleted.title': 'Fuente eliminada',
+  'sources.detail.lastError': 'Último error',
+  'sources.detail.lastRefresh': 'Última actualización',
+  'sources.detail.packs': 'Packs de esta fuente',
+  'sources.detail.notFound.title': 'Fuente no encontrada',
+
+  // Authored skills (Phase 8)
+  'authored.title': 'Skills creados',
+  'authored.description':
+    'Skill Packs creados directamente en Portico. Compón un manifiesto, edita archivos y publica — sin recompilar.',
+  'authored.col.skillId': 'ID del skill',
+  'authored.col.version': 'Versión',
+  'authored.col.status': 'Estado',
+  'authored.col.checksum': 'Checksum',
+  'authored.col.created': 'Creado',
+  'authored.action.new': 'Nuevo skill',
+  'authored.action.publish': 'Publicar',
+  'authored.action.archive': 'Archivar',
+  'authored.action.deleteDraft': 'Eliminar borrador',
+  'authored.empty.title': 'Aún no hay skills creados',
+  'authored.empty.description':
+    'Crea un borrador desde el editor de manifiestos y publícalo para el tenant activo.',
+  'authored.editor.manifest': 'Manifiesto',
+  'authored.editor.skillMd': 'SKILL.md',
+  'authored.editor.prompts': 'Prompts',
+  'authored.editor.validate': 'Validación',
+  'authored.editor.savedraft': 'Guardar borrador',
+  'authored.editor.publish': 'Publicar',
+  'authored.editor.title': 'Componer skill',
+  'authored.editor.description':
+    'Edita el manifiesto a la izquierda, los archivos en el centro y la validación en vivo a la derecha.',
+  'authored.validation.valid': 'Manifiesto válido',
+  'authored.validation.errors': '{n} violación(es)',
+  'authored.validation.line': 'línea {line} col {col}',
+  'authored.versions.title': 'Versiones',
+  'authored.toast.saved': 'Borrador guardado',
+  'authored.toast.published': 'Publicado',
+  'authored.toast.archived': 'Archivado',
+
+  // Sub-nav
+  'nav.sources': 'Fuentes',
+  'nav.authored': 'Creados',
+
   // Command palette
   'cmdk.placeholder': 'Escribe un comando o busca…',
   'cmdk.section.navigate': 'Navegar',

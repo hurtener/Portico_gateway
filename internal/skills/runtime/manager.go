@@ -138,6 +138,90 @@ func (m *Manager) Stop() {
 	m.wg.Wait()
 }
 
+// AddSource attaches a previously-unknown Source to the running
+// manager: lists its packs, populates the catalog, and starts a
+// Watch goroutine. Used by the Phase 8 source.Registry after a
+// POST /api/skill-sources write.
+//
+// tenantID, when non-empty, scopes every loaded pack to that tenant
+// (Skill.TenantID is set so ForTenant won't leak the pack across
+// tenants). Pass "" for global / cross-tenant sources.
+func (m *Manager) AddSource(ctx context.Context, src source.Source, tenantID string) error {
+	if m.loader == nil {
+		return errors.New("manager: loader is nil")
+	}
+	results := []loader.LoadResult{}
+	refs, err := src.List(ctx)
+	if err != nil {
+		m.log.Warn("manager: source list failed", "source", src.Name(), "err", err)
+		return err
+	}
+	for _, ref := range refs {
+		results = append(results, m.loader.LoadOne(ctx, src, ref))
+	}
+	for _, r := range results {
+		if len(r.Errors) > 0 {
+			m.log.Warn("skill load failed",
+				"skill_id", r.Ref.ID,
+				"errors", errSliceToString(r.Errors),
+				"warnings", r.Warnings)
+			continue
+		}
+		key := r.Manifest.ID
+		if tenantID != "" {
+			key = tenantID + ":" + r.Manifest.ID
+		}
+		_ = key // catalog keys today are skill ids; tenant scoping is via Skill.TenantID
+		m.catalog.Set(&Skill{
+			Manifest: r.Manifest,
+			Source:   r.Source,
+			Ref:      r.Ref,
+			Warnings: r.Warnings,
+			TenantID: tenantID,
+		})
+		m.log.Info("skill loaded",
+			"skill_id", r.Manifest.ID,
+			"version", r.Manifest.Version,
+			"source", src.Name(),
+			"tenant_id", tenantID)
+	}
+	m.indexGen.InvalidateAll()
+
+	m.mu.Lock()
+	stopCtx := m.stop
+	m.mu.Unlock()
+	_ = stopCtx
+	// Use the manager's lifetime ctx (background) so the watch survives
+	// the request that triggered the add.
+	wctx := context.Background() //nolint:contextcheck // see Start()
+	ch, err := src.Watch(wctx)
+	if err != nil || ch == nil {
+		return nil
+	}
+	m.wg.Add(1)
+	go m.watchLoop(wctx, src, ch) //nolint:contextcheck
+	return nil
+}
+
+// RemoveSource drops every catalog entry that came from the named
+// source within the given tenant scope. Pass tenantID="" to remove
+// across every tenant (used when an operator deletes a global source).
+// Watch goroutines are joined when the source's ctx ends or when the
+// source's own Stop is called by the caller.
+func (m *Manager) RemoveSource(tenantID, name string) {
+	m.catalog.RemoveBySource(tenantID, name)
+	m.indexGen.InvalidateAll()
+	m.log.Info("source removed", "source", name, "tenant_id", tenantID)
+}
+
+// RemoveForTenant drops the (tenantID, skillID) entry. Used by the
+// authored-skill archive flow.
+func (m *Manager) RemoveForTenant(tenantID, skillID string) {
+	m.catalog.RemoveForTenant(tenantID, skillID)
+	m.indexGen.InvalidateAll()
+	m.log.Info("authored skill archived", "skill_id", skillID, "tenant_id", tenantID)
+}
+
 func (m *Manager) watchLoop(ctx context.Context, src source.Source, ch <-chan source.Event) {
 	defer m.wg.Done()
 	for {
@@ -156,14 +240,36 @@ func (m *Manager) watchLoop(ctx context.Context, src source.Source, ch <-chan so
 func (m *Manager) handleEvent(ctx context.Context, src source.Source, ev source.Event) {
 	switch ev.Kind {
 	case source.EventRemoved:
-		m.catalog.Remove(ev.Ref.ID)
+		// Determine tenant context from a previously-loaded entry:
+		// look up by source name and id; when the prior catalog entry
+		// is tenant-scoped, route the removal accordingly.
+		tenantID := lookupTenantForSourceID(m.catalog, src.Name(), ev.Ref.ID)
+		if tenantID != "" {
+			m.catalog.RemoveForTenant(tenantID, ev.Ref.ID)
+		} else {
+			m.catalog.Remove(ev.Ref.ID)
+		}
 		m.indexGen.InvalidateAll()
-		m.log.Info("skill removed", "skill_id", ev.Ref.ID)
+		m.log.Info("skill removed", "skill_id", ev.Ref.ID, "tenant_id", tenantID)
 	case source.EventAdded, source.EventUpdated:
 		m.reloadSkill(ctx, src, ev.Ref)
 	default:
 		m.log.Debug("unknown skill event; ignoring", "kind", ev.Kind, "skill_id", ev.Ref.ID)
 	}
+}
+
+// lookupTenantForSourceID returns the TenantID of a catalog entry that
+// matches (sourceName, skillID), or "" if absent or global.
+func lookupTenantForSourceID(c *Catalog, sourceName, id string) string {
+	for _, s := range c.List() {
+		if s == nil || s.Source == nil || s.Manifest == nil {
+			continue
+		}
+		if s.Source.Name() == sourceName && s.Manifest.ID == id {
+			return s.TenantID
+		}
+	}
+	return ""
 }
 
 // reloadSkill re-validates a single pack and atomically swaps it in;
@@ -178,14 +284,16 @@ func (m *Manager) reloadSkill(ctx context.Context, src source.Source, ref source
 			"warnings", res.Warnings)
 		return
 	}
+	tenantID := lookupTenantForSourceID(m.catalog, src.Name(), ref.ID)
 	m.catalog.Set(&Skill{
 		Manifest: res.Manifest,
 		Source:   src,
 		Ref:      res.Ref,
 		Warnings: res.Warnings,
+		TenantID: tenantID,
 	})
 	m.indexGen.InvalidateAll()
-	m.log.Info("skill reloaded", "skill_id", res.Manifest.ID, "version", res.Manifest.Version)
+	m.log.Info("skill reloaded", "skill_id", res.Manifest.ID, "version", res.Manifest.Version, "tenant_id", tenantID)
 }
 
 func errSliceToString(errs []error) []string {

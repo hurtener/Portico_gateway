@@ -288,6 +288,75 @@ export default {
   'secrets.unavailable.description':
     'Set PORTICO_VAULT_KEY before starting Portico to enable secret management. The vault stays disabled in dev mode without a key.',
 
+  // Skill sources (Phase 8)
+  'sources.title': 'Skill sources',
+  'sources.description':
+    'External Git/HTTP feeds plus the in-Portico authored store. Add or remove sources without restarting the gateway.',
+  'sources.col.name': 'Name',
+  'sources.col.driver': 'Driver',
+  'sources.col.priority': 'Priority',
+  'sources.col.enabled': 'Enabled',
+  'sources.col.lastRefresh': 'Last refresh',
+  'sources.col.status': 'Status',
+  'sources.action.add': 'Add source',
+  'sources.action.refresh': 'Refresh now',
+  'sources.empty.title': 'No sources configured',
+  'sources.empty.description':
+    'Add a Git or HTTP feed, or compose authored skills directly in the Console.',
+  'sources.form.name': 'Name',
+  'sources.form.driver': 'Driver',
+  'sources.form.config.url': 'URL',
+  'sources.form.config.branch': 'Branch (optional)',
+  'sources.form.config.feedUrl': 'Feed URL',
+  'sources.form.config.subdir': 'Subdir glob (optional)',
+  'sources.form.credentialRef': 'Vault credential (optional)',
+  'sources.form.priority': 'Priority',
+  'sources.form.refresh': 'Refresh seconds',
+  'sources.form.required': 'Name and driver are required',
+  'sources.toast.saved.title': 'Source saved',
+  'sources.toast.deleted.title': 'Source removed',
+  'sources.detail.lastError': 'Last error',
+  'sources.detail.lastRefresh': 'Last refresh',
+  'sources.detail.packs': 'Packs from this source',
+  'sources.detail.notFound.title': 'Source not found',
+
+  // Authored skills (Phase 8)
+  'authored.title': 'Authored skills',
+  'authored.description':
+    'In-Portico Skill Packs. Compose a manifest, draft files, and publish — no rebuild required.',
+  'authored.col.skillId': 'Skill ID',
+  'authored.col.version': 'Version',
+  'authored.col.status': 'Status',
+  'authored.col.checksum': 'Checksum',
+  'authored.col.created': 'Created',
+  'authored.action.new': 'New skill',
+  'authored.action.publish': 'Publish',
+  'authored.action.archive': 'Archive',
+  'authored.action.deleteDraft': 'Delete draft',
+  'authored.empty.title': 'No authored skills yet',
+  'authored.empty.description':
+    'Create a draft from the manifest editor, then publish it for the active tenant.',
+  'authored.editor.manifest': 'Manifest',
+  'authored.editor.skillMd': 'SKILL.md',
+  'authored.editor.prompts': 'Prompts',
+  'authored.editor.validate': 'Validation',
+  'authored.editor.savedraft': 'Save draft',
+  'authored.editor.publish': 'Publish',
+  'authored.editor.title': 'Compose skill',
+  'authored.editor.description':
+    'Edit the manifest on the left, files in the centre, and live validation on the right.',
+  'authored.validation.valid': 'Valid manifest',
+  'authored.validation.errors': '{n} violation(s)',
+  'authored.validation.line': 'line {line} col {col}',
+  'authored.versions.title': 'Versions',
+  'authored.toast.saved': 'Draft saved',
+  'authored.toast.published': 'Published',
+  'authored.toast.archived': 'Archived',
+
+  // Sub-nav
+  'nav.sources': 'Sources',
+  'nav.authored': 'Authored',
+
   // Command palette
   'cmdk.placeholder': 'Type a command or search…',
   'cmdk.section.navigate': 'Navigate',

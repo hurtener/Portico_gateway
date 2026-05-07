@@ -14,6 +14,7 @@ The gateway is the substrate. The Skill Pack runtime binds the open Skills spec 
 - **Server registry + lifecycle.** REST CRUD at `/v1/servers/*`, hot reconfiguration, list-changed propagation; servers persisted in SQLite.
 - **Resources, prompts, MCP Apps.** Aggregated `resources/list`, `resources/read`, `prompts/list`, `prompts/get` across the fleet; `ui://` MCP Apps wrapped with the configured CSP.
 - **Skill Pack runtime.** Manifest schema (`skills/v1`) with JSON Schema 2020-12 validation; `LocalDir` source with `fsnotify` hot-reload (200ms debounce); per-tenant/session enablement; synthetic `skill://` resources + namespaced prompts so vanilla MCP clients can consume skills directly. Four reference packs ship in `examples/skills/`.
+- **Skill sources first-class (Phase 8).** Add Git/HTTP feeds or compose authored Skill Packs from the Console at runtime — no rebuild, no restart. Per-tenant `tenant_skill_sources` rows materialize through a driver registry (`internal/skills/source/{git,http,authored}`); authored packs land in SQLite with versioning + content checksums + draft/publish lifecycle. Console screens at `/skills/sources` and `/skills/authored` cover the full CRUD; the validation pipeline returns JSON-Pointer-tagged violations for inline highlighting.
 - **Console.** SvelteKit SPA (`adapter-static`, embedded via `//go:embed`). Pages for servers, sessions, resources, prompts, MCP Apps, skills. Design tokens centralized in `web/console/src/lib/tokens.css`; typed API client at `web/console/src/lib/api.ts`.
 - **Storage.** SQLite (`modernc.org/sqlite`, CGo-free) behind a `Backend` interface so future drivers slot in without touching callers.
 - **Telemetry.** Structured `slog` everywhere with `tenant_id` / `request_id` / `session_id` / `server_id` attributes; OpenTelemetry hooks wired but tracing instrumentation expands in the next milestone.
@@ -21,8 +22,8 @@ The gateway is the substrate. The Skill Pack runtime binds the open Skills spec 
 
 ## What's next
 
-- **Auth, policy, credentials, approval.** File-encrypted vault (AES-256-GCM, HKDF per-value), OAuth 2.0 token exchange (RFC 8693), env / header / secret-reference injection strategies; policy engine with risk classes; headless approval flow (`elicitation/create` primary, structured `-32001 approval_required` fallback); SQLite audit store with token redaction. See [`docs/plans/phase-5-auth-policy-credentials-approval.md`](docs/plans/phase-5-auth-policy-credentials-approval.md).
-- **Catalog snapshots, observability.** Per-session catalog snapshots stable by default with opt-in live updates; schema-fingerprint drift detection; full OpenTelemetry tracing across gateway → runtime → southbound; deeper session inspector. See [`docs/plans/phase-6-catalog-snapshots-observability.md`](docs/plans/phase-6-catalog-snapshots-observability.md).
+- **Console CRUD (Phase 9).** Servers, tenants, secrets, and policy editor get full Console CRUD with hot-reload everywhere. Destructive actions go through the approval flow; permission scopes are enforced. See [`docs/plans/phase-9-console-crud.md`](docs/plans/phase-9-console-crud.md).
+- **Playground (Phase 10).** Interactive MCP playground with catalog browser, schema-driven tool composer, and live trace + audit + drift correlation. See [`docs/plans/phase-10-playground.md`](docs/plans/phase-10-playground.md).
 
 ## Quickstart
 

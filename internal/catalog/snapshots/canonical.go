@@ -20,6 +20,13 @@ import (
 //     already deterministic.
 //
 // Returns (canonical bytes, error). nil → "null".
+//
+// CanonicalEncode is the exported wrapper consumed by other packages
+// (e.g. the authored-skill driver in Phase 8) that need the same
+// canonical encoding for content checksums. Internal callers in this
+// package keep using the lower-case alias.
+func CanonicalEncode(v any) ([]byte, error) { return canonicalEncode(v) }
+
 func canonicalEncode(v any) ([]byte, error) {
 	if v == nil {
 		return []byte("null"), nil
