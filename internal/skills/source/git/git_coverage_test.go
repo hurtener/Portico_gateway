@@ -175,9 +175,10 @@ func TestWatch_StopsCleanly(t *testing.T) {
 	gs.Stop()
 	select {
 	case _, open := <-ch:
-		if open {
-			// channel may still drain; just want to confirm it eventually closes
-		}
+		// channel may still drain a residual event; either way it must
+		// eventually close. open==false confirms it; open==true means a
+		// drain frame, which is also acceptable.
+		_ = open
 	case <-time.After(2 * time.Second):
 		t.Fatal("channel did not close after Stop")
 	}

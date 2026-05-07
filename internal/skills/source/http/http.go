@@ -415,7 +415,7 @@ func decodeBundle(body []byte) ([]bundleFile, error) {
 	out := make([]bundleFile, 0)
 	for {
 		hdr, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

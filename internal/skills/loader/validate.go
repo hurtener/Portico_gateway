@@ -181,6 +181,8 @@ func descend(n *yaml.Node, key string) *yaml.Node {
 		if idx >= 0 && idx < len(n.Content) {
 			return n.Content[idx]
 		}
+	case yaml.DocumentNode, yaml.ScalarNode, yaml.AliasNode:
+		// Not addressable by key — fall through to the nil return.
 	}
 	return nil
 }
