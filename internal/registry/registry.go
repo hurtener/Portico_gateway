@@ -53,6 +53,14 @@ type Snapshot struct {
 	Record ifaces.ServerRecord
 }
 
+// LogSource produces a stream of LogLine values for (tenantID, serverID),
+// starting from `since`. Returns a channel that closes when the underlying
+// context is cancelled or the source is stopped. The supervisor's
+// log-ring registry implements this; tests pass a fake.
+type LogSource interface {
+	Logs(ctx context.Context, tenantID, serverID string, since time.Time) (<-chan LogLine, error)
+}
+
 // Registry exposes tenant-scoped CRUD over the persistent store and
 // publishes change events for the supervisor.
 type Registry struct {
@@ -61,6 +69,18 @@ type Registry struct {
 
 	subMu       sync.RWMutex
 	subscribers map[chan ChangeEvent]struct{}
+
+	logSource LogSource
+}
+
+// SetLogSource registers a LogSource (typically the supervisor's ring
+// registry) so Logs() can stream live tails. Without it Logs returns a
+// closed channel.
+func (r *Registry) SetLogSource(src LogSource) {
+	if r == nil {
+		return
+	}
+	r.logSource = src
 }
 
 // New builds a Registry over the supplied store.

@@ -120,6 +120,7 @@ type Supervisor struct {
 	registry *registry.Registry
 	health   *HealthChecker
 	notif    *NotifPump
+	logs     *LogRingRegistry
 
 	mu        sync.Mutex
 	instances map[InstanceKey]*instance
@@ -139,12 +140,59 @@ func NewSupervisor(log *slog.Logger, resolver *Resolver, reg *registry.Registry)
 		log:       log,
 		resolver:  resolver,
 		registry:  reg,
+		logs:      NewLogRingRegistry(),
 		instances: make(map[InstanceKey]*instance),
 		starting:  make(map[InstanceKey]chan struct{}),
 	}
 	s.health = NewHealthChecker(log, s)
 	s.notif = NewNotifPump(log, nil)
 	return s
+}
+
+// LogRing returns the per-instance log ring registry. Callers (the
+// /api/servers/{id}/logs handler) use it to fetch live tails. Always
+// non-nil for a fully-constructed supervisor.
+func (s *Supervisor) LogRing() *LogRingRegistry {
+	if s == nil {
+		return nil
+	}
+	return s.logs
+}
+
+// Logs implements registry.LogSource. It hands the caller a stream of
+// registry.LogLine values converted from the per-process ring registry.
+// The channel is closed when ctx is cancelled.
+func (s *Supervisor) Logs(ctx context.Context, tenantID, serverID string, since time.Time) (<-chan registry.LogLine, error) {
+	if s == nil || s.logs == nil {
+		ch := make(chan registry.LogLine)
+		close(ch)
+		return ch, nil
+	}
+	src := s.logs.LogsFor(ctx, tenantID, serverID, since)
+	out := make(chan registry.LogLine, 32)
+	go func() {
+		defer close(out)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case ll, ok := <-src:
+				if !ok {
+					return
+				}
+				select {
+				case out <- registry.LogLine{
+					At:     ll.At,
+					Stream: ll.Stream,
+					Text:   ll.Text,
+				}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+	return out, nil
 }
 
 // SetNotifSink installs a sink that receives every downstream
@@ -383,6 +431,17 @@ func (s *Supervisor) spawnStdio(ctx context.Context, inst *instance) (southbound
 		}
 		env = resolved
 	}
+	var sink stdiocli.LogSink
+	if s.logs != nil {
+		// Per-process ring keyed on (tenantID, serverID). Tenant id falls
+		// back to the synthetic "_global" the supervisor uses for shared
+		// instances so callers can always find a ring by spec id.
+		tenant := inst.tenantID
+		if tenant == "" {
+			tenant = inst.key.TenantID
+		}
+		sink = s.logs.Acquire(tenant, inst.spec.ID)
+	}
 	c := stdiocli.New(stdiocli.Config{
 		ServerID:     inst.spec.ID,
 		Command:      inst.spec.Stdio.Command,
@@ -391,6 +450,7 @@ func (s *Supervisor) spawnStdio(ctx context.Context, inst *instance) (southbound
 		Cwd:          inst.spec.Stdio.Cwd,
 		StartTimeout: inst.spec.Stdio.StartTimeout.Std(),
 		Logger:       s.log,
+		LogSink:      sink,
 	})
 	if err := c.Start(ctx); err != nil {
 		return nil, err

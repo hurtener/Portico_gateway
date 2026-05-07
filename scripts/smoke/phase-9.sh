@@ -112,10 +112,15 @@ skip_if_404 200 "GET /api/admin/tenants/{id}" -- "$(api_url /api/admin/tenants/s
 # 12) Tenant activity
 skip_if_404 200 "GET /api/admin/tenants/{id}/activity" -- "$(api_url /api/admin/tenants/smoke-tenant/activity)"
 
-# 13) DELETE tenant (archive)
+# 13) DELETE tenant (archive). Phase 10 wraps this verb with the
+# approval gate so the first request returns 202 + approval_request_id
+# (the operator re-issues with X-Approval-Token after approving). 202 is
+# the gate's contract assertion; 204/200 still pass when the gate is
+# bypassed (e.g. unconfigured approval store).
 capture_status "DELETE /api/admin/tenants/{id}" \
   -- -X DELETE "$(api_url /api/admin/tenants/smoke-tenant)"
 case "$RESPONSE_STATUS" in
+  202) say_ok "archive tenant: approval gate engaged (202)"; PHASE_OK=$((PHASE_OK + 1));;
   204|200) say_ok "archive tenant"; PHASE_OK=$((PHASE_OK + 1));;
   404|405|501) say_skip "archive not wired"; PHASE_SKIP=$((PHASE_SKIP + 1));;
   *) say_fail "archive $RESPONSE_STATUS"; PHASE_FAIL=$((PHASE_FAIL + 1));;

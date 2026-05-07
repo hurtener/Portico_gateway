@@ -138,19 +138,22 @@ func (r *Registry) Restart(ctx context.Context, tenantID, serverID, reason strin
 	return snap, nil
 }
 
-// Logs returns a closed channel for V1 — the supervisor's per-process
-// ring buffer is a follow-up. The handler renders the existing supervisor
-// status fields for the live tail; this method exists so the API surface
-// is stable from Phase 9 onward.
-func (r *Registry) Logs(ctx context.Context, tenantID, serverID string, _ time.Time) (<-chan LogLine, error) {
+// Logs streams stdout/stderr lines for (tenantID, serverID) starting at
+// `since`. When a LogSource is wired in (the supervisor's per-process
+// ring registry), the channel receives historical + live lines until the
+// context is cancelled. Without a source the channel is closed
+// immediately so the SSE writer can render an empty tail.
+func (r *Registry) Logs(ctx context.Context, tenantID, serverID string, since time.Time) (<-chan LogLine, error) {
 	if r == nil {
 		return nil, errors.New("registry: not configured")
 	}
 	if _, err := r.store.GetServer(ctx, tenantID, serverID); err != nil {
 		return nil, err
 	}
-	ch := make(chan LogLine)
-	close(ch)
-	_ = ctx
-	return ch, nil
+	if r.logSource == nil {
+		ch := make(chan LogLine)
+		close(ch)
+		return ch, nil
+	}
+	return r.logSource.Logs(ctx, tenantID, serverID, since)
 }

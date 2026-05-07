@@ -53,6 +53,9 @@ type Backend interface {
 	// EntityActivity returns the entity activity projection (Phase 9).
 	EntityActivity() EntityActivityStore
 
+	// Playground returns the saved playground cases + runs store (Phase 10).
+	Playground() PlaygroundStore
+
 	// Health pings the underlying connection. Returns error if the backend
 	// is not reachable. Used by /readyz and tests.
 	Health(ctx context.Context) error

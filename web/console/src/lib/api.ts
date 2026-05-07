@@ -509,8 +509,144 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(rules ? { call, rules: { rules } } : { call })
     }),
-  policyActivity: () => request<EntityActivityRow[]>('/api/policy/activity')
+  policyActivity: () => request<EntityActivityRow[]>('/api/policy/activity'),
+
+  // ── Phase 10: Playground ────────────────────────────────────────────
+  startPlaygroundSession: (req: PlaygroundStartSessionRequest = {}) =>
+    request<PlaygroundSession>('/api/playground/sessions', {
+      method: 'POST',
+      body: JSON.stringify(req)
+    }),
+  endPlaygroundSession: (sid: string) =>
+    request<void>(`/api/playground/sessions/${encodeURIComponent(sid)}`, { method: 'DELETE' }),
+  getPlaygroundCatalog: (sid: string) =>
+    request<PlaygroundCatalog>(`/api/playground/sessions/${encodeURIComponent(sid)}/catalog`),
+  issuePlaygroundCall: (sid: string, body: PlaygroundCallRequest) =>
+    request<PlaygroundCallEnvelope>(`/api/playground/sessions/${encodeURIComponent(sid)}/calls`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+  getPlaygroundCorrelation: (sid: string, since?: string) =>
+    request<CorrelationBundle>(
+      `/api/playground/sessions/${encodeURIComponent(sid)}/correlation${
+        since ? `?since=${encodeURIComponent(since)}` : ''
+      }`
+    ),
+  listPlaygroundCases: () =>
+    request<{ cases: PlaygroundCase[]; next_cursor?: string }>('/api/playground/cases'),
+  createPlaygroundCase: (c: Partial<PlaygroundCase>) =>
+    request<PlaygroundCase>('/api/playground/cases', {
+      method: 'POST',
+      body: JSON.stringify(c)
+    }),
+  getPlaygroundCase: (id: string) =>
+    request<PlaygroundCase>(`/api/playground/cases/${encodeURIComponent(id)}`),
+  updatePlaygroundCase: (id: string, c: Partial<PlaygroundCase>) =>
+    request<PlaygroundCase>(`/api/playground/cases/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(c)
+    }),
+  deletePlaygroundCase: (id: string) =>
+    request<void>(`/api/playground/cases/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  caseRuns: (id: string) =>
+    request<{ runs: PlaygroundRun[]; next_cursor?: string }>(
+      `/api/playground/cases/${encodeURIComponent(id)}/runs`
+    ),
+  replayPlaygroundCase: (id: string) =>
+    request<PlaygroundRun>(`/api/playground/cases/${encodeURIComponent(id)}/replay`, {
+      method: 'POST'
+    }),
+  getPlaygroundRun: (id: string) =>
+    request<PlaygroundRun>(`/api/playground/runs/${encodeURIComponent(id)}`)
 };
+
+// ── Phase 10: Playground types ──────────────────────────────────────
+export interface PlaygroundStartSessionRequest {
+  tenant_id?: string;
+  snapshot_id?: string;
+  runtime_override?: string;
+  scopes?: string[];
+}
+
+export interface PlaygroundSession {
+  id: string;
+  tenant_id: string;
+  actor_id?: string;
+  snapshot_id?: string;
+  token: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface PlaygroundCatalog {
+  snapshot_id: string;
+  catalog: Record<string, unknown>;
+}
+
+export interface PlaygroundCallRequest {
+  kind: 'tool_call' | 'resource_read' | 'prompt_get';
+  target: string;
+  arguments?: unknown;
+}
+
+export interface PlaygroundCallEnvelope {
+  call_id: string;
+  session_id: string;
+  status: string;
+}
+
+export interface PlaygroundCase {
+  id: string;
+  name: string;
+  description?: string;
+  kind: 'tool_call' | 'resource_read' | 'prompt_get';
+  target: string;
+  payload: unknown;
+  snapshot_id?: string;
+  tags: string[] | null;
+  created_at: string;
+  created_by?: string;
+}
+
+export interface PlaygroundRun {
+  id: string;
+  case_id?: string;
+  session_id: string;
+  snapshot_id: string;
+  status: 'running' | 'ok' | 'error' | 'denied';
+  drift_detected: boolean;
+  summary?: string;
+  started_at: string;
+  ended_at?: string;
+}
+
+export interface SpanNode {
+  span_id: string;
+  parent_id?: string;
+  name: string;
+  started_at: string;
+  ended_at?: string;
+  status: string;
+  attributes?: Record<string, string>;
+}
+
+export interface PolicyDecisionLite {
+  tool?: string;
+  decision: string;
+  reason?: string;
+  detail?: Record<string, unknown>;
+  at: string;
+}
+
+export interface CorrelationBundle {
+  session_id: string;
+  spans: SpanNode[];
+  audits: AuditEvent[];
+  policy: PolicyDecisionLite[];
+  drift: AuditEvent[];
+  last_event_age?: string;
+  generated_at: string;
+}
 
 export interface Snapshot {
   id: string;

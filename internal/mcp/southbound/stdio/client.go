@@ -21,6 +21,15 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/mcp/southbound"
 )
 
+// LogSink receives every observed line from the child process's stdout
+// and stderr. The supervisor uses it to feed a per-process ring buffer
+// the /api/servers/{id}/logs SSE writer reads from. Optional — leaving
+// it nil keeps the stdio client's historical behaviour (stderr → slog
+// at Debug, stdout → JSON-RPC scanner only).
+type LogSink interface {
+	PublishLog(stream, text string)
+}
+
 // Config configures a stdio Client. ServerID is used in log lines and error
 // data for routing diagnostics.
 type Config struct {
@@ -31,6 +40,11 @@ type Config struct {
 	Cwd          string
 	StartTimeout time.Duration
 	Logger       *slog.Logger
+	// LogSink receives every line observed on stderr (always) and a
+	// best-effort copy of stdout JSON-RPC lines (so playground / Console
+	// log tail can show non-RPC noise the server emits while degraded).
+	// Optional.
+	LogSink LogSink
 }
 
 // Client implements southbound.Client via a child process speaking JSON-RPC
@@ -414,6 +428,12 @@ func (c *Client) readLoop() {
 		if len(line) == 0 {
 			continue
 		}
+		// Tee a best-effort copy to the LogSink so the playground /
+		// Console live tail can render the JSON-RPC frames as raw
+		// lines. The dispatcher still consumes parsed messages below.
+		if c.cfg.LogSink != nil {
+			c.cfg.LogSink.PublishLog("stdout", string(line))
+		}
 		c.handleIncoming(line)
 	}
 	if err := scanner.Err(); err != nil {
@@ -517,7 +537,11 @@ func (c *Client) stderrLoop() {
 	defer c.wg.Done()
 	scanner := bufio.NewScanner(c.stderr)
 	for scanner.Scan() {
-		c.log.Debug("downstream stderr", "line", scanner.Text())
+		text := scanner.Text()
+		c.log.Debug("downstream stderr", "line", text)
+		if c.cfg.LogSink != nil {
+			c.cfg.LogSink.PublishLog("stderr", text)
+		}
 	}
 }
 

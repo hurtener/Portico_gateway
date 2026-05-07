@@ -22,6 +22,7 @@ import (
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/policy/approval"
 	"github.com/hurtener/Portico_gateway/internal/registry"
+	apimw "github.com/hurtener/Portico_gateway/internal/server/api/middleware"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	"github.com/hurtener/Portico_gateway/internal/server/ui"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
@@ -87,6 +88,12 @@ type Deps struct {
 	PolicyRules    PolicyRulesController
 	ServerRuntime  ifaces.ServerRuntimeStore
 	VaultReveal    VaultRevealManager
+
+	// Phase 10: playground service + saved-case store. Both are
+	// optional — when nil, /api/playground/* returns 503.
+	Playground       PlaygroundController
+	PlaygroundStore  ifaces.PlaygroundStore
+	ApprovalStoreRaw ifaces.ApprovalStore
 }
 
 // approvalFlow is the slice of internal/policy/approval.Flow the API
@@ -118,7 +125,13 @@ func (f *approvalFlow) ResolveManually(ctx context.Context, tenantID, id, status
 // interface so this package doesn't import the runtime directly.
 type SkillsManager = skillsManager
 
-// NewRouter wires the full HTTP routing surface.
+// NewRouter wires the full HTTP routing surface. The complexity is
+// structural: every Phase N+ route group is gated on its own optional
+// Deps field so a partially-wired build still serves the surfaces it
+// has. Splitting would obscure the routing surface operators read
+// top-to-bottom.
+//
+//nolint:gocyclo // structural complexity from optional Deps gating.
 func NewRouter(d Deps) http.Handler {
 	r := chi.NewRouter()
 
@@ -264,13 +277,31 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/v1/admin/tenants/{id}", getTenantHandler(d))
 			r.Post("/v1/admin/tenants", upsertTenantHandler(d, false))
 
+			// Phase 9 / 10 carry-over: build a per-verb approval gate
+			// when the approval store is wired. The gate intercepts the
+			// first request, returns 202 + approval_request_id, and only
+			// lets the verb through when the operator re-issues with
+			// X-Approval-Token: <id> after the row reaches `approved`.
+			//
+			// Mounted opt-in per route — never as a router-wide wrapper.
+			approvalGateFor := func(verb string) func(http.Handler) http.Handler {
+				if d.Approvals == nil {
+					return func(next http.Handler) http.Handler { return next }
+				}
+				return apimw.NewApprovalGate(apimw.Config{
+					Store: d.Approvals,
+					Audit: d.AuditEmitter,
+					Verb:  verb,
+				})
+			}
+
 			// Phase 9: /api/admin/tenants full CRUD.
 			r.Get("/api/admin/tenants", listTenantsHandler(d))
 			r.Post("/api/admin/tenants", upsertTenantHandler(d, false))
 			r.Get("/api/admin/tenants/{id}", getTenantHandler(d))
 			r.Put("/api/admin/tenants/{id}", upsertTenantHandler(d, true))
-			r.Delete("/api/admin/tenants/{id}", deleteTenantHandler(d))
-			r.Post("/api/admin/tenants/{id}/purge", purgeTenantHandler(d))
+			r.With(approvalGateFor("tenant.delete")).Delete("/api/admin/tenants/{id}", deleteTenantHandler(d))
+			r.With(approvalGateFor("tenant.purge")).Post("/api/admin/tenants/{id}/purge", purgeTenantHandler(d))
 			r.Get("/api/admin/tenants/{id}/activity", activityHandler(d, "tenant"))
 
 			// Phase 5: manual approval resolution + secrets management.
@@ -289,16 +320,40 @@ func NewRouter(d Deps) http.Handler {
 			// Specific paths first so chi prefers them over the {name}
 			// catch-all.
 			r.Get("/api/admin/secrets/reveal/{token}", revealConsumeHandler(d))
-			r.Post("/api/admin/secrets/rotate-root", rotateRootHandler(d))
+			r.With(approvalGateFor("secret.rotate_root")).Post("/api/admin/secrets/rotate-root", rotateRootHandler(d))
 			r.Post("/api/admin/secrets/{name}/rotate", rotateAPISecretHandler(d))
 			r.Post("/api/admin/secrets/{name}/reveal", revealIssueHandler(d))
 			r.Get("/api/admin/secrets/{name}/activity", activityHandler(d, "secret"))
 			r.Get("/api/admin/secrets/{name}", getAPISecretMetadataHandler(d))
 			r.Put("/api/admin/secrets/{name}", putAPISecretHandler(d))
-			r.Delete("/api/admin/secrets/{name}", deleteAPISecretHandler(d))
+			r.With(approvalGateFor("secret.delete")).Delete("/api/admin/secrets/{name}", deleteAPISecretHandler(d))
 			r.Get("/api/admin/secrets", listAPISecretsHandler(d))
 			r.Post("/api/admin/secrets", createAPISecretHandler(d))
 		})
+
+		// Phase 10: Interactive Playground. Mounted under the auth
+		// group so the synth-tenant identity in dev mode reaches the
+		// handlers. Gated on Deps.Playground; saved-case CRUD only
+		// requires the store.
+		if d.Playground != nil {
+			r.Post("/api/playground/sessions", startPlaygroundSessionHandler(d))
+			r.Delete("/api/playground/sessions/{sid}", endPlaygroundSessionHandler(d))
+			r.Get("/api/playground/sessions/{sid}/catalog", catalogPlaygroundHandler(d))
+			r.Post("/api/playground/sessions/{sid}/calls", issueCallHandler(d))
+			r.Get("/api/playground/sessions/{sid}/calls/{cid}/stream", streamCallHandler(d))
+			r.Get("/api/playground/sessions/{sid}/correlation", playgroundCorrelationHandler(d))
+			r.Post("/api/playground/cases/{id}/replay", replayPlaygroundCaseHandler(d))
+			r.Get("/api/playground/runs/{run_id}", runDetailHandler(d))
+			r.Get("/api/playground/runs/{run_id}/correlation", runCorrelationHandler(d))
+		}
+		if d.PlaygroundStore != nil {
+			r.Get("/api/playground/cases", listPlaygroundCasesHandler(d))
+			r.Post("/api/playground/cases", createPlaygroundCaseHandler(d))
+			r.Get("/api/playground/cases/{id}", getPlaygroundCaseHandler(d))
+			r.Put("/api/playground/cases/{id}", updatePlaygroundCaseHandler(d))
+			r.Delete("/api/playground/cases/{id}", deletePlaygroundCaseHandler(d))
+			r.Get("/api/playground/cases/{id}/runs", caseRunsHandler(d))
+		}
 
 		// Phase 9: Policy editor endpoints. Mounted under the auth group;
 		// tenant scope is honoured implicitly by every store call.
