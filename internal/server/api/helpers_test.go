@@ -304,8 +304,8 @@ func newStubVaultReveal(v *stubVaultManager) *stubVaultReveal {
 	}
 }
 
-func (s *stubVaultReveal) IssueRevealToken(_ context.Context, tenantID, name, actorID string) (secrets.RevealToken, error) {
-	if _, err := s.vault.Get(context.Background(), tenantID, name); err != nil {
+func (s *stubVaultReveal) IssueRevealToken(ctx context.Context, tenantID, name, actorID string) (secrets.RevealToken, error) {
+	if _, err := s.vault.Get(ctx, tenantID, name); err != nil {
 		return secrets.RevealToken{}, err
 	}
 	s.mu.Lock()
@@ -316,7 +316,7 @@ func (s *stubVaultReveal) IssueRevealToken(_ context.Context, tenantID, name, ac
 	return secrets.RevealToken{Token: tok, ExpiresAt: exp}, nil
 }
 
-func (s *stubVaultReveal) ConsumeReveal(_ context.Context, token string) (string, string, string, string, error) {
+func (s *stubVaultReveal) ConsumeReveal(ctx context.Context, token string) (string, string, string, string, error) {
 	s.mu.Lock()
 	entry, ok := s.tokens[token]
 	if ok {
@@ -326,7 +326,7 @@ func (s *stubVaultReveal) ConsumeReveal(_ context.Context, token string) (string
 	if !ok {
 		return "", "", "", "", errors.New("unknown token")
 	}
-	pt, err := s.vault.Get(context.Background(), entry.tenant, entry.name)
+	pt, err := s.vault.Get(ctx, entry.tenant, entry.name)
 	if err != nil {
 		return "", "", "", "", err
 	}

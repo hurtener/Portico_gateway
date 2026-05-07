@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"net/http/httptest"
 	"testing"
 
@@ -225,20 +224,15 @@ func TestListInstances_NoRegistry(t *testing.T) {
 }
 
 // upsertServerHandler also exercises the body-id-fills-from-path branch
-// when the path id is set and the body id is empty.
+// when the path id is set and the body id is empty. Seed first since
+// upsert-on-missing returns 404 in update mode.
 func TestUpsertServer_FillsIDFromPath(t *testing.T) {
-	d, _, _, _, _, _, _, _, _, _ := testDeps(t)
 	spec := *validServerSpec("")
 	spec.ID = ""
+	d, _, _, _, _, _, _, _, reg, _ := testDeps(t)
+	seedServer(t, reg, "auto")
 	r := newReq("PUT", "/v1/servers/auto", spec)
 	r = withChiURLParam(r, "id", "auto")
-	// Existing creates a server first since PUT-on-missing returns 404.
-	d2, _, _, _, _, _, _, _, reg2, _ := testDeps(t)
-	seedServer(t, reg2, "auto")
-	r2 := newReq("PUT", "/v1/servers/auto", spec)
-	r2 = withChiURLParam(r2, "id", "auto")
-	w := runHandler(upsertServerHandler(d2, true), r2)
+	w := runHandler(upsertServerHandler(d, true), r)
 	statusOK(t, w, 200)
-	_ = d
-	_ = context.Background
 }
