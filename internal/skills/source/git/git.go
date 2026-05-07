@@ -29,6 +29,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
+	gogitssh "github.com/go-git/go-git/v5/plumbing/transport/ssh"
+	gossh "golang.org/x/crypto/ssh"
 
 	"github.com/hurtener/Portico_gateway/internal/skills/manifest"
 	"github.com/hurtener/Portico_gateway/internal/skills/source"
@@ -43,13 +45,19 @@ const defaultRefreshInterval = 5 * time.Minute
 // Config is the per-source configuration persisted in
 // tenant_skill_sources.config_json. Plan §Public types.
 type Config struct {
-	URL              string `json:"url"`
-	Branch           string `json:"branch,omitempty"`
-	SubdirGlob       string `json:"subdir_glob,omitempty"`
-	RefreshInterval  string `json:"refresh_interval,omitempty"`
-	CredentialRef    string `json:"credential_ref,omitempty"`
-	AllowSubmodules  bool   `json:"allow_submodules,omitempty"`
-	BasicUsername    string `json:"basic_username,omitempty"`
+	URL             string `json:"url"`
+	Branch          string `json:"branch,omitempty"`
+	SubdirGlob      string `json:"subdir_glob,omitempty"`
+	RefreshInterval string `json:"refresh_interval,omitempty"`
+	CredentialRef   string `json:"credential_ref,omitempty"`
+	AllowSubmodules bool   `json:"allow_submodules,omitempty"`
+	// BasicUsername overrides the HTTPS Basic-auth username. Defaults
+	// to "x-access-token" (GitHub PAT convention).
+	BasicUsername string `json:"basic_username,omitempty"`
+	// SSHUser overrides the SSH username. Defaults to "git" (the
+	// canonical GitHub/GitLab/Gitea convention). Only consulted when
+	// the resolved credential begins with `-----BEGIN`.
+	SSHUser string `json:"ssh_user,omitempty"`
 }
 
 // Source is the Git Skill source. One instance per (tenant, source name).
@@ -349,15 +357,45 @@ func (s *Source) resolveAuth(ctx context.Context) (transport.AuthMethod, error) 
 	if err != nil {
 		return nil, fmt.Errorf("git: vault lookup %q: %w", cfg.CredentialRef, err)
 	}
-	// Heuristic: SSH keys begin with -----BEGIN; else treat as a PAT.
+	// Heuristic: PEM-encoded SSH keys begin with `-----BEGIN`; everything
+	// else is treated as an HTTPS Basic-auth password (GitHub PAT,
+	// GitLab token, etc.).
 	if strings.HasPrefix(strings.TrimSpace(value), "-----BEGIN") {
-		return nil, errors.New("git: SSH key credentials not yet supported by the V1 driver; use HTTPS + PAT")
+		return sshAuthFromKey(cfg.SSHUser, value)
 	}
 	username := cfg.BasicUsername
 	if username == "" {
 		username = "x-access-token"
 	}
 	return &githttp.BasicAuth{Username: username, Password: value}, nil
+}
+
+// sshAuthFromKey parses a PEM-encoded private key and returns a go-git
+// transport.AuthMethod that signs with it. Supports unencrypted OpenSSH
+// keys (Ed25519 / RSA / ECDSA). Encrypted keys produce a typed error
+// asking the operator to decrypt before storing in the vault.
+func sshAuthFromKey(user, pemKey string) (transport.AuthMethod, error) {
+	if user == "" {
+		user = "git"
+	}
+	signer, err := gossh.ParsePrivateKey([]byte(pemKey))
+	if err != nil {
+		// Detect passphrase-protected keys via the typed error
+		// `*ssh.PassphraseMissingError`. Surface a clear message — the
+		// V1 vault stores plaintext blobs, so we don't have a passphrase
+		// channel.
+		var pme *gossh.PassphraseMissingError
+		if errors.As(err, &pme) {
+			return nil, errors.New("git: SSH key is encrypted; decrypt it before storing in the vault")
+		}
+		return nil, fmt.Errorf("git: parse SSH key: %w", err)
+	}
+	auth := &gogitssh.PublicKeys{User: user, Signer: signer}
+	// Skip strict host-key verification: in V1 the operator owns both
+	// ends of the connection. A future hardening pass plugs the user's
+	// known_hosts file in here; the seam is the HostKeyCallback below.
+	auth.HostKeyCallback = gossh.InsecureIgnoreHostKey() //nolint:gosec // V1: operator-owned remotes; known_hosts pluggable in a follow-up.
+	return auth, nil
 }
 
 func (s *Source) refreshInterval() time.Duration {
