@@ -141,8 +141,11 @@ func (s *playgroundStore) GetCase(ctx context.Context, tenantID, caseID string) 
 	return &rec, nil
 }
 
-//nolint:gocyclo // ListCases threads filter+pagination+cursor branches; splitting
-// the WHERE-clause builder out would just move the complexity behind a helper.
+// ListCases threads filter + pagination + cursor branches. Pulling the
+// WHERE-clause builder into a helper would just relocate the cyclomatic
+// mass without making the SQL clearer to read.
+//
+//nolint:gocyclo // structural complexity from filter+pagination+cursor.
 func (s *playgroundStore) ListCases(ctx context.Context, tenantID string, q ifaces.PlaygroundCasesQuery) ([]*ifaces.PlaygroundCaseRecord, string, error) {
 	if tenantID == "" {
 		return nil, "", errors.New("playground: tenant_id required")

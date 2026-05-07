@@ -125,10 +125,13 @@ func (f *approvalFlow) ResolveManually(ctx context.Context, tenantID, id, status
 // interface so this package doesn't import the runtime directly.
 type SkillsManager = skillsManager
 
-// NewRouter wires the full HTTP routing surface.
+// NewRouter wires the full HTTP routing surface. The complexity is
+// structural: every Phase N+ route group is gated on its own optional
+// Deps field so a partially-wired build still serves the surfaces it
+// has. Splitting would obscure the routing surface operators read
+// top-to-bottom.
 //
-//nolint:gocyclo // chi route mounts gated on optional Deps fields — splitting
-// would obscure the routing surface that operators read top-to-bottom.
+//nolint:gocyclo // structural complexity from optional Deps gating.
 func NewRouter(d Deps) http.Handler {
 	r := chi.NewRouter()
 
