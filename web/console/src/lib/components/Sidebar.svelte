@@ -17,6 +17,8 @@
   import IconHistory from 'lucide-svelte/icons/history';
   import IconDatabase from 'lucide-svelte/icons/database';
   import IconKey from 'lucide-svelte/icons/key';
+  import IconUsers from 'lucide-svelte/icons/users';
+  import IconScale from 'lucide-svelte/icons/scale';
   import IconChevronLeft from 'lucide-svelte/icons/chevron-left';
   import IconChevronRight from 'lucide-svelte/icons/chevron-right';
 
@@ -47,8 +49,15 @@
       ]
     },
     {
+      labelKey: 'nav.section.operations',
+      items: [{ labelKey: 'nav.policy', href: '/policy', Icon: IconScale }]
+    },
+    {
       labelKey: 'nav.section.admin',
-      items: [{ labelKey: 'nav.secrets', href: '/admin/secrets', Icon: IconKey }]
+      items: [
+        { labelKey: 'nav.secrets', href: '/admin/secrets', Icon: IconKey },
+        { labelKey: 'nav.tenants', href: '/admin/tenants', Icon: IconUsers }
+      ]
     }
   ];
 

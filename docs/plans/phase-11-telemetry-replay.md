@@ -35,6 +35,13 @@ Phases 0–10 complete. Specifically:
 - Phase 10 components: `SpanTree.svelte`, `EvalTree.svelte`, the correlation bundle shape, the playback machinery.
 - Phase 7 component library: `Tabs`, `Drawer`, `Modal`, `Toast`, `Skeleton`, `CodeBlock`.
 
+## Phase 9 carry-overs (retention + vault hygiene)
+
+Two items shipped in Phase 9 as documented deviations because their natural home is retention + cryptographic hygiene, both of which Phase 11 touches. Phase 11 absorbs them as first-class deliverables; do not lose them.
+
+1. **`/api/admin/secrets/rotate-root` with grace mapping table.** Phase 9 left the endpoint at 501 and kept the operator CLI (`portico vault rotate-key`) as the working path. Phase 11 lands the API shape: a transactional re-encrypt under a new master key, a `vault_keys_archive` table that holds the previous key for a configurable grace window (default 14 days), and partial-failure semantics — if 999 of 1000 entries succeed and the 1000th fails, the rotation aborts, the active key is restored, and a `vault.rotate_root.aborted` audit event is emitted. Smoke + integration tests cover happy path, abort-on-failure, grace-window decryption with the archived key, and the audit trail. Coverage gate: ≥ 80% on the new vault rotation surface.
+2. **`entity_activity` retention sweep.** Phase 9 added the denormalised `entity_activity` projection but left it pruned only by FK cascade on entity deletion. Phase 11 lands a per-tenant retention worker (default 30 days, configurable per `tenants.audit_retention_days`) that runs alongside the existing audit-event retention, with a single configuration knob and a single observability surface. The exporter-side guarantee: bundles include the activity rows present at export time; the importer recreates them under the imported session id.
+
 ## Deliverables
 
 1. **Self-contained span store** — Portico already exports spans to OTel, but it doesn't store them itself. Phase 11 introduces `internal/telemetry/spanstore/` — a SQLite-backed span store that the OTel exporter writes to *in addition to* the configured external collector. Configurable retention (default 7 days) per tenant.
@@ -381,6 +388,13 @@ The "Replay this call" button POSTs `/api/sessions/{sid}/calls/{cid}/replay`, wh
 ### Step 8 — Smoke + tests
 
 `scripts/smoke/phase-11.sh` exercises bundle, export, import, audit search, replay handoff. Integration tests cover the spanstore tee, bundle determinism, redaction, and cross-tenant isolation.
+
+### Step 9 — Phase 9 carry-overs
+
+Land alongside the retention work since both touch the SQLite vacuum + per-tenant retention scheduler:
+
+- `internal/secrets/rotate_root.go` — new file. Implements transactional rotation with `vault_keys_archive` table (migration 0013). Reuses the existing per-value HKDF derivation in `stubvault.go` by re-deriving each entry under the new master key. On any entry failure: rollback, archive untouched, audit `vault.rotate_root.aborted`. Replace the `501` stub at `internal/server/api/handlers_secrets.go::rotateRootHandler`. Wire `PORTICO_VAULT_KEY_NEXT` env var per the Phase 9 plan's design.
+- `internal/audit/entity_activity_retention.go` — new file. Per-tenant sweep aligned with the Phase 11 audit-event retention worker (same scheduler, same configuration surface). Default 30 days; per-tenant override via `tenants.audit_retention_days` (column already exists from Phase 9 migration 0009). Smoke: extend `scripts/smoke/phase-11.sh` to assert that an entity_activity row older than the retention window is purged after one sweep tick.
 
 ## Test plan
 

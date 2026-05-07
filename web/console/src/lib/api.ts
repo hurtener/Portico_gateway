@@ -402,7 +402,114 @@ export const api = {
       `/v1/catalog/snapshots/${encodeURIComponent(a)}/diff/${encodeURIComponent(b)}`
     ),
   getSessionSnapshot: (sessionId: string) =>
-    request<Snapshot>(`/v1/sessions/${encodeURIComponent(sessionId)}/snapshot`)
+    request<Snapshot>(`/v1/sessions/${encodeURIComponent(sessionId)}/snapshot`),
+
+  // ----- Phase 9: Console CRUD -------------------------------------------
+
+  // Servers — phase-9 surface (PATCH, restart, health, activity).
+  patchServer: (
+    id: string,
+    body: { enabled?: boolean; env_overrides?: Record<string, string>; reason?: string }
+  ) =>
+    request<ServerSpec>(`/api/servers/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body)
+    }),
+  restartServer: (id: string, reason = '') =>
+    request<ServerSpec>(`/api/servers/${encodeURIComponent(id)}/restart`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    }),
+  serverHealth: (id: string) =>
+    request<ServerHealth>(`/api/servers/${encodeURIComponent(id)}/health`),
+  serverActivity: (id: string, limit = 50) =>
+    request<EntityActivityRow[]>(`/api/servers/${encodeURIComponent(id)}/activity?limit=${limit}`),
+
+  // Tenants — full CRUD.
+  listTenants: () => request<Tenant[]>('/api/admin/tenants'),
+  getTenant: (id: string) => request<Tenant>(`/api/admin/tenants/${encodeURIComponent(id)}`),
+  createTenant: (t: Partial<Tenant>) =>
+    request<Tenant>('/api/admin/tenants', {
+      method: 'POST',
+      body: JSON.stringify(t)
+    }),
+  updateTenant: (id: string, t: Partial<Tenant>) =>
+    request<Tenant>(`/api/admin/tenants/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(t)
+    }),
+  archiveTenant: (id: string) =>
+    request<void>(`/api/admin/tenants/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  purgeTenant: (id: string) =>
+    request<void>(`/api/admin/tenants/${encodeURIComponent(id)}/purge`, {
+      method: 'POST',
+      body: '{}'
+    }),
+  tenantActivity: (id: string, limit = 50) =>
+    request<EntityActivityRow[]>(
+      `/api/admin/tenants/${encodeURIComponent(id)}/activity?limit=${limit}`
+    ),
+
+  // Secrets — Phase 9 richer surface.
+  listSecretsAPI: () => request<SecretMetadata[]>('/api/admin/secrets'),
+  createSecretAPI: (body: { tenant_id?: string; name: string; value: string }) =>
+    request<SecretMetadata>('/api/admin/secrets', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+  getSecretMetadata: (name: string) =>
+    request<SecretMetadata>(`/api/admin/secrets/${encodeURIComponent(name)}`),
+  updateSecret: (name: string, value: string) =>
+    request<SecretMetadata>(`/api/admin/secrets/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value })
+    }),
+  deleteSecretAPI: (name: string) =>
+    request<void>(`/api/admin/secrets/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  rotateSecret: (name: string) =>
+    request<{ status: string }>(`/api/admin/secrets/${encodeURIComponent(name)}/rotate`, {
+      method: 'POST',
+      body: '{}'
+    }),
+  issueRevealToken: (name: string) =>
+    request<RevealTokenResponse>(`/api/admin/secrets/${encodeURIComponent(name)}/reveal`, {
+      method: 'POST',
+      body: '{}'
+    }),
+  consumeRevealToken: (token: string) =>
+    request<{ tenant_id: string; name: string; value: string }>(
+      `/api/admin/secrets/reveal/${encodeURIComponent(token)}`
+    ),
+  secretActivity: (name: string, limit = 50) =>
+    request<EntityActivityRow[]>(
+      `/api/admin/secrets/${encodeURIComponent(name)}/activity?limit=${limit}`
+    ),
+
+  // Policy editor.
+  listPolicyRules: () => request<{ rules: PolicyRule[] }>('/api/policy/rules'),
+  replacePolicyRules: (rules: PolicyRule[]) =>
+    request<{ rules: PolicyRule[] }>('/api/policy/rules', {
+      method: 'PUT',
+      body: JSON.stringify({ rules })
+    }),
+  createPolicyRule: (rule: PolicyRule) =>
+    request<PolicyRule>('/api/policy/rules', {
+      method: 'POST',
+      body: JSON.stringify(rule)
+    }),
+  updatePolicyRule: (id: string, rule: PolicyRule) =>
+    request<PolicyRule>(`/api/policy/rules/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(rule)
+    }),
+  deletePolicyRule: (id: string) =>
+    request<void>(`/api/policy/rules/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  dryRunPolicy: (call: PolicyToolCall, rules?: PolicyRule[]) =>
+    request<PolicyDryRunResult>('/api/policy/dry-run', {
+      method: 'POST',
+      body: JSON.stringify(rules ? { call, rules: { rules } } : { call })
+    }),
+  policyActivity: () => request<EntityActivityRow[]>('/api/policy/activity')
 };
 
 export interface Snapshot {
@@ -590,4 +697,102 @@ export interface SkillValidationResult {
   violations: SkillValidationViolation[];
   checksum?: string;
   validated?: string;
+}
+
+// ----- Phase 9 types ------------------------------------------------------
+
+export interface ServerHealth {
+  server_id: string;
+  status: string;
+  status_detail?: string;
+  enabled: boolean;
+  last_error?: string;
+  updated_at: string;
+}
+
+export interface EntityActivityRow {
+  event_id: string;
+  occurred_at: string;
+  actor_user_id?: string;
+  summary: string;
+  diff: Record<string, unknown>;
+}
+
+export interface Tenant {
+  id: string;
+  display_name: string;
+  plan: string;
+  runtime_mode?: string;
+  max_concurrent_sessions?: number;
+  max_requests_per_minute?: number;
+  audit_retention_days?: number;
+  jwt_issuer?: string;
+  jwt_jwks_url?: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SecretMetadata {
+  tenant_id: string;
+  name: string;
+  version?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface RevealTokenResponse {
+  token: string;
+  expires_at: string;
+}
+
+export interface PolicyRuleConditions {
+  match: {
+    tools?: string[];
+    servers?: string[];
+    tenants?: string[];
+    args_expr?: string;
+    time_range?: { from?: string; to?: string };
+  };
+}
+
+export interface PolicyRuleActions {
+  allow?: boolean;
+  deny?: boolean;
+  require_approval?: boolean;
+  log_level?: string;
+  annotate?: string;
+}
+
+export interface PolicyRule {
+  id: string;
+  priority: number;
+  enabled: boolean;
+  risk_class: string;
+  conditions: PolicyRuleConditions;
+  actions: PolicyRuleActions;
+  notes?: string;
+  updated_at?: string;
+  updated_by?: string;
+}
+
+export interface PolicyToolCall {
+  tenant_id?: string;
+  server: string;
+  tool: string;
+  args?: Record<string, unknown>;
+  now?: string;
+}
+
+export interface PolicyDryRunMatch {
+  rule_id: string;
+  priority: number;
+  reason: string;
+}
+
+export interface PolicyDryRunResult {
+  matched_rules: PolicyDryRunMatch[];
+  losing_rules?: PolicyDryRunMatch[];
+  final_action: PolicyRuleActions;
+  final_risk: string;
 }

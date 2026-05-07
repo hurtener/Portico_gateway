@@ -291,9 +291,9 @@ func TestWatch_StopsCleanly(t *testing.T) {
 	hs.Stop()
 	select {
 	case _, open := <-ch:
-		if open {
-			// drain residual events
-		}
+		// channel may still drain a residual event; either way it must
+		// eventually close.
+		_ = open
 	case <-time.After(2 * time.Second):
 		t.Fatal("channel did not close after Stop")
 	}

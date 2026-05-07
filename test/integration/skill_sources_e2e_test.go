@@ -276,4 +276,3 @@ func TestE2E_SkillSources_RoundTrip_DevMode(t *testing.T) {
 		t.Errorf("delete: %d", resp.StatusCode)
 	}
 }
-

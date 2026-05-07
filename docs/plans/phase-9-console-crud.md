@@ -557,3 +557,13 @@ Phase 10 (Playground) inherits:
 - The hot-reload guarantees so an operator editing policy or registry mid-playground sees the result on the next call.
 
 Phase 10's first task: build the Playground route at `/playground`, give the operator an interactive way to compose a tool call, see the streamed response, and inspect the audit + trace events that result. Reuses CodeBlock, the policy dry-run pane shape, and the SSE log-tail pattern landed here.
+
+## Carry-overs to follow-up phases
+
+Phase 9 shipped with five documented deviations. They are not lost — each has a designated home in a follow-up phase plan. **Update those plans, not this one, when scoping the carry-over work.**
+
+- **Server log SSE live tail** — Phase 10. Requires a per-process ring buffer in `internal/runtime/process/`. The `/api/servers/{id}/logs` route shipped here as a stub; Phase 10 wires it to real output. See `docs/plans/phase-10-playground.md` §"Phase 9 carry-overs" item 1.
+- **Approval-gate middleware for destructive Phase 9 verbs** — Phase 10. The `/v1/approvals` UI is already wired; Phase 10 adds `internal/server/api/middleware/approval_gate.go` with the 202+poll pattern. See `docs/plans/phase-10-playground.md` §"Phase 9 carry-overs" item 2.
+- **Phase 9 integration tests** (`TestE2E_PolicyEdit_HotReload`, `TestE2E_DestructiveDelete_RequiresApproval`, `TestE2E_ServerCRUD_NoRestart`) — Phase 10. Land in `test/integration/console_crud/`. See `docs/plans/phase-10-playground.md` §"Phase 9 carry-overs" item 3.
+- **`/api/admin/secrets/rotate-root` with grace mapping table** — Phase 11. Currently returns 501; the operator CLI continues to cover root rotation. Phase 11 lands the API + transactional re-encrypt with archived-key grace. See `docs/plans/phase-11-telemetry-replay.md` §"Phase 9 carry-overs" item 1.
+- **`entity_activity` retention sweep** — Phase 11. Currently pruned only by FK cascade on entity deletion; Phase 11 adds the per-tenant retention worker aligned with audit-event retention. See `docs/plans/phase-11-telemetry-replay.md` §"Phase 9 carry-overs" item 2.

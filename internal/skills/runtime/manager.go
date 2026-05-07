@@ -192,14 +192,15 @@ func (m *Manager) AddSource(ctx context.Context, src source.Source, tenantID str
 	m.mu.Unlock()
 	_ = stopCtx
 	// Use the manager's lifetime ctx (background) so the watch survives
-	// the request that triggered the add.
-	wctx := context.Background() //nolint:contextcheck // see Start()
-	ch, err := src.Watch(wctx)
+	// the request that triggered the add. The ctx is intentionally a
+	// fresh background — the watch outlives the request scope.
+	wctx := context.Background()
+	ch, err := src.Watch(wctx) //nolint:contextcheck // wctx is the manager's lifetime, not the request's
 	if err != nil || ch == nil {
 		return nil
 	}
 	m.wg.Add(1)
-	go m.watchLoop(wctx, src, ch) //nolint:contextcheck
+	go m.watchLoop(wctx, src, ch) //nolint:contextcheck // see above
 	return nil
 }
 

@@ -119,6 +119,21 @@ func (d *DB) AuthoredSkills() ifaces.AuthoredSkillStore {
 	return &authoredSkillStore{db: d.sql}
 }
 
+// PolicyRules returns a PolicyRulesStore backed by this DB (Phase 9).
+func (d *DB) PolicyRules() ifaces.PolicyRulesStore {
+	return &policyRulesStore{db: d.sql}
+}
+
+// ServerRuntime returns a ServerRuntimeStore backed by this DB (Phase 9).
+func (d *DB) ServerRuntime() ifaces.ServerRuntimeStore {
+	return &serverRuntimeStore{db: d.sql}
+}
+
+// EntityActivity returns an EntityActivityStore backed by this DB (Phase 9).
+func (d *DB) EntityActivity() ifaces.EntityActivityStore {
+	return &entityActivityStore{db: d.sql}
+}
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {

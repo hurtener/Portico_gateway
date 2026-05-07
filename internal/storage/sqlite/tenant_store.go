@@ -18,11 +18,18 @@ type tenantStore struct {
 	db *sql.DB
 }
 
+// tenantSelect selects every column we currently care about. Kept as a const
+// so Get + List share the layout (and any extension changes one place).
+const tenantSelect = `
+	SELECT id, display_name, plan,
+	       runtime_mode, max_concurrent_sessions, max_requests_per_minute,
+	       audit_retention_days, jwt_issuer, jwt_jwks_url, status,
+	       created_at, updated_at
+	FROM tenants
+`
+
 func (s *tenantStore) Get(ctx context.Context, id string) (*ifaces.Tenant, error) {
-	row := s.db.QueryRowContext(ctx, `
-		SELECT id, display_name, plan, created_at, updated_at
-		FROM tenants WHERE id = ?
-	`, id)
+	row := s.db.QueryRowContext(ctx, tenantSelect+`WHERE id = ?`, id)
 	t, err := scanTenant(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -31,10 +38,7 @@ func (s *tenantStore) Get(ctx context.Context, id string) (*ifaces.Tenant, error
 }
 
 func (s *tenantStore) List(ctx context.Context) ([]*ifaces.Tenant, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, display_name, plan, created_at, updated_at
-		FROM tenants ORDER BY id
-	`)
+	rows, err := s.db.QueryContext(ctx, tenantSelect+`ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: list tenants: %w", err)
 	}
@@ -55,14 +59,55 @@ func (s *tenantStore) Upsert(ctx context.Context, t *ifaces.Tenant) error {
 	if t == nil || t.ID == "" {
 		return errors.New("sqlite: tenant id is required")
 	}
+	// Apply defaults for fields that are non-nullable but unset by the caller
+	// — keep parity with the migration-supplied DEFAULTs.
+	runtimeMode := t.RuntimeMode
+	if runtimeMode == "" {
+		runtimeMode = "shared_global"
+	}
+	status := t.Status
+	if status == "" {
+		status = "active"
+	}
+	maxConcurrent := t.MaxConcurrentSessions
+	if maxConcurrent == 0 {
+		maxConcurrent = 16
+	}
+	maxRPM := t.MaxRequestsPerMinute
+	if maxRPM == 0 {
+		maxRPM = 600
+	}
+	retention := t.AuditRetentionDays
+	if retention == 0 {
+		retention = 30
+	}
+
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO tenants(id, display_name, plan, created_at, updated_at)
-		VALUES (?, ?, ?, COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ','now')), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+		INSERT INTO tenants(id, display_name, plan,
+		                    runtime_mode, max_concurrent_sessions, max_requests_per_minute,
+		                    audit_retention_days, jwt_issuer, jwt_jwks_url, status,
+		                    created_at, updated_at)
+		VALUES (?, ?, ?,
+		        ?, ?, ?,
+		        ?, ?, ?, ?,
+		        COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+		        strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 		ON CONFLICT(id) DO UPDATE SET
-		    display_name = excluded.display_name,
-		    plan = excluded.plan,
-		    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-	`, t.ID, t.DisplayName, t.Plan, nullTime(t.CreatedAt))
+		    display_name             = excluded.display_name,
+		    plan                     = excluded.plan,
+		    runtime_mode             = excluded.runtime_mode,
+		    max_concurrent_sessions  = excluded.max_concurrent_sessions,
+		    max_requests_per_minute  = excluded.max_requests_per_minute,
+		    audit_retention_days     = excluded.audit_retention_days,
+		    jwt_issuer               = excluded.jwt_issuer,
+		    jwt_jwks_url             = excluded.jwt_jwks_url,
+		    status                   = excluded.status,
+		    updated_at               = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+	`,
+		t.ID, t.DisplayName, t.Plan,
+		runtimeMode, maxConcurrent, maxRPM,
+		retention, t.JWTIssuer, t.JWTJWKSURL, status,
+		nullTime(t.CreatedAt))
 	if err != nil {
 		return fmt.Errorf("sqlite: upsert tenant %q: %w", t.ID, err)
 	}
@@ -92,7 +137,12 @@ func scanTenant(rs rowScanner) (*ifaces.Tenant, error) {
 		t                    ifaces.Tenant
 		createdAt, updatedAt string
 	)
-	if err := rs.Scan(&t.ID, &t.DisplayName, &t.Plan, &createdAt, &updatedAt); err != nil {
+	if err := rs.Scan(
+		&t.ID, &t.DisplayName, &t.Plan,
+		&t.RuntimeMode, &t.MaxConcurrentSessions, &t.MaxRequestsPerMinute,
+		&t.AuditRetentionDays, &t.JWTIssuer, &t.JWTJWKSURL, &t.Status,
+		&createdAt, &updatedAt,
+	); err != nil {
 		return nil, err
 	}
 	t.CreatedAt, _ = parseSQLiteTime(createdAt)

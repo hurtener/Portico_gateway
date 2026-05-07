@@ -368,6 +368,14 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	}
 	_ = watcher // kept for future inspection; lifecycle owned by ctx
 
+	// Phase 9: SQL-backed policy rule store, vault reveal manager.
+	policyRuleStore := policy.NewRuleStore(backend.PolicyRules())
+	policyAdapter := newPolicyRulesAdapter(policyRuleStore)
+	var revealMgr api.VaultRevealManager
+	if vault != nil {
+		revealMgr = newVaultRevealAdapter(secrets.NewRevealManager(vault, nil))
+	}
+
 	deps := api.Deps{
 		Logger:         logger,
 		Validator:      validator,
@@ -394,6 +402,13 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		SkillSources:   skillSourcesCtl,
 		AuthoredSkills: authoredCtl,
 		SkillValidator: skillValidator,
+
+		// Phase 9 wiring.
+		AuditEmitter:   auditEmitter,
+		EntityActivity: backend.EntityActivity(),
+		PolicyRules:    policyAdapter,
+		ServerRuntime:  backend.ServerRuntime(),
+		VaultReveal:    revealMgr,
 	}
 
 	handler := api.NewRouter(deps)
