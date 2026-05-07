@@ -23,7 +23,7 @@ So the visual language should feel like a mix of:
 
 If I had to describe the Portico design language in words:
 
-### Core attributes
+## Core attributes
 
 * **Calm**
 * **Structured**
@@ -34,7 +34,7 @@ If I had to describe the Portico design language in words:
 * **Technical without feeling cold**
 * **Minimal, but not sterile**
 
-### What it should *not* feel like
+## What it should *not* feel like
 
 * overly playful SaaS
 * glassmorphism startup cliché
@@ -269,7 +269,7 @@ Good candidates:
 * **Söhne** (if premium/commercial is okay)
 * **IBM Plex Sans** if you want slightly more technical character
 
-### My pick:
+### My pick
 
 **Inter** or **Geist** for practicality.
 
@@ -349,7 +349,7 @@ space.20  80
 space.24  96
 ```
 
-### Layout rhythm
+## Layout rhythm
 
 * **tight controls**: 8–12
 * **component padding**: 16–24
@@ -376,7 +376,7 @@ radius.xl   20
 radius.pill 999
 ```
 
-### Usage
+## Usage
 
 * buttons / inputs: 10–12
 * panels: 14–16
@@ -453,7 +453,7 @@ surface.raised
 surface.overlay
 ```
 
-### Example usage
+## Example usage
 
 * `canvas`: page background
 * `base`: primary content panels
@@ -636,7 +636,7 @@ I would create a subtle brand motif inspired by:
 
 But abstractly.
 
-### Graphic language
+## Graphic language
 
 * linear architectural diagrams
 * nested frames
