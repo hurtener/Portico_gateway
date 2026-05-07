@@ -1,9 +1,9 @@
-// Package console_crud hosts the Phase 9 carry-over integration tests
+// Package consolecrud hosts the Phase 9 carry-over integration tests
 // that the Phase 10 plan absorbed. The tests here exercise the Phase 9
 // REST surface via the in-process registry / approval / policy seams
 // against a real SQLite store. Full HTTP-stack coverage lives in the
 // smoke script and the api package's handler tests.
-package console_crud
+package consolecrud
 
 import (
 	"context"

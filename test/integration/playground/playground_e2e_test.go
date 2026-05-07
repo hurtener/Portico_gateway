@@ -191,14 +191,14 @@ func TestE2E_Playground_GoroutineLeak(t *testing.T) {
 
 func casePB(id, target, snap string) ifaces.PlaygroundCaseRecord {
 	return ifaces.PlaygroundCaseRecord{
-		TenantID:  "tenant-a",
-		CaseID:    id,
-		Name:      id,
-		Kind:      "tool_call",
-		Target:    target,
-		Payload:   json.RawMessage(`{}`),
+		TenantID:   "tenant-a",
+		CaseID:     id,
+		Name:       id,
+		Kind:       "tool_call",
+		Target:     target,
+		Payload:    json.RawMessage(`{}`),
 		SnapshotID: snap,
-		CreatedAt: time.Now().UTC(),
+		CreatedAt:  time.Now().UTC(),
 	}
 }
 

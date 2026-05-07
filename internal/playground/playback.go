@@ -47,11 +47,11 @@ type Executor interface {
 // Playback owns the replay machinery: bind a session, issue the call,
 // detect drift, record the run row.
 type Playback struct {
-	sessions  *Service
-	binder    *SnapshotBinder
-	store     ifaces.PlaygroundStore
-	emitter   audit.Emitter
-	executor  Executor
+	sessions *Service
+	binder   *SnapshotBinder
+	store    ifaces.PlaygroundStore
+	emitter  audit.Emitter
+	executor Executor
 }
 
 // NewPlayback constructs a Playback.

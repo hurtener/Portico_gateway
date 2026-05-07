@@ -38,14 +38,14 @@ const DefaultLogRingBytes = 1 << 20 // 1 MiB
 // future lines until the supplied context is cancelled. Slow subscribers
 // fall behind silently — the publisher never blocks.
 type LogRing struct {
-	mu      sync.Mutex
+	mu       sync.Mutex
 	maxBytes int
-	bytes   int
-	buf     []LogLine // bounded by total byte count
+	bytes    int
+	buf      []LogLine // bounded by total byte count
 
 	// subscribers receive a copy of every published line. Slow
 	// subscribers are dropped (drop-oldest semantics).
-	subs map[*subscriber]struct{}
+	subs   map[*subscriber]struct{}
 	closed bool
 }
 

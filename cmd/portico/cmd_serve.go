@@ -728,7 +728,8 @@ func firstNonEmpty(ss ...string) string {
 // the config doesn't set one. Used to seed the playground synthetic
 // JWT's `aud` claim so it round-trips through the gateway's existing
 // validator.
-func audienceFromConfig(cfg interface{ /* placeholder */ }) string {
+func audienceFromConfig(cfg interface { /* placeholder */
+}) string {
 	type audSrc interface {
 		AuthAudiences() []string
 	}

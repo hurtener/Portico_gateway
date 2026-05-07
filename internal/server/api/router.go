@@ -126,6 +126,9 @@ func (f *approvalFlow) ResolveManually(ctx context.Context, tenantID, id, status
 type SkillsManager = skillsManager
 
 // NewRouter wires the full HTTP routing surface.
+//
+//nolint:gocyclo // chi route mounts gated on optional Deps fields — splitting
+// would obscure the routing surface that operators read top-to-bottom.
 func NewRouter(d Deps) http.Handler {
 	r := chi.NewRouter()
 

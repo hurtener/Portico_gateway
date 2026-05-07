@@ -163,9 +163,9 @@ var readOnlyScopeAllowlist = map[string]bool{
 	"playground:save":    true,
 	// Read-only equivalents of the Phase 9 named scopes. The playground
 	// needs to read servers/skills/snapshots; it does not need write.
-	"servers:read":  true,
-	"skills:read":   true,
-	"policy:read":   true,
+	"servers:read":   true,
+	"skills:read":    true,
+	"policy:read":    true,
 	"snapshots:read": true,
 }
 

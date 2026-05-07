@@ -70,8 +70,8 @@ type PlaygroundCatalogDTO struct {
 
 // PlaygroundCallRequest is the body for POST /sessions/{sid}/calls.
 type PlaygroundCallRequest struct {
-	Kind   string          `json:"kind"`             // tool_call | resource_read | prompt_get
-	Target string          `json:"target"`           // <server>.<tool> | uri | prompt name
+	Kind   string          `json:"kind"`   // tool_call | resource_read | prompt_get
+	Target string          `json:"target"` // <server>.<tool> | uri | prompt name
 	Args   json.RawMessage `json:"arguments,omitempty"`
 }
 
