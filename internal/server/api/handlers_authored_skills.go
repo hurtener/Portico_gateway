@@ -298,8 +298,8 @@ func validateSkillHandler(d Deps) http.HandlerFunc {
 // --- helpers --------------------------------------------------------
 
 type authoredRequest struct {
-	Manifest string             `json:"manifest"`
-	Files    []authoredFileDTO  `json:"files,omitempty"`
+	Manifest string            `json:"manifest"`
+	Files    []authoredFileDTO `json:"files,omitempty"`
 }
 
 type authoredFileDTO struct {

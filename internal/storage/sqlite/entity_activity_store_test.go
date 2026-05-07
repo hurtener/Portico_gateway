@@ -29,8 +29,8 @@ func TestEntityActivityStore_AppendList(t *testing.T) {
 	// Append for a different entity.
 	if err := store.Append(ctx, &ifaces.EntityActivityRecord{
 		TenantID: "acme", EntityKind: "server", EntityID: "other",
-		EventID:  "evt-other",
-		Summary:  "server.created",
+		EventID: "evt-other",
+		Summary: "server.created",
 	}); err != nil {
 		t.Fatal(err)
 	}

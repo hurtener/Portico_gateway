@@ -29,8 +29,8 @@ type RevealManager struct {
 	vault Vault
 	clock func() time.Time
 
-	mu      sync.Mutex
-	tokens  map[string]revealEntry
+	mu     sync.Mutex
+	tokens map[string]revealEntry
 }
 
 type revealEntry struct {

@@ -16,9 +16,9 @@ import (
 	"time"
 
 	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 	gogitssh "github.com/go-git/go-git/v5/plumbing/transport/ssh"
-	"github.com/go-git/go-git/v5/plumbing/object"
 	gossh "golang.org/x/crypto/ssh"
 
 	"github.com/hurtener/Portico_gateway/internal/skills/source"
@@ -90,12 +90,12 @@ func TestTryEmit_DropsWhenFull(t *testing.T) {
 
 func TestDetectMIME_KnownExtensions(t *testing.T) {
 	cases := map[string]string{
-		"manifest.yaml":   "application/yaml",
-		"data.json":       "application/json",
-		"SKILL.md":        "text/markdown",
-		"page.html":       "text/html",
-		"notes.txt":       "text/plain",
-		"unknown.xyz":     "application/octet-stream",
+		"manifest.yaml": "application/yaml",
+		"data.json":     "application/json",
+		"SKILL.md":      "text/markdown",
+		"page.html":     "text/html",
+		"notes.txt":     "text/plain",
+		"unknown.xyz":   "application/octet-stream",
 	}
 	for path, want := range cases {
 		if got := detectMIME(path); got != want {

@@ -156,11 +156,11 @@ func (a *skillSourcesAdapter) attachSources(ctx context.Context, tenantID string
 // authoredSkillsAdapter implements api.AuthoredSkillsController.
 
 type authoredSkillsAdapter struct {
-	store         *authored.Store
-	manager       *skillruntime.Manager
-	registryRef   *skillsource.Registry
-	emitter       *auditpkg.FanoutEmitter
-	log           *slog.Logger
+	store       *authored.Store
+	manager     *skillruntime.Manager
+	registryRef *skillsource.Registry
+	emitter     *auditpkg.FanoutEmitter
+	log         *slog.Logger
 }
 
 func newAuthoredSkillsAdapter(store *authored.Store, mgr *skillruntime.Manager, registry *skillsource.Registry, emitter *auditpkg.FanoutEmitter, log *slog.Logger) *authoredSkillsAdapter {

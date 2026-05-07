@@ -62,8 +62,8 @@ func (m *memStore) UpdateServerStatus(_ context.Context, tenantID, id, status, d
 	r.StatusDetail = detail
 	return nil
 }
-func (m *memStore) UpsertInstance(_ context.Context, _ *ifaces.InstanceRecord) error  { return nil }
-func (m *memStore) DeleteInstance(_ context.Context, _, _ string) error               { return nil }
+func (m *memStore) UpsertInstance(_ context.Context, _ *ifaces.InstanceRecord) error { return nil }
+func (m *memStore) DeleteInstance(_ context.Context, _, _ string) error              { return nil }
 func (m *memStore) ListInstances(_ context.Context, _, _ string) ([]*ifaces.InstanceRecord, error) {
 	return nil, nil
 }

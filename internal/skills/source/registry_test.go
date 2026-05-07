@@ -174,4 +174,3 @@ func registered(name string) bool {
 	}
 	return false
 }
-
