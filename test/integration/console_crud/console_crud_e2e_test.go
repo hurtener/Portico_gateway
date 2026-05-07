@@ -19,6 +19,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/policy"
 	"github.com/hurtener/Portico_gateway/internal/policy/approval"
 	"github.com/hurtener/Portico_gateway/internal/server/api/middleware"
+	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 	"github.com/hurtener/Portico_gateway/internal/storage/sqlite"
 )
 
@@ -132,21 +133,21 @@ func TestE2E_ServerCRUD_NoRestart(t *testing.T) {
 // memApprovalStore is the in-memory approval store the gate uses.
 type memApprovalStore struct {
 	mu   sync.Mutex
-	rows map[string]*approval.Approval
+	rows map[string]*ifaces.ApprovalRecord
 }
 
 func newMemApprovalStore() *memApprovalStore {
-	return &memApprovalStore{rows: make(map[string]*approval.Approval)}
+	return &memApprovalStore{rows: make(map[string]*ifaces.ApprovalRecord)}
 }
 
-func (m *memApprovalStore) Insert(_ context.Context, a *approval.Approval) error {
+func (m *memApprovalStore) Insert(_ context.Context, a *ifaces.ApprovalRecord) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.rows[a.ID] = a
 	return nil
 }
 
-func (m *memApprovalStore) Get(_ context.Context, _, id string) (*approval.Approval, error) {
+func (m *memApprovalStore) Get(_ context.Context, _, id string) (*ifaces.ApprovalRecord, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if a, ok := m.rows[id]; ok {

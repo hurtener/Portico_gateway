@@ -12,25 +12,26 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
 	"github.com/hurtener/Portico_gateway/internal/policy/approval"
+	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
 
 type fakeApprovalStore struct {
 	mu   sync.Mutex
-	rows map[string]*approval.Approval
+	rows map[string]*ifaces.ApprovalRecord
 }
 
 func newFakeStore() *fakeApprovalStore {
-	return &fakeApprovalStore{rows: make(map[string]*approval.Approval)}
+	return &fakeApprovalStore{rows: make(map[string]*ifaces.ApprovalRecord)}
 }
 
-func (f *fakeApprovalStore) Insert(_ context.Context, a *approval.Approval) error {
+func (f *fakeApprovalStore) Insert(_ context.Context, a *ifaces.ApprovalRecord) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.rows[a.ID] = a
 	return nil
 }
 
-func (f *fakeApprovalStore) Get(_ context.Context, _ string, id string) (*approval.Approval, error) {
+func (f *fakeApprovalStore) Get(_ context.Context, _ string, id string) (*ifaces.ApprovalRecord, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	r, ok := f.rows[id]
@@ -85,7 +86,7 @@ func TestApprovalGate_ApprovedToken_PassesThrough(t *testing.T) {
 
 	// Pre-seed approved row.
 	id := "appr_test"
-	_ = store.Insert(context.Background(), &approval.Approval{
+	_ = store.Insert(context.Background(), &ifaces.ApprovalRecord{
 		ID:        id,
 		TenantID:  "tenant-a",
 		Status:    approval.StatusApproved,
@@ -114,7 +115,7 @@ func TestApprovalGate_PendingToken_403(t *testing.T) {
 	store := newFakeStore()
 	mw := NewApprovalGate(Config{Store: store, Verb: "x"})
 	id := "appr_pending"
-	_ = store.Insert(context.Background(), &approval.Approval{
+	_ = store.Insert(context.Background(), &ifaces.ApprovalRecord{
 		ID:        id,
 		TenantID:  "tenant-a",
 		Status:    approval.StatusPending,

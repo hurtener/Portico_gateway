@@ -14,14 +14,15 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
 	"github.com/hurtener/Portico_gateway/internal/policy/approval"
+	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
 
-// ApprovalStore is the slim seam the gate writes through. Implemented by
-// internal/storage/sqlite.approvalStore; callers pass the store they
-// already wired into the api package via approval.Flow.
+// ApprovalStore is the slim seam the gate writes through. Mirrors the
+// subset of ifaces.ApprovalStore the gate actually uses, so production
+// can pass the storage iface directly while tests pass a fake.
 type ApprovalStore interface {
-	Insert(ctx context.Context, a *approval.Approval) error
-	Get(ctx context.Context, tenantID, id string) (*approval.Approval, error)
+	Insert(ctx context.Context, a *ifaces.ApprovalRecord) error
+	Get(ctx context.Context, tenantID, id string) (*ifaces.ApprovalRecord, error)
 }
 
 // AuditEmitter mirrors api.AuditEmitter to avoid an import cycle.
@@ -106,22 +107,23 @@ func NewApprovalGate(cfg Config) func(http.Handler) http.Handler {
 
 			// No header — issue a pending approval row and 202.
 			now := time.Now().UTC()
-			a := &approval.Approval{
-				ID:          newApprovalID(),
-				TenantID:    tenantID,
-				UserID:      actor,
-				Tool:        cfg.Verb,
-				ArgsSummary: snapshotRequest(r),
-				RiskClass:   "destructive",
-				Status:      approval.StatusPending,
-				CreatedAt:   now,
-				ExpiresAt:   now.Add(cfg.Timeout),
-				Metadata: map[string]any{
-					"verb":   cfg.Verb,
-					"path":   r.URL.Path,
-					"method": r.Method,
-					"actor":  actor,
-				},
+			metaBytes, _ := json.Marshal(map[string]any{
+				"verb":   cfg.Verb,
+				"path":   r.URL.Path,
+				"method": r.Method,
+				"actor":  actor,
+			})
+			a := &ifaces.ApprovalRecord{
+				ID:           newApprovalID(),
+				TenantID:     tenantID,
+				UserID:       actor,
+				Tool:         cfg.Verb,
+				ArgsSummary:  snapshotRequest(r),
+				RiskClass:    "destructive",
+				Status:       approval.StatusPending,
+				CreatedAt:    now,
+				ExpiresAt:    now.Add(cfg.Timeout),
+				MetadataJSON: string(metaBytes),
 			}
 			if err := cfg.Store.Insert(r.Context(), a); err != nil {
 				writeJSON(w, http.StatusInternalServerError, map[string]any{
