@@ -26,6 +26,18 @@ Phases 0–9 complete. Specifically:
 - Phase 7 component library: `Form` primitives, `Tabs`, `CodeBlock`, `Badge`, `StatusDot`, `Skeleton`, `Toast`, `Drawer`.
 - Phase 9 entity activity + permission scopes — the playground is gated behind `playground:execute` (separate from `servers:write`).
 
+## Phase 9 carry-overs (must land before or alongside Phase 10)
+
+These three items shipped in Phase 9 as documented deviations because the right home for them is the supervisor + playground work. Phase 10 absorbs them as first-class deliverables; do not lose them.
+
+1. **Supervisor per-process log ring buffer + live SSE tail.** Phase 9 shipped the `/api/servers/{id}/logs` route as a stub (auth-gated, `text/event-stream`, info event on connect). Phase 10 lands the supervisor side: a bounded ring buffer per stdio process + an SSE writer that streams `since=…` to the route. The playground's "Output" panel reuses the same SSE parser the catalog client uses, so the supervisor change unblocks both the operator log viewer on `/servers/{id}` AND the playground's streaming output. Coverage gate: ≥ 80% on the new ring-buffer + SSE writer. Smoke: extend `scripts/smoke/phase-10.sh` to assert `GET /api/servers/{id}/logs?since=…` returns at least one log line for a server that has just emitted output.
+2. **Approval-gate middleware for destructive Phase 9 verbs.** Phase 9 wired the `/v1/approvals` UI but did NOT route the destructive Phase 9 verbs (`DELETE /api/servers/{id}` with sessions, `DELETE /api/admin/tenants/{id}`, `POST /api/admin/tenants/{id}/purge`, `POST /api/admin/secrets/rotate-root`, `DELETE /api/admin/secrets/{name}` when an injector references it) through `internal/policy/approval.Flow.Run`. Phase 10 lands `internal/server/api/middleware/approval_gate.go` with the 202+poll pattern: handler returns `202 Accepted { approval_request_id }`, Console polls `/v1/approvals/{id}` until decided, then re-issues the original verb. The playground's Audit tab is the test surface — running a destructive call from the playground must surface the approval prompt and the eventual decision in the timeline.
+3. **The Phase 9 integration tests deferred to smoke.** Three tests named in the Phase 9 plan ship in `test/integration/console_crud/` here:
+   - `TestE2E_PolicyEdit_HotReload` — add a deny rule via REST; next tool call denied without restart.
+   - `TestE2E_DestructiveDelete_RequiresApproval` — DELETE a server with a live session; assert `202 approval_required`; approve via the flow; DELETE succeeds.
+   - `TestE2E_ServerCRUD_NoRestart` — POST `/api/servers`; tool call lands; PATCH env override; restart; tool call still lands with new env.
+   These are the canonical proofs that the Phase 9 surface holds; the playground's smoke covers the same behaviours from the UI side.
+
 ## Deliverables
 
 1. **Playground route** at `/playground` — full-page surface; not a tab inside another resource.
@@ -331,6 +343,15 @@ Standard CRUD against `playground_cases`. Save flow: from the composer, "Save as
 ### Step 10 — Smoke + tests
 
 `scripts/smoke/phase-10.sh` covers: bootstrap, catalog fetch, an ad-hoc tool call, save case, replay, and a deliberate-drift replay (using a fixture). Integration tests cover the streamed call lifecycle, the synthetic JWT lifetime, and the correlation correctness.
+
+### Step 11 — Phase 9 carry-overs
+
+Pick this up at the start of the phase; it unblocks the streaming output panel and the destructive-verb tests:
+
+- `internal/runtime/process/log_ring.go` — bounded per-process stdout/stderr ring buffer (default 1 MB, configurable). Subscriber API returns a `<-chan LogLine` with cancellation through `ctx`. Wire it into the supervisor's process spawn path so every started process feeds the ring.
+- Wire the ring into `Registry.Logs(ctx, tenantID, serverID, since)`. Replace the closed-channel placeholder added in Phase 9.
+- `internal/server/api/middleware/approval_gate.go` — chi middleware factory `NewApprovalGate(flow, audit, deps)` that wraps a handler and returns `202 Accepted { approval_request_id }` for destructive verbs. The middleware is mounted in `router.go` only on the explicit verb list above (do NOT blanket-wrap `DELETE`).
+- `test/integration/console_crud/` — the three named tests above. Each uses the existing `examples/servers/mock` fixture for the in-flight tool call.
 
 ## Test plan
 
