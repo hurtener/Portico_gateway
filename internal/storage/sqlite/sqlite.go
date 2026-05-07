@@ -109,6 +109,16 @@ func (d *DB) Snapshots() ifaces.SnapshotStore {
 	return &snapshotStore{db: d.sql}
 }
 
+// SkillSources returns a SkillSourceStore backed by this DB.
+func (d *DB) SkillSources() ifaces.SkillSourceStore {
+	return &skillSourceStore{db: d.sql}
+}
+
+// AuthoredSkills returns an AuthoredSkillStore backed by this DB.
+func (d *DB) AuthoredSkills() ifaces.AuthoredSkillStore {
+	return &authoredSkillStore{db: d.sql}
+}
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {

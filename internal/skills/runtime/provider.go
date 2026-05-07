@@ -59,7 +59,7 @@ func (p *SkillProvider) ListResources(ctx context.Context, tenantID, sessionID, 
 			Meta:        skillMetaJSON(map[string]string{"synthetic": "true"}),
 		})
 	}
-	for _, s := range p.catalog.ForTenant(ents, plan) {
+	for _, s := range p.catalog.ForTenant(tenantID, ents, plan) {
 		on, err := p.enablement.IsEnabled(ctx, tenantID, sessionID, s.Manifest.ID)
 		if err != nil {
 			return nil, err
@@ -185,7 +185,7 @@ func (p *SkillProvider) ListPrompts(ctx context.Context, tenantID, sessionID, pl
 		return nil, nil
 	}
 	out := make([]protocol.Prompt, 0)
-	for _, s := range p.catalog.ForTenant(ents, plan) {
+	for _, s := range p.catalog.ForTenant(tenantID, ents, plan) {
 		on, err := p.enablement.IsEnabled(ctx, tenantID, sessionID, s.Manifest.ID)
 		if err != nil {
 			return nil, err

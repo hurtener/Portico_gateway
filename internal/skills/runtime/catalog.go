@@ -21,6 +21,14 @@ type Skill struct {
 	Ref      source.Ref
 	LoadedAt time.Time
 	Warnings []string
+
+	// TenantID is set when the pack came from a tenant-scoped source
+	// (Phase 8 authored skills). Empty when the pack is global
+	// (LocalDir / Git / HTTP today; future tenant-scoped external
+	// sources may set it). The catalog's ForTenant filter respects
+	// this — a non-empty TenantID is matched against the asker's
+	// tenant; empty means "visible to every tenant".
+	TenantID string
 }
 
 // Namespace returns the part before the first dot in the skill id, or
@@ -84,16 +92,26 @@ func NewCatalog() *Catalog {
 	}
 }
 
+// catalogKey returns the lookup key for a skill record. Tenant-scoped
+// skills use "<tenantID>:<id>" so two tenants can publish the same
+// id without colliding; global skills keep the bare id.
+func catalogKey(tenantID, id string) string {
+	if tenantID == "" {
+		return id
+	}
+	return tenantID + ":" + id
+}
+
 // Set inserts or replaces the Skill with the given id. Idempotent;
 // repeated Set calls publish ChangeUpdated.
 func (c *Catalog) Set(s *Skill) {
 	if s == nil || s.Manifest == nil {
 		return
 	}
-	id := s.Manifest.ID
+	key := catalogKey(s.TenantID, s.Manifest.ID)
 	c.mu.Lock()
-	_, existed := c.skills[id]
-	c.skills[id] = s
+	_, existed := c.skills[key]
+	c.skills[key] = s
 	c.mu.Unlock()
 	kind := ChangeAdded
 	if existed {
@@ -104,10 +122,21 @@ func (c *Catalog) Set(s *Skill) {
 
 // Remove deletes the skill with id (no-op when missing).
 func (c *Catalog) Remove(id string) {
+	c.removeKey(id, "")
+}
+
+// RemoveForTenant deletes a tenant-scoped skill. Use this for
+// authored sources where two tenants may share an id.
+func (c *Catalog) RemoveForTenant(tenantID, id string) {
+	c.removeKey(id, tenantID)
+}
+
+func (c *Catalog) removeKey(id, tenantID string) {
+	key := catalogKey(tenantID, id)
 	c.mu.Lock()
-	prev, ok := c.skills[id]
+	prev, ok := c.skills[key]
 	if ok {
-		delete(c.skills, id)
+		delete(c.skills, key)
 	}
 	c.mu.Unlock()
 	if ok {
@@ -115,12 +144,72 @@ func (c *Catalog) Remove(id string) {
 	}
 }
 
-// Get returns the skill for id.
+// RemoveBySource drops every skill whose Source.Name matches name.
+// Used when a Phase 8 source.Registry CRUD removal joins watcher
+// goroutines and we need to flush the catalog to match.
+//
+// Pass tenantID to scope the removal to a single tenant — important
+// because driver-level Source.Name() ("git", "http") is shared, but
+// the registry attaches the operator-chosen row name as the source
+// name. Pass "" to remove for every tenant.
+func (c *Catalog) RemoveBySource(tenantID, name string) {
+	c.mu.Lock()
+	removed := make([]*Skill, 0)
+	for key, s := range c.skills {
+		if s == nil || s.Source == nil {
+			continue
+		}
+		if s.Source.Name() != name {
+			continue
+		}
+		if tenantID != "" && s.TenantID != "" && s.TenantID != tenantID {
+			continue
+		}
+		removed = append(removed, s)
+		delete(c.skills, key)
+	}
+	c.mu.Unlock()
+	for _, s := range removed {
+		c.publish(ChangeEvent{Kind: ChangeRemoved, Skill: s})
+	}
+}
+
+// Get returns the skill for id. When two skills share an id (a
+// global skill and a tenant-scoped publish), the global wins for the
+// bare-id lookup; callers needing tenant scoping use GetForTenant.
 func (c *Catalog) Get(id string) (*Skill, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	s, ok := c.skills[id]
-	return s, ok
+	if s, ok := c.skills[id]; ok {
+		return s, true
+	}
+	// Fall back: scan tenant-scoped variants and return the first match.
+	for k, s := range c.skills {
+		if s == nil || s.Manifest == nil {
+			continue
+		}
+		if s.Manifest.ID == id {
+			_ = k
+			return s, true
+		}
+	}
+	return nil, false
+}
+
+// GetForTenant returns the skill resolved for a tenant: tenant-scoped
+// rows take precedence; global rows fall through.
+func (c *Catalog) GetForTenant(tenantID, id string) (*Skill, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if tenantID != "" {
+		if s, ok := c.skills[catalogKey(tenantID, id)]; ok {
+			return s, true
+		}
+	}
+	if s, ok := c.skills[id]; ok {
+		return s, true
+	}
+	return nil, false
 }
 
 // List returns every skill, sorted by id.
@@ -142,7 +231,12 @@ func (c *Catalog) List() []*Skill {
 //
 // When globs is empty the tenant sees every skill (plan filter still
 // applies). When plan is empty the manifest's plan list is ignored.
-func (c *Catalog) ForTenant(globs []string, plan string) []*Skill {
+//
+// Skills carrying a non-empty Skill.TenantID (Phase 8 authored skills,
+// future tenant-scoped external sources) are visible only to that
+// tenant; tenantID="" disables this filter (used by tests and the
+// validate-skills CLI).
+func (c *Catalog) ForTenant(tenantID string, globs []string, plan string) []*Skill {
 	all := c.List()
 	out := make([]*Skill, 0, len(all))
 	for _, s := range all {
@@ -150,6 +244,9 @@ func (c *Catalog) ForTenant(globs []string, plan string) []*Skill {
 			continue
 		}
 		if !planAllowed(plan, s.Manifest.Binding.Entitlements.Plans) {
+			continue
+		}
+		if s.TenantID != "" && tenantID != "" && s.TenantID != tenantID {
 			continue
 		}
 		out = append(out, s)

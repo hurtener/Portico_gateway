@@ -71,6 +71,13 @@ type Deps struct {
 	// Phase 6: snapshot service + lazy session→snapshot binder.
 	Snapshots      *snapshots.Service
 	SnapshotBinder *mcpgw.SnapshotBinder
+
+	// Phase 8: skill source registry + authored skills store + the
+	// validate-only pipeline. All optional — handlers return 503 when
+	// nil, and the corresponding routes are skipped.
+	SkillSources   SkillSourcesController
+	AuthoredSkills AuthoredSkillsController
+	SkillValidator SkillValidator
 }
 
 // approvalFlow is the slice of internal/policy/approval.Flow the API
@@ -172,6 +179,32 @@ func NewRouter(d Deps) http.Handler {
 		}
 		if d.SnapshotBinder != nil {
 			r.Get("/v1/sessions/{session_id}/snapshot", sessionSnapshotHandler(d))
+		}
+
+		// Phase 8: skill source registry CRUD.
+		if d.SkillSources != nil {
+			r.Get("/api/skill-sources", listSkillSourcesHandler(d))
+			r.Post("/api/skill-sources", upsertSkillSourceHandler(d, false))
+			r.Get("/api/skill-sources/{name}", getSkillSourceHandler(d))
+			r.Put("/api/skill-sources/{name}", upsertSkillSourceHandler(d, true))
+			r.Delete("/api/skill-sources/{name}", deleteSkillSourceHandler(d))
+			r.Post("/api/skill-sources/{name}/refresh", refreshSkillSourceHandler(d))
+			r.Get("/api/skill-sources/{name}/packs", listSkillSourcePacksHandler(d))
+		}
+		// Phase 8: authored skills CRUD + publish + validate.
+		if d.AuthoredSkills != nil {
+			r.Get("/api/skills/authored", listAuthoredHandler(d))
+			r.Post("/api/skills/authored", createAuthoredHandler(d))
+			r.Get("/api/skills/authored/{id}", getAuthoredActiveHandler(d))
+			r.Get("/api/skills/authored/{id}/versions", historyAuthoredHandler(d))
+			r.Get("/api/skills/authored/{id}/versions/{v}", getAuthoredVersionHandler(d))
+			r.Put("/api/skills/authored/{id}/versions/{v}", updateAuthoredHandler(d))
+			r.Post("/api/skills/authored/{id}/versions/{v}/publish", publishAuthoredHandler(d))
+			r.Post("/api/skills/authored/{id}/versions/{v}/archive", archiveAuthoredHandler(d))
+			r.Delete("/api/skills/authored/{id}/versions/{v}", deleteAuthoredDraftHandler(d))
+		}
+		if d.SkillValidator != nil {
+			r.Post("/api/skills/validate", validateSkillHandler(d))
 		}
 
 		// Phase 4: skills runtime APIs.

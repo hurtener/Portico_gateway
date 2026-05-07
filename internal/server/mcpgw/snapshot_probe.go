@@ -208,6 +208,12 @@ func (p *SnapshotProbe) SkillInfos(ctx context.Context, tenantID, sessionID stri
 		if s == nil || s.Manifest == nil {
 			continue
 		}
+		// Phase 8: tenant-scoped authored skills must not leak across
+		// tenants. Skills with TenantID set are visible only to that
+		// tenant; an empty TenantID indicates a global pack.
+		if s.TenantID != "" && s.TenantID != tenantID {
+			continue
+		}
 		on := false
 		if p.enable != nil {
 			on, _ = p.enable.IsEnabled(ctx, tenantID, sessionID, s.Manifest.ID)

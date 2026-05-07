@@ -51,7 +51,7 @@ func getSkillHandler(d Deps) http.HandlerFunc {
 		}
 		id := tenant.MustFrom(r.Context())
 		skillID := chi.URLParam(r, "id")
-		s, ok := mgr.Catalog().Get(skillID)
+		s, ok := mgr.Catalog().GetForTenant(id.TenantID, skillID)
 		if !ok {
 			writeJSONError(w, http.StatusNotFound, "not_found", "unknown skill", map[string]any{"skill_id": skillID})
 			return
@@ -77,9 +77,9 @@ func getSkillManifestYAML(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusServiceUnavailable, "skills_unavailable", "skills runtime not configured", nil)
 			return
 		}
-		_ = tenant.MustFrom(r.Context())
+		id := tenant.MustFrom(r.Context())
 		skillID := chi.URLParam(r, "id")
-		s, ok := mgr.Catalog().Get(skillID)
+		s, ok := mgr.Catalog().GetForTenant(id.TenantID, skillID)
 		if !ok {
 			writeJSONError(w, http.StatusNotFound, "not_found", "unknown skill", map[string]any{"skill_id": skillID})
 			return

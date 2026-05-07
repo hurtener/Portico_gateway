@@ -123,7 +123,7 @@ func (g *IndexGenerator) Render(ctx context.Context, tenantID, sessionID string)
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Skills:      []indexEntryItem{},
 	}
-	for _, s := range g.catalog.ForTenant(ents, plan) {
+	for _, s := range g.catalog.ForTenant(tenantID, ents, plan) {
 		enabledTenant, _ := g.enablement.IsEnabled(ctx, tenantID, "", s.Manifest.ID)
 		enabledSession := enabledTenant
 		if sessionID != "" {

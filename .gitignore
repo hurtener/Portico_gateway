@@ -59,3 +59,4 @@ web/console/*.log
 
 # package-lock.json IS committed; npm-debug.log is not.
 web/console/npm-debug.log*
+.claude/

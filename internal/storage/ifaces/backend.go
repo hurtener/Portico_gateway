@@ -35,6 +35,14 @@ type Backend interface {
 	// Snapshots returns the catalog-snapshot + fingerprint store.
 	Snapshots() SnapshotStore
 
+	// SkillSources returns the tenant-scoped skill-source registry
+	// store (Phase 8).
+	SkillSources() SkillSourceStore
+
+	// AuthoredSkills returns the tenant-scoped authored skill store
+	// (Phase 8).
+	AuthoredSkills() AuthoredSkillStore
+
 	// Health pings the underlying connection. Returns error if the backend
 	// is not reachable. Used by /readyz and tests.
 	Health(ctx context.Context) error
