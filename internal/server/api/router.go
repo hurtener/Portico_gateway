@@ -78,6 +78,15 @@ type Deps struct {
 	SkillSources   SkillSourcesController
 	AuthoredSkills AuthoredSkillsController
 	SkillValidator SkillValidator
+
+	// Phase 9: Console CRUD additions. Each is optional — handlers gate
+	// on the corresponding nil so phase-N+1 builds boot cleanly when a
+	// dependency is missing.
+	AuditEmitter   AuditEmitter
+	EntityActivity ifaces.EntityActivityStore
+	PolicyRules    PolicyRulesController
+	ServerRuntime  ifaces.ServerRuntimeStore
+	VaultReveal    VaultRevealManager
 }
 
 // approvalFlow is the slice of internal/policy/approval.Flow the API
@@ -149,6 +158,19 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/v1/servers/{id}/enable", enableServerHandler(d, true))
 			r.Post("/v1/servers/{id}/disable", enableServerHandler(d, false))
 			r.Get("/v1/servers/{id}/instances", listInstancesHandler(d))
+
+			// Phase 9: /api/servers surface — adds restart, logs (SSE),
+			// health, partial-update PATCH, and per-server activity.
+			r.Get("/api/servers", listServersHandler(d))
+			r.Post("/api/servers", createAPIServerHandler(d))
+			r.Get("/api/servers/{id}", getServerHandler(d))
+			r.Put("/api/servers/{id}", upsertServerHandler(d, true))
+			r.Patch("/api/servers/{id}", patchServerHandler(d))
+			r.Delete("/api/servers/{id}", deleteServerHandler(d))
+			r.Post("/api/servers/{id}/restart", restartServerHandler(d))
+			r.Get("/api/servers/{id}/logs", logsServerHandler(d))
+			r.Get("/api/servers/{id}/health", healthServerHandler(d))
+			r.Get("/api/servers/{id}/activity", activityHandler(d, "server"))
 		}
 
 		// Phase 3: resources, prompts, apps. Gated on the dispatcher
@@ -240,7 +262,16 @@ func NewRouter(d Deps) http.Handler {
 			r.Use(scope.Require("admin"))
 			r.Get("/v1/admin/tenants", listTenantsHandler(d))
 			r.Get("/v1/admin/tenants/{id}", getTenantHandler(d))
-			r.Post("/v1/admin/tenants", upsertTenantHandler(d))
+			r.Post("/v1/admin/tenants", upsertTenantHandler(d, false))
+
+			// Phase 9: /api/admin/tenants full CRUD.
+			r.Get("/api/admin/tenants", listTenantsHandler(d))
+			r.Post("/api/admin/tenants", upsertTenantHandler(d, false))
+			r.Get("/api/admin/tenants/{id}", getTenantHandler(d))
+			r.Put("/api/admin/tenants/{id}", upsertTenantHandler(d, true))
+			r.Delete("/api/admin/tenants/{id}", deleteTenantHandler(d))
+			r.Post("/api/admin/tenants/{id}/purge", purgeTenantHandler(d))
+			r.Get("/api/admin/tenants/{id}/activity", activityHandler(d, "tenant"))
 
 			// Phase 5: manual approval resolution + secrets management.
 			if d.ApprovalFlow != nil {
@@ -252,7 +283,34 @@ func NewRouter(d Deps) http.Handler {
 				r.Put("/v1/admin/secrets/{tenant}/{name}", putAdminSecretHandler(d))
 				r.Delete("/v1/admin/secrets/{tenant}/{name}", deleteAdminSecretHandler(d))
 			}
+			// Phase 9: richer /api/admin/secrets surface. Mounted
+			// regardless of d.Vault so the routes shadow the SPA fallback
+			// — handlers return 503 when the vault is unconfigured.
+			// Specific paths first so chi prefers them over the {name}
+			// catch-all.
+			r.Get("/api/admin/secrets/reveal/{token}", revealConsumeHandler(d))
+			r.Post("/api/admin/secrets/rotate-root", rotateRootHandler(d))
+			r.Post("/api/admin/secrets/{name}/rotate", rotateAPISecretHandler(d))
+			r.Post("/api/admin/secrets/{name}/reveal", revealIssueHandler(d))
+			r.Get("/api/admin/secrets/{name}/activity", activityHandler(d, "secret"))
+			r.Get("/api/admin/secrets/{name}", getAPISecretMetadataHandler(d))
+			r.Put("/api/admin/secrets/{name}", putAPISecretHandler(d))
+			r.Delete("/api/admin/secrets/{name}", deleteAPISecretHandler(d))
+			r.Get("/api/admin/secrets", listAPISecretsHandler(d))
+			r.Post("/api/admin/secrets", createAPISecretHandler(d))
 		})
+
+		// Phase 9: Policy editor endpoints. Mounted under the auth group;
+		// tenant scope is honoured implicitly by every store call.
+		if d.PolicyRules != nil {
+			r.Get("/api/policy/rules", listPolicyRulesHandler(d))
+			r.Put("/api/policy/rules", putPolicyRulesHandler(d))
+			r.Post("/api/policy/rules", postPolicyRuleHandler(d))
+			r.Put("/api/policy/rules/{id}", putPolicyRuleHandler(d))
+			r.Delete("/api/policy/rules/{id}", deletePolicyRuleHandler(d))
+			r.Post("/api/policy/dry-run", dryRunPolicyHandler(d))
+			r.Get("/api/policy/activity", listPolicyActivityHandler(d))
+		}
 
 		// Console UI (HTML + static)
 		ui.Mount(r, ui.Deps{Logger: d.Logger, Version: d.Version, DevMode: d.DevMode})

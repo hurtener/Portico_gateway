@@ -44,6 +44,36 @@ const (
 	EventVaultPut             = "vault.put"
 	EventVaultDelete          = "vault.delete"
 	EventAuditDropped         = "audit.dropped"
+
+	// Phase 9 — Console CRUD events. Each emits with tenant_id, the
+	// actor user_id, and a redacted payload carrying before/after diffs.
+	EventServerCreated   = "server.created"
+	EventServerUpdated   = "server.updated"
+	EventServerDeleted   = "server.deleted"
+	EventServerRestarted = "server.restarted"
+	EventTenantCreated   = "tenant.created"
+	EventTenantUpdated   = "tenant.updated"
+	EventTenantArchived  = "tenant.archived"
+	EventTenantPurged    = "tenant.purged"
+	//nolint:gosec // event label, not a credential
+	EventSecretCreated = "secret.created"
+	//nolint:gosec // event label, not a credential
+	EventSecretUpdated = "secret.updated"
+	//nolint:gosec // event label, not a credential
+	EventSecretDeleted = "secret.deleted"
+	//nolint:gosec // event label, not a credential
+	EventSecretRotated = "secret.rotated"
+	//nolint:gosec // event label, not a credential
+	EventSecretRevealIssued = "secret.reveal.issued"
+	//nolint:gosec // event label, not a credential
+	EventSecretRevealConsumed = "secret.reveal.consumed"
+	//nolint:gosec // event label, not a credential
+	EventVaultRotateRoot = "vault.rotate_root"
+	//nolint:gosec // event label, not a credential
+	EventVaultRotateRootAborted = "vault.rotate_root.aborted"
+	EventPolicyRuleChanged      = "policy.rule_changed"
+	EventPolicyRuleDeleted      = "policy.rule_deleted"
+	EventPolicyDryRun           = "policy.dry_run"
 )
 
 // Event is one structured log entry. Payload is an arbitrary JSON-serialisable

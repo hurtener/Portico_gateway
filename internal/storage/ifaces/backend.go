@@ -43,6 +43,16 @@ type Backend interface {
 	// (Phase 8).
 	AuthoredSkills() AuthoredSkillStore
 
+	// PolicyRules returns the per-tenant policy rules store (Phase 9).
+	PolicyRules() PolicyRulesStore
+
+	// ServerRuntime returns the per-tenant server runtime overrides
+	// store (Phase 9).
+	ServerRuntime() ServerRuntimeStore
+
+	// EntityActivity returns the entity activity projection (Phase 9).
+	EntityActivity() EntityActivityStore
+
 	// Health pings the underlying connection. Returns error if the backend
 	// is not reachable. Used by /readyz and tests.
 	Health(ctx context.Context) error
