@@ -18,11 +18,21 @@
   export let block = true;
 
   $: hasError = Boolean(error);
+
+  // Auto-generate an id when a label is present but no id was given,
+  // so getByLabel + screen readers can resolve the select.
+  let _autoId = '';
+  $: if (label && !id) {
+    if (!_autoId) {
+      _autoId = `sel-${Math.random().toString(36).slice(2, 9)}`;
+    }
+  }
+  $: resolvedId = id ?? (label ? _autoId : undefined);
 </script>
 
 <div class="field" class:block>
   {#if label}
-    <label for={id} class="label">
+    <label for={resolvedId} class="label">
       {label}
       {#if required}<span class="req" aria-hidden="true">*</span>{/if}
     </label>
@@ -30,7 +40,7 @@
   <div class="wrap" class:err={hasError}>
     <select
       class="select {size}"
-      {id}
+      id={resolvedId}
       {name}
       {disabled}
       {required}
@@ -39,7 +49,7 @@
       on:focus
       on:blur
       aria-invalid={hasError || undefined}
-      aria-describedby={hint || error ? `${id}-msg` : undefined}
+      aria-describedby={hint || error ? `${resolvedId}-msg` : undefined}
     >
       {#if placeholder}
         <option value="" disabled selected={value === ''}>{placeholder}</option>
@@ -51,9 +61,9 @@
     <span class="caret" aria-hidden="true"><IconChevronDown size={16} /></span>
   </div>
   {#if error}
-    <p class="msg err-msg" id="{id}-msg">{error}</p>
+    <p class="msg err-msg" id="{resolvedId}-msg">{error}</p>
   {:else if hint}
-    <p class="msg hint" id="{id}-msg">{hint}</p>
+    <p class="msg hint" id="{resolvedId}-msg">{hint}</p>
   {/if}
 </div>
 

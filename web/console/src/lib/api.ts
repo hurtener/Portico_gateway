@@ -81,11 +81,20 @@ export interface LifecycleSpec {
   restart_window?: string;
 }
 
+export interface AuthSpec {
+  strategy?: string;
+  secret_ref?: string;
+  default_risk_class?: string;
+  env?: string[];
+  headers?: Record<string, string>;
+}
+
 export interface ServerSpec extends ServerSummary {
   stdio?: StdioSpec;
   http?: HTTPSpec;
   health?: HealthSpec;
   lifecycle?: LifecycleSpec;
+  auth?: AuthSpec;
 }
 
 export interface InstanceRecord {

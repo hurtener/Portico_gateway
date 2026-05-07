@@ -3,6 +3,7 @@
   import { api, type ServerSummary } from '$lib/api';
   import { Badge, Button, EmptyState, PageHeader, Table } from '$lib/components';
   import { t } from '$lib/i18n';
+  import IconPlus from 'lucide-svelte/icons/plus';
   import IconRefreshCw from 'lucide-svelte/icons/refresh-cw';
 
   let servers: ServerSummary[] = [];
@@ -68,6 +69,10 @@
       <IconRefreshCw slot="leading" size={14} />
       {$t('common.refresh')}
     </Button>
+    <Button href="/servers/new">
+      <IconPlus slot="leading" size={14} />
+      {$t('servers.action.add')}
+    </Button>
   </div>
 </PageHeader>
 
@@ -109,7 +114,14 @@
       title={$t('servers.empty.title')}
       description={$t('servers.empty.description')}
       compact
-    />
+    >
+      <svelte:fragment slot="actions">
+        <Button href="/servers/new">
+          <IconPlus slot="leading" size={14} />
+          {$t('servers.action.add')}
+        </Button>
+      </svelte:fragment>
+    </EmptyState>
   </svelte:fragment>
 </Table>
 

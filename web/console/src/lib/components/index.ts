@@ -24,6 +24,7 @@ export { default as Popover } from './Popover.svelte';
 export { default as RadioGroup } from './RadioGroup.svelte';
 export { default as SegmentedControl } from './SegmentedControl.svelte';
 export { default as Select } from './Select.svelte';
+export { default as ServerForm } from './ServerForm.svelte';
 export { default as Sidebar } from './Sidebar.svelte';
 export { default as Skeleton } from './Skeleton.svelte';
 export { default as Sparkline } from './Sparkline.svelte';

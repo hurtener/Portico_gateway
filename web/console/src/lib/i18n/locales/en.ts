@@ -16,9 +16,11 @@ export default {
   'common.save': 'Save',
   'common.cancel': 'Cancel',
   'common.delete': 'Delete',
+  'common.edit': 'Edit',
   'common.enable': 'Enable',
   'common.disable': 'Disable',
   'common.close': 'Close',
+  'common.error': 'Error',
   'common.loading': 'Loading…',
   'common.empty': 'No items.',
   'common.yes': 'yes',
@@ -408,6 +410,67 @@ export default {
   'servers.tabs.activity': 'Activity',
   'servers.tabs.config': 'Configuration',
   'servers.logs.note': 'Live tail wires up in a follow-up release.',
+
+  // Phase 10.5 — server form completeness
+  'servers.action.add': 'Add server',
+  'servers.edit.title': 'Edit server',
+  'servers.field.id.placeholder': 'github-prod',
+  'servers.field.displayName.placeholder': 'GitHub (prod)',
+  'servers.field.runtimeMode': 'Runtime mode',
+  'servers.field.status': 'Status',
+  'servers.field.command.placeholder': 'npx',
+  'servers.field.args.placeholder': '-y @modelcontextprotocol/server-github',
+  'servers.field.args.hint':
+    'Whitespace-separated. Quote args containing spaces, e.g. --message "hello world".',
+  'servers.field.env.empty': 'No environment variables yet.',
+  'servers.field.env.add': 'Add variable',
+  'servers.field.env.key.placeholder': 'GITHUB_TOKEN',
+  'servers.field.env.value.placeholder': 'ghp_…',
+  'servers.field.url.placeholder': 'https://example.com/mcp',
+  'servers.field.authHeader': 'Auth header',
+  'servers.field.authHeader.placeholder': 'Authorization: Bearer …',
+  'servers.field.authHeader.hint':
+    'Optional. Static header injected on every southbound call. Prefer a credential reference for rotation safety.',
+  'servers.field.credential': 'Credential reference',
+  'servers.field.credential.none': '— none —',
+  'servers.field.credential.hint':
+    "Pick a vault entry to inject this server's downstream credential at call time.",
+  'servers.field.credential.none.hint':
+    'No vault entries available. Add one under Admin → Secrets.',
+  'servers.field.credential.unavailable':
+    'Vault not configured in this build — credential references are disabled.',
+
+  // Server detail (Phase 10.5)
+  'serverDetail.tabs.overview': 'Overview',
+  'serverDetail.tabs.logs': 'Logs',
+  'serverDetail.tabs.activity': 'Activity',
+  'serverDetail.confirmRestart': 'Restart server "{id}"?',
+  'serverDetail.confirmDelete':
+    'Delete server "{id}"? Sessions using it will receive a typed server_unavailable error.',
+  'serverDetail.toast.restartIssued': 'Restart requested',
+  'serverDetail.toast.restartFailed.title': 'Restart failed',
+  'serverDetail.toast.deleted': 'Server deleted',
+  'serverDetail.toast.deleteFailed.title': 'Delete failed',
+  'serverDetail.toast.approvalRequired.title': 'Approval required',
+  'serverDetail.toast.approvalRequired.description':
+    'A destructive action was queued; check Approvals to resolve it.',
+  'serverDetail.logs.title': 'Live logs',
+  'serverDetail.logs.live': 'Live',
+  'serverDetail.logs.idle': 'Idle',
+  'serverDetail.logs.pause': 'Pause',
+  'serverDetail.logs.resume': 'Resume',
+  'serverDetail.logs.error': 'Log stream error.',
+  'serverDetail.logs.empty.title': 'No log lines yet',
+  'serverDetail.logs.empty.description':
+    'The server has not produced any output since the stream opened.',
+
+  // Activity (shared across server / tenant / secret detail tabs)
+  'activity.col.when': 'When',
+  'activity.col.event': 'Event',
+  'activity.col.actor': 'Actor',
+  'activity.col.summary': 'Summary',
+  'activity.empty.title': 'No activity yet',
+  'activity.empty.description': 'CRUD events on this entity will appear here.',
 
   // Tenants
   'tenants.title': 'Tenants',

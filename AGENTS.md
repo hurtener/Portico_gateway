@@ -195,6 +195,17 @@ Binding conventions for any frontend work:
 
 Forbidden practices added (see §13): hand-rolled component primitives that the chosen library already provides; raw color or spacing values in `.svelte` files; mixing package managers; `npm run build` artifacts committed to git; React/Vue/etc. dependencies in `web/console/`.
 
+### 4.5.1 Operator UX gates (Phase 10.5 onward)
+
+Smoke covers the API surface; it does **not** cover the operator's UI flow. The Phase 9 fallout (a server-create form that existed but was unreachable from `/servers`) traces directly to "I trusted file existence as proof of completeness." Phase 10.5 introduces these gates so the failure mode can't recur:
+
+1. **Every operator-creatable resource gets a visible "+ Add" CTA on its list page.** Resources/prompts come from MCP servers and are not operator-creatable; everything else (servers, tenants, secrets, skills, skill sources, policy rules) must have a one-click path from the list view to the create form.
+2. **Forms cover the full plan-defined surface.** A 90-line form claiming to be a 5-section form is a smell. Reviewers compare line count + field list against the phase plan's Console screens section.
+3. **Playwright in CI.** `web/console/tests/*.spec.ts` runs against the actual `./bin/portico dev` (the same surface preflight uses). Every operator-facing flow that shipped in a phase must have a matching `.spec.ts`. The harness boots Chromium against the embedded Console via the Go binary, so the test catches embed/routing/SPA-fallback drift in addition to UX gaps. New routes added in Phase N+1 must come with their `.spec.ts`.
+4. **Form components auto-generate ids when a `label` is set** (Input, Select, etc.). Without this, `getByLabel` queries fail and accessibility is broken — a form that screen readers can't navigate is broken regardless of how it looks.
+
+A frontend phase is not done until: (a) every list page has its "+ Add" CTA, (b) every form covers its plan surface, (c) `npm run e2e` passes locally and in CI.
+
 ---
 
 ## 4.4 Extensibility seams (project-wide policy)

@@ -59,4 +59,11 @@ web/console/*.log
 
 # package-lock.json IS committed; npm-debug.log is not.
 web/console/npm-debug.log*
+
+# Playwright (Phase 10.5 — e2e harness)
+web/console/test-results/
+web/console/playwright-report/
+web/console/.e2e-data/
+web/console/.playwright/
+
 .claude/

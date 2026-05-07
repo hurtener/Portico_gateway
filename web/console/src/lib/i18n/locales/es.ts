@@ -13,9 +13,11 @@ export default {
   'common.save': 'Guardar',
   'common.cancel': 'Cancelar',
   'common.delete': 'Eliminar',
+  'common.edit': 'Editar',
   'common.enable': 'Habilitar',
   'common.disable': 'Deshabilitar',
   'common.close': 'Cerrar',
+  'common.error': 'Error',
   'common.loading': 'Cargando…',
   'common.empty': 'Sin elementos.',
   'common.yes': 'sí',
@@ -405,6 +407,67 @@ export default {
   'servers.tabs.activity': 'Actividad',
   'servers.tabs.config': 'Configuración',
   'servers.logs.note': 'El stream en vivo llegará en una versión posterior.',
+
+  // Phase 10.5 — formulario completo de servidor
+  'servers.action.add': 'Añadir servidor',
+  'servers.edit.title': 'Editar servidor',
+  'servers.field.id.placeholder': 'github-prod',
+  'servers.field.displayName.placeholder': 'GitHub (prod)',
+  'servers.field.runtimeMode': 'Modo de ejecución',
+  'servers.field.status': 'Estado',
+  'servers.field.command.placeholder': 'npx',
+  'servers.field.args.placeholder': '-y @modelcontextprotocol/server-github',
+  'servers.field.args.hint':
+    'Separados por espacios. Entrecomilla los que contengan espacios, p. ej. --message "hola mundo".',
+  'servers.field.env.empty': 'Aún no hay variables de entorno.',
+  'servers.field.env.add': 'Añadir variable',
+  'servers.field.env.key.placeholder': 'GITHUB_TOKEN',
+  'servers.field.env.value.placeholder': 'ghp_…',
+  'servers.field.url.placeholder': 'https://example.com/mcp',
+  'servers.field.authHeader': 'Cabecera de autenticación',
+  'servers.field.authHeader.placeholder': 'Authorization: Bearer …',
+  'servers.field.authHeader.hint':
+    'Opcional. Cabecera estática inyectada en cada llamada al downstream. Para rotar credenciales, prefiere una referencia al vault.',
+  'servers.field.credential': 'Referencia de credencial',
+  'servers.field.credential.none': '— ninguna —',
+  'servers.field.credential.hint':
+    'Elige una entrada del vault para inyectar la credencial del downstream al llamar.',
+  'servers.field.credential.none.hint':
+    'No hay entradas en el vault. Añade una en Admin → Secretos.',
+  'servers.field.credential.unavailable':
+    'Vault no configurado en esta build — las referencias a credenciales están deshabilitadas.',
+
+  // Detalle del servidor (Phase 10.5)
+  'serverDetail.tabs.overview': 'Resumen',
+  'serverDetail.tabs.logs': 'Registros',
+  'serverDetail.tabs.activity': 'Actividad',
+  'serverDetail.confirmRestart': '¿Reiniciar el servidor "{id}"?',
+  'serverDetail.confirmDelete':
+    '¿Eliminar el servidor "{id}"? Las sesiones que lo usen recibirán un error tipado server_unavailable.',
+  'serverDetail.toast.restartIssued': 'Reinicio solicitado',
+  'serverDetail.toast.restartFailed.title': 'Falló el reinicio',
+  'serverDetail.toast.deleted': 'Servidor eliminado',
+  'serverDetail.toast.deleteFailed.title': 'Falló la eliminación',
+  'serverDetail.toast.approvalRequired.title': 'Aprobación requerida',
+  'serverDetail.toast.approvalRequired.description':
+    'Se encoló una acción destructiva; resuélvela en Aprobaciones.',
+  'serverDetail.logs.title': 'Registros en vivo',
+  'serverDetail.logs.live': 'En vivo',
+  'serverDetail.logs.idle': 'Inactivo',
+  'serverDetail.logs.pause': 'Pausar',
+  'serverDetail.logs.resume': 'Reanudar',
+  'serverDetail.logs.error': 'Error en el stream de registros.',
+  'serverDetail.logs.empty.title': 'Sin líneas de registro aún',
+  'serverDetail.logs.empty.description':
+    'El servidor no ha emitido salida desde que se abrió el stream.',
+
+  // Actividad (compartida entre detalles de server / tenant / secret)
+  'activity.col.when': 'Cuándo',
+  'activity.col.event': 'Evento',
+  'activity.col.actor': 'Actor',
+  'activity.col.summary': 'Resumen',
+  'activity.empty.title': 'Sin actividad aún',
+  'activity.empty.description': 'Los eventos CRUD de esta entidad aparecerán aquí.',
 
   'tenants.title': 'Tenants',
   'tenants.subtitle': 'Directorio de tenants gestionado por el operador.',
