@@ -2,6 +2,10 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api, type SkillDetail } from '$lib/api';
+  import { Badge, Breadcrumbs, Button, CodeBlock, PageHeader } from '$lib/components';
+  import { t } from '$lib/i18n';
+  import IconRefreshCw from 'lucide-svelte/icons/refresh-cw';
+  import IconAlertTriangle from 'lucide-svelte/icons/alert-triangle';
 
   let detail: SkillDetail | null = null;
   let loading = true;
@@ -37,34 +41,50 @@
   }
 
   onMount(refresh);
+
+  $: manifestJson = detail ? JSON.stringify(detail.manifest, null, 2) : '';
 </script>
 
-<header class="page-head">
-  <div>
-    <a class="back" href="/skills">← All skills</a>
-    <h1>{detail?.title || id}</h1>
-    <p class="muted"><code>{id}</code> · v{detail?.version ?? '?'}</p>
-  </div>
-  <div class="actions">
-    <button class="btn btn-secondary" on:click={refresh} disabled={loading}>Refresh</button>
+<PageHeader title={detail?.title || id} description={detail?.description}>
+  <Breadcrumbs
+    slot="breadcrumbs"
+    items={[{ label: $t('nav.skills'), href: '/skills' }, { label: id }]}
+  />
+  <div slot="meta">
+    <Badge tone="neutral" mono>{id}</Badge>
+    {#if detail?.version}<Badge tone="neutral" mono>v{detail.version}</Badge>{/if}
     {#if detail}
-      <button class="btn" on:click={toggle}>
-        {detail.enabled_for_tenant ? 'Disable for tenant' : 'Enable for tenant'}
-      </button>
+      {#if detail.enabled_for_tenant}
+        <Badge tone="success">enabled</Badge>
+      {:else}
+        <Badge tone="neutral">disabled</Badge>
+      {/if}
     {/if}
   </div>
-</header>
+  <div slot="actions">
+    <Button variant="secondary" on:click={refresh} {loading}>
+      <IconRefreshCw slot="leading" size={14} />
+      {$t('common.refresh')}
+    </Button>
+    {#if detail}
+      <Button on:click={toggle}>
+        {detail.enabled_for_tenant
+          ? $t('skillDetail.action.disableForTenant')
+          : $t('skillDetail.action.enableForTenant')}
+      </Button>
+    {/if}
+  </div>
+</PageHeader>
 
 {#if error}<p class="error">{error}</p>{/if}
 
 {#if detail}
-  {#if detail.description}
-    <p class="lede">{detail.description}</p>
-  {/if}
-
   {#if detail.warnings && detail.warnings.length > 0}
-    <section class="warnings">
-      <h2>Warnings</h2>
+    <section class="warn">
+      <h2 class="warn-title">
+        <IconAlertTriangle size={16} aria-hidden="true" />
+        {$t('skillDetail.warnings')}
+      </h2>
       <ul>
         {#each detail.warnings as w (w)}
           <li>{w}</li>
@@ -74,94 +94,46 @@
   {/if}
 
   <section>
-    <h2>Manifest</h2>
-    <pre><code>{JSON.stringify(detail.manifest, null, 2)}</code></pre>
+    <h2 class="section-title">{$t('skillDetail.manifest')}</h2>
+    <CodeBlock code={manifestJson} language="json" filename="skill.yaml" />
   </section>
 {:else if !loading}
-  <p class="muted">Skill not found.</p>
+  <p class="muted">{$t('skillDetail.notFound')}</p>
 {/if}
 
 <style>
-  .page-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--space-4);
-    margin-bottom: var(--space-6);
-  }
-  .back {
-    font-size: var(--text-sm);
-    color: var(--color-text-muted);
-  }
-  h1 {
-    margin: var(--space-1) 0;
-    font-size: var(--text-2xl);
-    font-weight: var(--weight-semibold);
-  }
-  h2 {
-    margin: var(--space-6) 0 var(--space-3) 0;
-    font-size: var(--text-lg);
-    font-weight: var(--weight-semibold);
-  }
-  .muted {
-    color: var(--color-text-muted);
-    margin: 0;
-  }
-  .lede {
-    color: var(--color-text-muted);
-  }
-  .actions {
-    display: flex;
-    gap: var(--space-2);
-  }
   .error {
     color: var(--color-danger);
+    font-size: var(--font-size-body-sm);
+    margin: 0 0 var(--space-4) 0;
   }
-  .warnings {
+  .muted {
+    color: var(--color-text-tertiary);
+  }
+  .warn {
     border: 1px solid var(--color-warning);
     background: var(--color-warning-soft);
     color: var(--color-warning);
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-4) var(--space-5);
     border-radius: var(--radius-md);
+    margin-bottom: var(--space-6);
   }
-  .warnings h2 {
+  .warn-title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
     margin: 0 0 var(--space-2) 0;
-    font-size: var(--text-base);
+    font-size: var(--font-size-title);
+    font-weight: var(--font-weight-semibold);
   }
-  pre {
-    background: var(--color-surface-2);
-    padding: var(--space-4);
-    border-radius: var(--radius-md);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    overflow-x: auto;
+  .warn ul {
+    margin: 0;
+    padding-left: var(--space-5);
   }
-  code {
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-  }
-  .btn {
-    border: 1px solid var(--color-brand);
-    background: var(--color-brand);
-    color: var(--color-on-brand);
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
-    cursor: pointer;
-  }
-  .btn:hover:not(:disabled) {
-    background: var(--color-brand-hover);
-  }
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .btn-secondary {
-    background: var(--color-surface);
-    color: var(--color-text);
-    border-color: var(--color-border-strong);
-  }
-  .btn-secondary:hover:not(:disabled) {
-    background: var(--color-surface-2);
+  .section-title {
+    font-size: var(--font-size-title);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+    margin: 0 0 var(--space-3) 0;
   }
 </style>

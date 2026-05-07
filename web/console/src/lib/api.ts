@@ -30,6 +30,20 @@ export class HTTPError extends Error implements APIError {
   }
 }
 
+/**
+ * Returns true when an error indicates the endpoint isn't wired in this
+ * build (404/501/405 are all "feature absent" from the operator's
+ * perspective). Pages use this to render a calm "not configured" empty
+ * state instead of a raw error.
+ */
+export function isFeatureUnavailable(e: unknown): boolean {
+  if (e instanceof HTTPError) {
+    return e.status === 404 || e.status === 405 || e.status === 501;
+  }
+  const msg = (e as Error)?.message ?? '';
+  return /\b(404|405|501)\b/.test(msg);
+}
+
 export interface ServerSummary {
   id: string;
   display_name?: string;

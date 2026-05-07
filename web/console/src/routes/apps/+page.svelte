@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type AppEntry } from '$lib/api';
+  import { Badge, Button, EmptyState, KeyValueGrid, PageHeader } from '$lib/components';
+  import { t } from '$lib/i18n';
+  import IconRefreshCw from 'lucide-svelte/icons/refresh-cw';
+  import IconBoxes from 'lucide-svelte/icons/boxes';
 
   let items: AppEntry[] = [];
   let loading = true;
@@ -21,119 +25,92 @@
   onMount(refresh);
 </script>
 
-<header class="page-head">
-  <h1>MCP Apps</h1>
-  <button class="btn" on:click={refresh} disabled={loading}>Refresh</button>
-</header>
-
-<p class="muted">
-  Every <code>ui://</code> resource discovered across downstream servers. Phase 5 adds policy filtering;
-  preview rendering arrives later in dev mode.
-</p>
+<PageHeader title={$t('apps.title')} description={$t('apps.description')}>
+  <div slot="actions">
+    <Button variant="secondary" on:click={refresh} {loading}>
+      <IconRefreshCw slot="leading" size={14} />
+      {$t('common.refresh')}
+    </Button>
+  </div>
+</PageHeader>
 
 {#if error}<p class="error">{error}</p>{/if}
 
-{#if loading && items.length === 0}
-  <p class="muted">Loading…</p>
-{:else if items.length === 0}
-  <p class="muted">No MCP App resources discovered yet.</p>
+{#if items.length === 0 && !loading}
+  <EmptyState title={$t('apps.empty.title')} description={$t('apps.empty.description')} />
 {:else}
   <div class="grid">
     {#each items as a (a.uri)}
-      <article>
-        <h2>{a.name ?? a.uri}</h2>
-        <p class="muted small">{a.description ?? ''}</p>
-        <dl>
-          <dt>Server</dt>
-          <dd><code>{a.serverId}</code></dd>
-          <dt>URI</dt>
-          <dd><code class="uri">{a.uri}</code></dd>
-          <dt>Upstream</dt>
-          <dd><code class="uri">{a.upstreamUri}</code></dd>
-          <dt>MIME</dt>
-          <dd><code>{a.mimeType ?? ''}</code></dd>
-        </dl>
+      <article class="card">
+        <header class="card-head">
+          <span class="ico"><IconBoxes size={18} /></span>
+          <div>
+            <h2>{a.name ?? a.uri}</h2>
+            {#if a.description}<p class="desc">{a.description}</p>{/if}
+          </div>
+          {#if a.mimeType}<Badge tone="accent" mono>{a.mimeType}</Badge>{/if}
+        </header>
+        <KeyValueGrid
+          columns={1}
+          items={[
+            { label: 'Server', value: a.serverId, mono: true },
+            { label: 'URI', value: a.uri, mono: true, full: true },
+            { label: 'Upstream', value: a.upstreamUri, mono: true, full: true }
+          ]}
+        />
       </article>
     {/each}
   </div>
 {/if}
 
 <style>
-  .page-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: var(--space-4);
-  }
-  h1 {
-    margin: 0;
-    font-size: var(--text-2xl);
-    font-weight: var(--weight-semibold);
-  }
-  .muted {
-    color: var(--color-text-muted);
-    margin-bottom: var(--space-6);
-  }
-  .small {
-    font-size: var(--text-sm);
-  }
   .error {
     color: var(--color-danger);
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--font-size-body-sm);
   }
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: var(--space-4);
   }
-  article {
-    border: 1px solid var(--color-border);
+  .card {
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border-soft);
     border-radius: var(--radius-md);
-    background: var(--color-surface);
-    padding: var(--space-4);
+    padding: var(--space-5);
   }
-  article h2 {
-    margin: 0 0 var(--space-2) 0;
-    font-size: var(--text-lg);
-    font-weight: var(--weight-semibold);
+  .card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
   }
-  dl {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: var(--space-1) var(--space-3);
-    margin: 0;
-  }
-  dt {
-    color: var(--color-text-muted);
-    font-size: var(--text-xs);
-  }
-  dd {
-    margin: 0;
-    font-size: var(--text-sm);
-  }
-  code {
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    background: var(--color-surface-2);
-    padding: var(--space-1) var(--space-2);
+  .ico {
+    color: var(--color-accent-primary);
+    background: var(--color-accent-primary-subtle);
+    width: 36px;
+    height: 36px;
     border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
   }
-  code.uri {
-    word-break: break-all;
+  .card-head > div {
+    flex: 1;
+    min-width: 0;
   }
-  .btn {
-    border: 1px solid var(--color-brand);
-    background: var(--color-brand);
-    color: var(--color-on-brand);
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
-    cursor: pointer;
+  .card h2 {
+    margin: 0;
+    font-size: var(--font-size-title);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+    word-break: break-word;
   }
-  .btn:hover:not(:disabled) {
-    background: var(--color-brand-hover);
-  }
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .desc {
+    margin: 4px 0 0 0;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-body-sm);
   }
 </style>

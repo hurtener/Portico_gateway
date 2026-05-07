@@ -1,11 +1,25 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { api, type Approval } from '$lib/api';
+  import { Badge, Button, EmptyState, PageHeader, Table } from '$lib/components';
+  import { t } from '$lib/i18n';
+  import IconRefreshCw from 'lucide-svelte/icons/refresh-cw';
+  import IconCheck from 'lucide-svelte/icons/check';
+  import IconX from 'lucide-svelte/icons/x';
 
   let approvals: Approval[] = [];
   let loading = true;
   let error = '';
   let timer: ReturnType<typeof setInterval> | null = null;
+
+  type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'accent';
+  function riskTone(rc: string): Tone {
+    const v = rc.toLowerCase();
+    if (v === 'destructive' || v === 'sensitive_read') return 'danger';
+    if (v === 'external_side_effect') return 'warning';
+    if (v === 'idempotent_read') return 'info';
+    return 'neutral';
+  }
 
   async function refresh() {
     try {
@@ -44,104 +58,88 @@
   onDestroy(() => {
     if (timer !== null) clearInterval(timer);
   });
+
+  function fmt(t: string): string {
+    try {
+      return new Date(t).toLocaleString();
+    } catch {
+      return t;
+    }
+  }
+
+  const columns = [
+    { key: 'tool', label: 'Tool', mono: true },
+    { key: 'risk_class', label: 'Risk', width: '160px' },
+    { key: 'session_id', label: 'Session', mono: true },
+    { key: 'created_at', label: 'Created' },
+    { key: 'expires_at', label: 'Expires' },
+    { key: 'actions', label: '', align: 'right' as const, width: '180px' }
+  ];
 </script>
 
-<header class="page-head">
-  <h1>Pending approvals</h1>
-  <button class="btn" on:click={refresh} disabled={loading}>Refresh</button>
-</header>
+<PageHeader title={$t('approvals.title')} description={$t('approvals.description')}>
+  <div slot="actions">
+    <Button variant="secondary" on:click={refresh} {loading}>
+      <IconRefreshCw slot="leading" size={14} />
+      {$t('common.refresh')}
+    </Button>
+  </div>
+</PageHeader>
 
-{#if error}
-  <p class="error">{error}</p>
-{/if}
+{#if error}<p class="error">{error}</p>{/if}
 
-{#if loading && approvals.length === 0}
-  <p class="muted">Loading…</p>
-{:else if approvals.length === 0}
-  <p class="muted">No pending approvals.</p>
-{:else}
-  <table>
-    <thead>
-      <tr>
-        <th>Tool</th>
-        <th>Risk</th>
-        <th>Session</th>
-        <th>Created</th>
-        <th>Expires</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each approvals as a (a.id)}
-        <tr>
-          <td><code>{a.tool}</code></td>
-          <td><span class="risk risk-{a.risk_class}">{a.risk_class}</span></td>
-          <td class="muted">{a.session_id}</td>
-          <td class="muted">{new Date(a.created_at).toLocaleString()}</td>
-          <td class="muted">{new Date(a.expires_at).toLocaleString()}</td>
-          <td class="actions">
-            <button class="btn btn-approve" on:click={() => approve(a.id)}>Approve</button>
-            <button class="btn btn-deny" on:click={() => deny(a.id)}>Deny</button>
-          </td>
-        </tr>
-      {/each}
-    </tbody>
-  </table>
-{/if}
+<Table {columns} rows={approvals} empty="No pending approvals.">
+  <svelte:fragment slot="cell" let:row let:column>
+    {#if column.key === 'risk_class'}
+      <Badge tone={riskTone(row.risk_class)}>{row.risk_class}</Badge>
+    {:else if column.key === 'session_id'}
+      <code class="mono">{row.session_id}</code>
+    {:else if column.key === 'created_at'}
+      <span class="muted">{fmt(row.created_at)}</span>
+    {:else if column.key === 'expires_at'}
+      <span class="muted">{fmt(row.expires_at)}</span>
+    {:else if column.key === 'actions'}
+      <div class="actions">
+        <Button size="sm" variant="primary" on:click={() => approve(row.id)}>
+          <IconCheck slot="leading" size={14} />
+          {$t('approvals.action.approve')}
+        </Button>
+        <Button size="sm" variant="destructive" on:click={() => deny(row.id)}>
+          <IconX slot="leading" size={14} />
+          {$t('approvals.action.deny')}
+        </Button>
+      </div>
+    {:else}
+      {row[column.key] ?? ''}
+    {/if}
+  </svelte:fragment>
+  <svelte:fragment slot="empty">
+    <EmptyState
+      title={$t('approvals.empty.title')}
+      description={$t('approvals.empty.description')}
+      compact
+    />
+  </svelte:fragment>
+</Table>
 
 <style>
-  .page-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--space-4);
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  th,
-  td {
-    padding: var(--space-2) var(--space-3);
-    text-align: left;
-    border-bottom: 1px solid var(--color-border);
-  }
-  .muted {
-    color: var(--color-text-muted);
-  }
   .error {
     color: var(--color-danger);
+    margin: 0 0 var(--space-4) 0;
+    font-size: var(--font-size-body-sm);
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-mono-sm);
+    color: var(--color-text-secondary);
+  }
+  .muted {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-label);
   }
   .actions {
-    display: flex;
+    display: inline-flex;
     gap: var(--space-2);
-  }
-  .btn {
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    cursor: pointer;
-  }
-  .btn-approve {
-    background: var(--color-success);
-    color: var(--color-on-success);
-    border-color: var(--color-success);
-  }
-  .btn-deny {
-    background: var(--color-danger);
-    color: var(--color-on-danger);
-    border-color: var(--color-danger);
-  }
-  .risk {
-    padding: 2px 8px;
-    border-radius: var(--radius-sm);
-    font-size: var(--font-sm);
-    background: var(--color-surface-alt);
-  }
-  .risk-destructive,
-  .risk-external_side_effect {
-    background: var(--color-warning-bg, #fff3cd);
-    color: var(--color-warning-fg, #856404);
+    justify-content: flex-end;
   }
 </style>

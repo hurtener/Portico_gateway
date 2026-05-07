@@ -1,0 +1,129 @@
+/*
+ * Global stylesheet — applied once via the root layout. Contains:
+ *
+ *   - CSS reset adjustments specific to the Console
+ *   - Body / html defaults that hang off the token surface
+ *   - Heading / anchor / form defaults (sans-serif unless overridden)
+ *   - One small print mode tweak so logs are readable on paper
+ *
+ * Tokens still drive every visual property; this file is structural glue.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+html {
+  background: var(--color-bg-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-body-md);
+  line-height: var(--font-line-body-md);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--color-bg-canvas);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+}
+
+a {
+  color: var(--color-accent-primary);
+  text-decoration: none;
+  transition: color var(--motion-fast) var(--ease-default);
+}
+a:hover {
+  color: var(--color-accent-primary-hover);
+}
+a:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+  border-radius: var(--radius-xs);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+p {
+  margin: 0;
+  line-height: var(--font-line-body-md);
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-mono-sm);
+}
+
+button {
+  font-family: inherit;
+}
+
+::selection {
+  background: var(--color-accent-primary-soft);
+  color: var(--color-text-primary);
+}
+
+/* Surface helpers — apply to non-component zones to reinforce hierarchy. */
+
+.surface-canvas {
+  background: var(--color-bg-canvas);
+}
+.surface-base {
+  background: var(--color-bg-surface);
+}
+.surface-raised {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+}
+.surface-overlay {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+/* Visually-hidden helper for screen-reader-only labels. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
+  margin: -1px;
+}
+
+@media print {
+  body {
+    background: #fff;
+    color: #000;
+  }
+}
