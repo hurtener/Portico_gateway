@@ -16,6 +16,8 @@ export const SCOPE_SERVERS_WRITE = 'servers:write';
 export const SCOPE_SECRETS_WRITE = 'secrets:write';
 export const SCOPE_POLICY_WRITE = 'policy:write';
 export const SCOPE_TENANTS_ADMIN = 'tenants:admin';
+export const SCOPE_PLAYGROUND_EXECUTE = 'playground:execute';
+export const SCOPE_PLAYGROUND_SAVE = 'playground:save';
 
 const STORAGE_KEY = 'portico:scopes';
 

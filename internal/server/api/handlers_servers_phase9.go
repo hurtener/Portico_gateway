@@ -50,10 +50,11 @@ func restartServerHandler(d Deps) http.HandlerFunc {
 	}
 }
 
-// logsServerHandler GET /api/servers/{id}/logs — SSE stream. V1 ships an
-// empty-stream stub: the supervisor's per-process ring buffer is a
-// follow-up. The handler still negotiates SSE so the Console can attach
-// without 404ing.
+// logsServerHandler GET /api/servers/{id}/logs — SSE stream of stdout +
+// stderr lines from the supervisor's per-process ring buffer. Phase 10
+// fills in the live tail; Phase 9 shipped the placeholder route.
+//
+// Query params: ?since=<RFC3339Nano> filters historical lines.
 func logsServerHandler(d Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if d.Registry == nil {
@@ -71,6 +72,12 @@ func logsServerHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "get_failed", err.Error(), nil)
 			return
 		}
+		var since time.Time
+		if s := r.URL.Query().Get("since"); s != "" {
+			if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+				since = t
+			}
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
@@ -79,16 +86,45 @@ func logsServerHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "no_flusher", "streaming not supported", nil)
 			return
 		}
-		// Send a single placeholder event so the client knows the stream is
-		// alive, then close. Phase 9 ships the surface; the live tail is a
-		// follow-up.
-		fmt.Fprintf(w, ": connected\n\n")
-		fmt.Fprintf(w, "event: info\ndata: %s\n\n",
-			fmt.Sprintf(`{"server_id":"%s","note":"live tail not implemented in V1"}`, serverID))
+		// Initial comment line so the EventSource immediately considers
+		// itself connected (browsers wait for the first byte before firing
+		// `onopen`).
+		fmt.Fprint(w, ": connected\n\n")
 		flusher.Flush()
-		// Keep the connection open until the client disconnects so the
-		// EventSource doesn't aggressively reconnect.
-		<-r.Context().Done()
+
+		ch, err := d.Registry.Logs(r.Context(), id.TenantID, serverID, since)
+		if err != nil {
+			fmt.Fprintf(w, "event: error\ndata: %q\n\n", err.Error())
+			flusher.Flush()
+			return
+		}
+		// 15s heartbeat so reverse proxies don't kill an idle SSE.
+		hb := time.NewTicker(15 * time.Second)
+		defer hb.Stop()
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-hb.C:
+				fmt.Fprint(w, ": keep-alive\n\n")
+				flusher.Flush()
+			case line, ok := <-ch:
+				if !ok {
+					// Stream ended; close the SSE so the client knows
+					// (EventSource will auto-reconnect, which is fine —
+					// the Console only opens this stream when a server
+					// page is mounted).
+					return
+				}
+				payload, _ := jsonEncode(map[string]any{
+					"at":     line.At.Format(time.RFC3339Nano),
+					"stream": line.Stream,
+					"text":   line.Text,
+				})
+				fmt.Fprintf(w, "event: log\ndata: %s\n\n", string(payload))
+				flusher.Flush()
+			}
+		}
 	}
 }
 

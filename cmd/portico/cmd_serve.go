@@ -19,6 +19,7 @@ import (
 	porticohttp "github.com/hurtener/Portico_gateway/internal/mcp/northbound/http"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
+	"github.com/hurtener/Portico_gateway/internal/playground"
 	"github.com/hurtener/Portico_gateway/internal/policy"
 	"github.com/hurtener/Portico_gateway/internal/policy/approval"
 	"github.com/hurtener/Portico_gateway/internal/registry"
@@ -148,6 +149,10 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	// keyed by InstanceKey (tenant/user/session, per runtime mode).
 	resolver := process.NewResolver(vault)
 	supervisor := process.NewSupervisor(logger, resolver, reg)
+	// Phase 10 carry-over: feed the registry's Logs() through the
+	// supervisor's per-process ring-buffer registry so /api/servers/{id}/logs
+	// renders a live tail.
+	reg.SetLogSource(supervisor)
 
 	// Phase 1+2: MCP gateway components. The Manager is now a thin
 	// coordinator over Registry + Supervisor — clients are constructed
@@ -376,6 +381,30 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		revealMgr = newVaultRevealAdapter(secrets.NewRevealManager(vault, nil))
 	}
 
+	// Phase 10: playground service. Mints synthetic RS256 JWTs for
+	// in-Console MCP sessions, binds to per-tenant snapshots, and
+	// records replay runs.
+	var playgroundCtl api.PlaygroundController
+	if signKey, err := playground.NewSigningKey(); err == nil {
+		pgSvc, err := playground.New(playground.Config{
+			SigningKey: signKey,
+			Issuer:     "portico-playground",
+			Audience:   firstNonEmpty(audienceFromConfig(cfg), "portico"),
+			TTL:        30 * time.Minute,
+		})
+		if err == nil {
+			pgBinder := playground.NewSnapshotBinder(snapshotService)
+			pgExec := newPlaybackExecutor(auditEmitter)
+			pgPlayback := playground.NewPlayback(pgSvc, pgBinder, backend.Playground(), auditEmitter, pgExec)
+			pgCorrelator := playground.NewCorrelator(auditStore)
+			playgroundCtl = newPlaygroundAdapter(pgSvc, pgBinder, pgPlayback, pgCorrelator, auditEmitter, snapshotService, backend.Playground(), logger.With("component", "playground"))
+		} else {
+			logger.Warn("playground service init failed", "err", err)
+		}
+	} else {
+		logger.Warn("playground signing key generation failed", "err", err)
+	}
+
 	deps := api.Deps{
 		Logger:         logger,
 		Validator:      validator,
@@ -409,6 +438,11 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		PolicyRules:    policyAdapter,
 		ServerRuntime:  backend.ServerRuntime(),
 		VaultReveal:    revealMgr,
+
+		// Phase 10 wiring.
+		Playground:       playgroundCtl,
+		PlaygroundStore:  backend.Playground(),
+		ApprovalStoreRaw: backend.Approvals(),
 	}
 
 	handler := api.NewRouter(deps)
@@ -685,6 +719,23 @@ func firstNonEmpty(ss ...string) string {
 	for _, s := range ss {
 		if s != "" {
 			return s
+		}
+	}
+	return ""
+}
+
+// audienceFromConfig pulls the first configured JWT audience or "" if
+// the config doesn't set one. Used to seed the playground synthetic
+// JWT's `aud` claim so it round-trips through the gateway's existing
+// validator.
+func audienceFromConfig(cfg interface{ /* placeholder */ }) string {
+	type audSrc interface {
+		AuthAudiences() []string
+	}
+	if a, ok := cfg.(audSrc); ok {
+		auds := a.AuthAudiences()
+		if len(auds) > 0 {
+			return auds[0]
 		}
 	}
 	return ""

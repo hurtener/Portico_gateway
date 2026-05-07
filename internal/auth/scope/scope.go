@@ -29,6 +29,13 @@ const (
 
 	// ScopeTenantsAdmin — required to create / archive / purge tenants.
 	ScopeTenantsAdmin = "tenants:admin"
+
+	// ScopePlaygroundExecute — required to invoke a tool / resource /
+	// prompt from the playground (Phase 10).
+	ScopePlaygroundExecute = "playground:execute"
+
+	// ScopePlaygroundSave — required to save a test case (Phase 10).
+	ScopePlaygroundSave = "playground:save"
 )
 
 // Has reports whether the identity has the named scope.

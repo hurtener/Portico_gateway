@@ -87,6 +87,12 @@ type Deps struct {
 	PolicyRules    PolicyRulesController
 	ServerRuntime  ifaces.ServerRuntimeStore
 	VaultReveal    VaultRevealManager
+
+	// Phase 10: playground service + saved-case store. Both are
+	// optional — when nil, /api/playground/* returns 503.
+	Playground       PlaygroundController
+	PlaygroundStore  ifaces.PlaygroundStore
+	ApprovalStoreRaw ifaces.ApprovalStore
 }
 
 // approvalFlow is the slice of internal/policy/approval.Flow the API
@@ -299,6 +305,30 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/api/admin/secrets", listAPISecretsHandler(d))
 			r.Post("/api/admin/secrets", createAPISecretHandler(d))
 		})
+
+		// Phase 10: Interactive Playground. Mounted under the auth
+		// group so the synth-tenant identity in dev mode reaches the
+		// handlers. Gated on Deps.Playground; saved-case CRUD only
+		// requires the store.
+		if d.Playground != nil {
+			r.Post("/api/playground/sessions", startPlaygroundSessionHandler(d))
+			r.Delete("/api/playground/sessions/{sid}", endPlaygroundSessionHandler(d))
+			r.Get("/api/playground/sessions/{sid}/catalog", catalogPlaygroundHandler(d))
+			r.Post("/api/playground/sessions/{sid}/calls", issueCallHandler(d))
+			r.Get("/api/playground/sessions/{sid}/calls/{cid}/stream", streamCallHandler(d))
+			r.Get("/api/playground/sessions/{sid}/correlation", playgroundCorrelationHandler(d))
+			r.Post("/api/playground/cases/{id}/replay", replayPlaygroundCaseHandler(d))
+			r.Get("/api/playground/runs/{run_id}", runDetailHandler(d))
+			r.Get("/api/playground/runs/{run_id}/correlation", runCorrelationHandler(d))
+		}
+		if d.PlaygroundStore != nil {
+			r.Get("/api/playground/cases", listPlaygroundCasesHandler(d))
+			r.Post("/api/playground/cases", createPlaygroundCaseHandler(d))
+			r.Get("/api/playground/cases/{id}", getPlaygroundCaseHandler(d))
+			r.Put("/api/playground/cases/{id}", updatePlaygroundCaseHandler(d))
+			r.Delete("/api/playground/cases/{id}", deletePlaygroundCaseHandler(d))
+			r.Get("/api/playground/cases/{id}/runs", caseRunsHandler(d))
+		}
 
 		// Phase 9: Policy editor endpoints. Mounted under the auth group;
 		// tenant scope is honoured implicitly by every store call.
