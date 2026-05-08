@@ -66,4 +66,7 @@ web/console/playwright-report/
 web/console/.e2e-data/
 web/console/.playwright/
 
+# Playwright MCP session artifacts (local-only)
+.playwright-mcp/
+
 .claude/
