@@ -56,8 +56,7 @@
     error = '';
     try {
       server = await api.getServer(id);
-      const inst = await api.listInstances(id);
-      instances = inst.items ?? [];
+      instances = (await api.listInstances(id)) ?? [];
     } catch (e) {
       error = (e as Error).message;
     } finally {

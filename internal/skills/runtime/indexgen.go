@@ -91,22 +91,36 @@ func (g *IndexGenerator) Render(ctx context.Context, tenantID, sessionID string)
 		plan, ents = g.plans(tenantID)
 	}
 
+	// Phase 10.6 substrate additions: AttachedServer, Assets,
+	// LastUpdated, Status. These let the Console's Skills table render
+	// the catalog without per-row round-trips. The fields are
+	// derivations over the manifest + enablement + missing-tools data
+	// the loop already collects, so the cost is negligible.
+	type assetCounts struct {
+		Prompts   int `json:"prompts"`
+		Resources int `json:"resources"`
+		Apps      int `json:"apps"`
+	}
 	type indexEntryItem struct {
-		ID                string   `json:"id"`
-		Version           string   `json:"version"`
-		Title             string   `json:"title"`
-		Description       string   `json:"description,omitempty"`
-		Spec              string   `json:"spec"`
-		RequiredServers   []string `json:"required_servers"`
-		RequiredTools     []string `json:"required_tools"`
-		OptionalTools     []string `json:"optional_tools,omitempty"`
-		ManifestURI       string   `json:"manifest_uri"`
-		InstructionsURI   string   `json:"instructions_uri"`
-		UIResourceURI     string   `json:"ui_resource_uri,omitempty"`
-		EnabledForTenant  bool     `json:"enabled_for_tenant"`
-		EnabledForSession bool     `json:"enabled_for_session"`
-		MissingTools      []string `json:"missing_tools,omitempty"`
-		Warnings          []string `json:"warnings,omitempty"`
+		ID                string      `json:"id"`
+		Version           string      `json:"version"`
+		Title             string      `json:"title"`
+		Description       string      `json:"description,omitempty"`
+		Spec              string      `json:"spec"`
+		RequiredServers   []string    `json:"required_servers"`
+		RequiredTools     []string    `json:"required_tools"`
+		OptionalTools     []string    `json:"optional_tools,omitempty"`
+		ManifestURI       string      `json:"manifest_uri"`
+		InstructionsURI   string      `json:"instructions_uri"`
+		UIResourceURI     string      `json:"ui_resource_uri,omitempty"`
+		EnabledForTenant  bool        `json:"enabled_for_tenant"`
+		EnabledForSession bool        `json:"enabled_for_session"`
+		MissingTools      []string    `json:"missing_tools,omitempty"`
+		Warnings          []string    `json:"warnings,omitempty"`
+		AttachedServer    string      `json:"attached_server,omitempty"`
+		Assets            assetCounts `json:"assets"`
+		LastUpdated       string      `json:"last_updated,omitempty"`
+		Status            string      `json:"status"`
 	}
 	type indexDoc struct {
 		Version     int              `json:"version"`
@@ -140,9 +154,33 @@ func (g *IndexGenerator) Render(ctx context.Context, tenantID, sessionID string)
 		name := s.Name()
 		base := "skill://" + ns + "/" + name + "/"
 		ui := ""
+		uiCount := 0
 		if s.Manifest.Binding.UI != nil {
 			ui = s.Manifest.Binding.UI.ResourceURI
+			uiCount = 1
 		}
+
+		// Phase 10.6 substrate: condense ServerDependencies,
+		// asset counts, last-updated, and status into table-ready
+		// fields. AttachedServer is the first dependency — most
+		// skills target one server; the inspector shows the full
+		// list when there are more.
+		attached := ""
+		if len(s.Manifest.Binding.ServerDependencies) > 0 {
+			attached = s.Manifest.Binding.ServerDependencies[0]
+		}
+		lastUpdated := ""
+		if !s.LoadedAt.IsZero() {
+			lastUpdated = s.LoadedAt.UTC().Format(time.RFC3339)
+		}
+		status := "disabled"
+		switch {
+		case len(missing) > 0:
+			status = "missing_tools"
+		case enabledTenant:
+			status = "enabled"
+		}
+
 		doc.Skills = append(doc.Skills, indexEntryItem{
 			ID:                s.Manifest.ID,
 			Version:           s.Manifest.Version,
@@ -159,6 +197,14 @@ func (g *IndexGenerator) Render(ctx context.Context, tenantID, sessionID string)
 			EnabledForSession: enabledSession,
 			MissingTools:      missing,
 			Warnings:          warnings,
+			AttachedServer:    attached,
+			Assets: assetCounts{
+				Prompts:   len(s.Manifest.Prompts),
+				Resources: len(s.Manifest.Resources),
+				Apps:      uiCount,
+			},
+			LastUpdated: lastUpdated,
+			Status:      status,
 		})
 	}
 

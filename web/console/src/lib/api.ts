@@ -44,6 +44,21 @@ export function isFeatureUnavailable(e: unknown): boolean {
   return /\b(404|405|501)\b/.test(msg);
 }
 
+/**
+ * Capability counts derived from the latest catalog snapshot for the
+ * tenant. Zero across the board means no snapshot has been generated
+ * yet — the UI renders an em-dash placeholder rather than "0 tools".
+ */
+export interface ServerCapabilities {
+  tools: number;
+  resources: number;
+  prompts: number;
+  apps: number;
+}
+
+export type ServerPolicyState = 'none' | 'enforced' | 'approval' | 'disabled';
+export type ServerAuthState = 'none' | 'env' | 'header' | 'oauth' | 'vault_ref' | string;
+
 export interface ServerSummary {
   id: string;
   display_name?: string;
@@ -53,6 +68,15 @@ export interface ServerSummary {
   status: string;
   status_detail?: string;
   updated_at: string;
+
+  // Phase 10.6 substrate. All optional so older builds (or builds with
+  // partial wiring — no snapshots service, no policy store) keep working
+  // and the UI degrades to an em-dash for the missing dimension.
+  capabilities?: ServerCapabilities;
+  skills_count?: number;
+  policy_state?: ServerPolicyState;
+  auth_state?: ServerAuthState;
+  last_seen?: string;
 }
 
 export interface StdioSpec {
@@ -144,6 +168,19 @@ export interface AppEntry {
   discoveredAt: string;
 }
 
+/**
+ * Counts of prompts, resources, and embedded UI apps the skill carries.
+ * Zero is meaningful (the skill genuinely has no prompts), so every
+ * field is required — distinct from the server capabilities case.
+ */
+export interface SkillAssets {
+  prompts: number;
+  resources: number;
+  apps: number;
+}
+
+export type SkillStatus = 'enabled' | 'disabled' | 'missing_tools' | 'draft' | 'review';
+
 export interface SkillIndexEntry {
   id: string;
   version: string;
@@ -160,6 +197,13 @@ export interface SkillIndexEntry {
   enabled_for_session: boolean;
   missing_tools?: string[];
   warnings?: string[];
+
+  // Phase 10.6 substrate. Always populated on new builds; older builds
+  // omit, in which case the UI derives a fallback from existing fields.
+  attached_server?: string;
+  assets?: SkillAssets;
+  last_updated?: string;
+  status?: SkillStatus;
 }
 
 export interface SkillsIndex {
@@ -226,7 +270,7 @@ export const api = {
   health: () => request<{ status: string }>('/healthz'),
   ready: () => request<{ status: string }>('/readyz'),
 
-  listServers: () => request<{ items: ServerSummary[] }>('/v1/servers'),
+  listServers: () => request<ServerSummary[]>('/v1/servers'),
   getServer: (id: string) => request<ServerSpec>(`/v1/servers/${encodeURIComponent(id)}`),
   upsertServer: (spec: Partial<ServerSpec>) =>
     request<ServerSpec>('/v1/servers', {
@@ -247,7 +291,7 @@ export const api = {
   disableServer: (id: string) =>
     request<ServerSpec>(`/v1/servers/${encodeURIComponent(id)}/disable`, { method: 'POST' }),
   listInstances: (id: string) =>
-    request<{ items: InstanceRecord[] }>(`/v1/servers/${encodeURIComponent(id)}/instances`),
+    request<InstanceRecord[]>(`/v1/servers/${encodeURIComponent(id)}/instances`),
 
   listResources: (cursor = '') =>
     request<{ resources: Resource[]; nextCursor?: string }>(
@@ -526,6 +570,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(req)
     }),
+  getPlaygroundSession: (sid: string) =>
+    request<PlaygroundSession>(`/api/playground/sessions/${encodeURIComponent(sid)}`),
   endPlaygroundSession: (sid: string) =>
     request<void>(`/api/playground/sessions/${encodeURIComponent(sid)}`, { method: 'DELETE' }),
   getPlaygroundCatalog: (sid: string) =>
@@ -540,6 +586,11 @@ export const api = {
       `/api/playground/sessions/${encodeURIComponent(sid)}/correlation${
         since ? `?since=${encodeURIComponent(since)}` : ''
       }`
+    ),
+  setPlaygroundSkillEnabled: (sid: string, skillID: string, enabled: boolean) =>
+    request<{ session_id: string; skill_id: string; enabled: boolean }>(
+      `/api/playground/sessions/${encodeURIComponent(sid)}/skills/${encodeURIComponent(skillID)}/${enabled ? 'enable' : 'disable'}`,
+      { method: 'POST' }
     ),
   listPlaygroundCases: () =>
     request<{ cases: PlaygroundCase[]; next_cursor?: string }>('/api/playground/cases'),
@@ -589,7 +640,11 @@ export interface PlaygroundSession {
 
 export interface PlaygroundCatalog {
   snapshot_id: string;
-  catalog: Record<string, unknown>;
+  // Catalog mirrors the Snapshot shape — every property the operator
+  // needs to populate the rail is on it. Kept Partial because the
+  // backend may shed fields in degraded boots (e.g. snapshots service
+  // disabled).
+  catalog: Partial<Snapshot>;
 }
 
 export interface PlaygroundCallRequest {

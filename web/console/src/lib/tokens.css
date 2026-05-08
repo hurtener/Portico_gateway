@@ -24,6 +24,17 @@
   --color-bg-elevated: #ffffff;
   --color-bg-subtle: #f1eee8;
 
+  /* Sidebar — dark architectural slab. Same hex in both modes by design;
+   * dark mode shifts a touch so the canvas/sidebar boundary stays visible. */
+  --color-bg-sidebar: #102d31;
+  --color-bg-sidebar-elevated: #17383d;
+  --color-text-on-sidebar: rgba(243, 245, 246, 0.86);
+  --color-text-on-sidebar-muted: rgba(243, 245, 246, 0.55);
+  --color-text-on-sidebar-soft: rgba(243, 245, 246, 0.72);
+  --color-border-on-sidebar: rgba(255, 255, 255, 0.1);
+  --color-bg-sidebar-active: rgba(45, 111, 115, 0.55);
+  --color-bg-sidebar-hover: rgba(255, 255, 255, 0.06);
+
   /* Borders */
   --color-border-soft: #e7e1d8;
   --color-border-default: #d9d1c5;
@@ -113,6 +124,7 @@
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
+  --space-7: 28px;
   --space-8: 32px;
   --space-10: 40px;
   --space-12: 48px;
@@ -145,10 +157,13 @@
 
   /* === Layout (Console-specific shell) ================================= */
 
-  --layout-sidebar-width: 240px;
+  --layout-sidebar-width: 208px;
   --layout-sidebar-width-collapsed: 64px;
   --layout-topbar-height: 56px;
-  --layout-content-max-width: 1320px;
+  /* Detail / form / docs pages opt into this via `.page-narrow`.
+   * List + workspace pages stay fluid so the right-rail inspector
+   * has somewhere to live (Phase 10.6). */
+  --layout-content-narrow-max-width: 1320px;
 
   /* === Z-index scale =================================================== */
 
@@ -167,6 +182,13 @@
   --color-bg-surface: #171c20;
   --color-bg-elevated: #1d2328;
   --color-bg-subtle: #222a31;
+
+  /* Sidebar in dark mode: same teal-ink slab, slightly lifted so the
+   * 1px border between canvas and sidebar stays visible. */
+  --color-bg-sidebar: #0d2024;
+  --color-bg-sidebar-elevated: #122c30;
+  --color-bg-sidebar-active: rgba(77, 154, 159, 0.32);
+  --color-bg-sidebar-hover: rgba(255, 255, 255, 0.05);
 
   --color-border-soft: #2a333b;
   --color-border-default: #36414a;

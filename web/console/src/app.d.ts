@@ -6,6 +6,10 @@ declare global {
     // interface PageData {}
     // interface Platform {}
   }
+
+  // Vite-injected at build time; see vite.config.ts.
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  const __APP_VERSION__: string;
 }
 
 export {};

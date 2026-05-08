@@ -76,13 +76,21 @@
   .content {
     flex: 1;
     width: 100%;
-    max-width: var(--layout-content-max-width);
+    /* Console list / workspace pages are fluid so the right-rail
+     * inspector has somewhere to live. Detail / form pages opt back
+     * into a narrower column via `<div class="page-narrow">`. */
     margin: 0 auto;
-    padding: var(--space-8) var(--space-8);
+    padding: var(--space-7) var(--space-8) var(--space-8);
   }
   @media (max-width: 880px) {
     .content {
       padding: var(--space-6) var(--space-4);
     }
+  }
+  /* Narrow column for detail / form / docs pages.
+   * Apply via <div class="page-narrow">…</div> at the top of those routes. */
+  :global(.page-narrow) {
+    max-width: var(--layout-content-narrow-max-width);
+    margin: 0 auto;
   }
 </style>

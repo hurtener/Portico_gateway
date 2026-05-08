@@ -7,7 +7,15 @@
     type AuditEvent,
     type Snapshot
   } from '$lib/api';
-  import { Badge, DashboardTile, EmptyState, Logo, Sparkline, Table } from '$lib/components';
+  import {
+    Badge,
+    DashboardTile,
+    EmptyState,
+    IdBadge,
+    Logo,
+    Sparkline,
+    Table
+  } from '$lib/components';
   import { t } from '$lib/i18n';
   import IconArrowRight from 'lucide-svelte/icons/arrow-right';
 
@@ -111,21 +119,32 @@
   $: pendingApprovals = approvals ? approvals.length : null;
   $: lastSnapshotAge =
     snapshots && snapshots.length > 0 ? fmtRelative(snapshots[0].created_at) : null;
+  // schema.drift events firing against playground sessions (psn_*) are
+  // operator-noise: every interactive playground session pays a snapshot
+  // cost, and the drift detector compares its frozen hash against a
+  // potentially-flickering live tools list. Suppress them here so the
+  // dashboard only surfaces drift the operator can act on.
+  function isPlaygroundSession(sid: string | null | undefined): boolean {
+    return typeof sid === 'string' && sid.startsWith('psn_');
+  }
   $: noticeableAudit = (auditEvents ?? [])
-    .filter(
-      (e) =>
+    .filter((e) => {
+      if (e.type === 'schema.drift' && isPlaygroundSession(e.session_id)) return false;
+      return (
         e.type === 'tool_call.failed' ||
         e.type === 'policy.denied' ||
         e.type === 'schema.drift' ||
         e.type === 'audit.dropped' ||
         e.type === 'approval.expired'
-    )
+      );
+    })
     .slice(0, 5);
 
   $: approvalRows = (approvals ?? []).slice(0, 5);
 
   $: snapshotColumns = [
     { key: 'id', label: $t('snapshots.col.id'), mono: true },
+    { key: 'source', label: $t('snapshots.col.source'), width: '110px' },
     { key: 'session_id', label: $t('snapshots.col.session'), mono: true },
     { key: 'tools', label: $t('snapshots.col.tools'), align: 'right' as const, width: '80px' },
     { key: 'created_at', label: $t('snapshots.col.created') }
@@ -240,18 +259,30 @@
 
   <div class="block">
     <header class="block-head">
-      <h2>{$t('landing.section.recentSessions')}</h2>
+      <h2>{$t('landing.section.recentSnapshots')}</h2>
       <a class="more" href="/snapshots">{$t('common.viewAll')} <IconArrowRight size={12} /></a>
     </header>
     {#if (snapshots ?? []).length === 0}
-      <EmptyState title={$t('landing.empty.sessions')} compact />
+      <EmptyState title={$t('landing.empty.snapshots')} compact />
     {:else}
       <Table columns={snapshotColumns} rows={snapshots ?? []} compact>
         <svelte:fragment slot="cell" let:row let:column>
           {#if column.key === 'id'}
-            <a href={`/snapshots/${row.id}`}><code class="mono">{row.id}</code></a>
+            <a href={`/snapshots/${row.id}`} class="link-row">
+              <IdBadge value={row.id} hint="snapshot" />
+            </a>
+          {:else if column.key === 'source'}
+            {#if isPlaygroundSession(row.session_id)}
+              <Badge tone="info">playground</Badge>
+            {:else}
+              <Badge tone="neutral">mcp</Badge>
+            {/if}
           {:else if column.key === 'session_id'}
-            <span class="muted">{row.session_id ?? '—'}</span>
+            {#if row.session_id}
+              <IdBadge value={row.session_id} />
+            {:else}
+              <span class="muted">—</span>
+            {/if}
           {:else if column.key === 'tools'}
             <Badge tone="neutral">{row.tools.length}</Badge>
           {:else if column.key === 'created_at'}
@@ -289,7 +320,11 @@
             {row.type}
           </Badge>
         {:else if column.key === 'session_id'}
-          <span class="muted">{row.session_id ?? '—'}</span>
+          {#if row.session_id}
+            <IdBadge value={row.session_id} />
+          {:else}
+            <span class="muted">—</span>
+          {/if}
         {:else}
           {row[column.key] ?? ''}
         {/if}
@@ -380,10 +415,5 @@
   .muted {
     color: var(--color-text-tertiary);
     font-size: var(--font-size-label);
-  }
-  .mono {
-    font-family: var(--font-mono);
-    font-size: var(--font-size-mono-sm);
-    color: var(--color-text-secondary);
   }
 </style>

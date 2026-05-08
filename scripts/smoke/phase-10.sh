@@ -98,11 +98,16 @@ if [ -n "$CID" ]; then
   rm -f "$STREAM_TMP"
   case "${STREAM_STATUS:0:3}" in
     200)
-      if printf '%s' "$STREAM_BODY" | grep -q "event: chunk"; then
-        say_ok "SSE chunk frame received"
+      # Accept either an `event: chunk` (happy path against a real
+      # downstream MCP server) or an `event: error` envelope (Phase 10.5
+      # routes through the real dispatcher; a synthetic `smoke.example`
+      # target legitimately resolves to "unknown server"). Both prove
+      # the SSE handshake + dispatcher wiring.
+      if printf '%s' "$STREAM_BODY" | grep -qE "^event: (chunk|error)"; then
+        say_ok "SSE frame received from dispatcher"
         PHASE_OK=$((PHASE_OK + 1))
       else
-        say_fail "expected 'event: chunk' in stream body"
+        say_fail "expected 'event: chunk' or 'event: error' in stream body"
         PHASE_FAIL=$((PHASE_FAIL + 1))
       fi
       ;;

@@ -32,6 +32,14 @@ type Detector struct {
 	stopOnce sync.Once
 	stop     chan struct{}
 	wg       sync.WaitGroup
+
+	// emittedMu guards lastEmitted, the per-(session,server) hash the
+	// detector has already surfaced as drift. Without this map a single
+	// drift would re-fire every sweep until the snapshot was rebuilt,
+	// because the snapshot's recorded hash is frozen and the live hash
+	// would compare unequal forever.
+	emittedMu   sync.Mutex
+	lastEmitted map[string]string
 }
 
 // NewDetector wires the drift detector. interval defaults to 60s.
@@ -47,12 +55,13 @@ func NewDetector(service *Service, probe LiveProbe, log *slog.Logger, interval t
 		em = service.EmitterFor()
 	}
 	return &Detector{
-		service:  service,
-		probe:    probe,
-		emitter:  em,
-		log:      log,
-		interval: interval,
-		stop:     make(chan struct{}),
+		service:     service,
+		probe:       probe,
+		emitter:     em,
+		log:         log,
+		interval:    interval,
+		stop:        make(chan struct{}),
+		lastEmitted: make(map[string]string),
 	}
 }
 
@@ -138,6 +147,16 @@ func (d *Detector) sweep(ctx context.Context) error {
 			if currentHash == sv.SchemaHash {
 				continue
 			}
+			// Suppress repeats: we already surfaced this exact drift for
+			// this session/server pair. The next change of currentHash
+			// will re-arm the alert.
+			emitKey := sess.SessionID + "|" + sv.ID
+			d.emittedMu.Lock()
+			already := d.lastEmitted[emitKey]
+			d.emittedMu.Unlock()
+			if already == currentHash {
+				continue
+			}
 			oldRefs := indexToolsByName(snap.Tools)
 			newRefs := indexNewTools(tools, sv.ID)
 			diff := diffTools(oldRefs, newRefs, sv.ID)
@@ -153,6 +172,9 @@ func (d *Detector) sweep(ctx context.Context) error {
 					"diff":        map[string]any{"tools": diff},
 				},
 			})
+			d.emittedMu.Lock()
+			d.lastEmitted[emitKey] = currentHash
+			d.emittedMu.Unlock()
 			_ = store.UpsertFingerprint(ctx, sess.TenantID, sv.ID, currentHash, len(tools))
 		}
 	}

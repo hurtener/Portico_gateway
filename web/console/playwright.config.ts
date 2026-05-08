@@ -19,7 +19,8 @@ import { defineConfig, devices } from '@playwright/test';
  * same.
  */
 const PORT = Number(process.env.PORTICO_E2E_PORT ?? 28080);
-const BINARY = process.env.PORTICO_E2E_BIN ?? '../../bin/portico';
+// Path relative to the webServer cwd (repo root, set below).
+const BINARY = process.env.PORTICO_E2E_BIN ?? 'bin/portico';
 
 export default defineConfig({
   testDir: './tests',
@@ -43,7 +44,11 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: `${BINARY} dev -bind 127.0.0.1:${PORT} -data-dir .e2e-data`,
+    // cwd at the repo root so `dev` mode can resolve `./examples/skills`
+    // for its bundled-skills bootstrap. Without this the catalog is
+    // empty and any spec that touches /skills sees a 404.
+    cwd: '../..',
+    command: `${BINARY} dev -bind 127.0.0.1:${PORT} -data-dir web/console/.e2e-data`,
     url: `http://127.0.0.1:${PORT}/healthz`,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
