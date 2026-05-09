@@ -37,6 +37,7 @@ export default {
 
   // Navigation groups + items
   'nav.overview': 'Overview',
+  'nav.connect': 'Connect',
   'nav.section.catalog': 'Catalog',
   'nav.section.operations': 'Operations',
   'nav.section.admin': 'Admin',
@@ -76,6 +77,62 @@ export default {
   'sidebar.degraded': 'Degraded',
   'sidebar.partialHealth': 'Partial — readiness pending',
   'sidebar.unknown': 'Connecting…',
+
+  // Phase 10.9 — Connect page
+  'connect.title': 'Connect',
+  'connect.error.title': 'Could not load gateway info',
+  'connect.error.description':
+    'The gateway info endpoint did not respond. Confirm the binary is running and the bind address is reachable.',
+  'connect.toast.copied': '{what} copied',
+  'connect.toast.copyFailed': 'Copy failed',
+  'connect.metric.aria': 'Gateway connection facts',
+  'connect.metric.endpoint': 'Endpoint',
+  'connect.metric.auth': 'Auth',
+  'connect.metric.auth.devHelper': 'No bearer token required',
+  'connect.metric.auth.jwtHelper': 'Bearer JWT required',
+  'connect.metric.tenant': 'Tenant',
+  'connect.metric.tenant.devHelper': 'Hardcoded dev tenant',
+  'connect.metric.tenant.jwtHelper': 'Read from this JWT claim',
+  'connect.metric.servers': 'Servers',
+  'connect.metric.servers.helper': 'Backends registered for routing',
+  'connect.section.quickstart': 'Quick start',
+  'connect.section.quickstartHelp':
+    'Three ways to point an MCP client at this gateway. The bind URL is filled in from the live config.',
+  'connect.section.auth': 'Authentication',
+  'connect.section.headers': 'Standard headers',
+  'connect.section.firstServer': 'No servers registered yet',
+  'connect.firstServer.body':
+    'Connecting an agent works, but with no backends the only response will be an empty tools/list. Add a server to start routing real tool calls.',
+  'connect.firstServer.action': 'Add a server',
+  'connect.snippet.claude.title': 'Claude Desktop / generic MCP client',
+  'connect.snippet.claude.what': 'Client config',
+  'connect.snippet.claude.help':
+    'Drop this block under "mcpServers" in your client config. Replace the bearer placeholder with a tenant-scoped JWT when auth.mode is "jwt".',
+  'connect.snippet.inspector.title': 'MCP Inspector',
+  'connect.snippet.inspector.what': 'Inspector command',
+  'connect.snippet.inspector.help':
+    'Boots the MCP Inspector against this gateway. Useful for inspecting the namespaced tool catalog without writing a client.',
+  'connect.snippet.curl.title': 'curl (tools/list)',
+  'connect.snippet.curl.what': 'curl command',
+  'connect.snippet.curl.help':
+    'A raw JSON-RPC request that returns the namespaced tool catalog. Useful for verifying the gateway responds before wiring a client.',
+  'connect.auth.devTitle': 'Dev mode active',
+  'connect.auth.devBody':
+    'No JWT validator is configured. Every request maps to tenant "{tenant}". Safe for local development; bind to a non-localhost address only after switching to JWT mode.',
+  'connect.auth.mode': 'Mode',
+  'connect.auth.issuer': 'Issuer',
+  'connect.auth.audiences': 'Audiences',
+  'connect.auth.jwksUrl': 'JWKS URL',
+  'connect.auth.tenantClaim': 'Tenant claim',
+  'connect.auth.scopeClaim': 'Scope claim',
+  'connect.auth.tenantsHint':
+    'Per-tenant configuration (display names, plans, retention) lives in',
+  'connect.headers.description':
+    'Required or honored by the northbound MCP transport.',
+  'connect.headers.origin': 'Browser-only. Must match the configured allowlist or "*".',
+  'connect.headers.auth': 'Bearer JWT in JWT mode; absent in dev mode.',
+  'connect.headers.session': 'Returned on initialize; echoed on subsequent requests for SSE resumption.',
+  'connect.headers.accept': 'Set to "application/json, text/event-stream" for the streamable HTTP transport.',
 
   // Landing page
   'landing.title': 'Portico Console',

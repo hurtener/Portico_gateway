@@ -45,6 +45,29 @@ export function isFeatureUnavailable(e: unknown): boolean {
 }
 
 /**
+ * Phase 10.9 — public gateway connection facts. Mirrors the JSON
+ * shape returned by GET /api/gateway/info. Auth.mode is "dev" when
+ * no JWT validator is configured, "jwt" otherwise; in dev mode the
+ * issuer / audiences / jwks_url fields are empty.
+ */
+export interface GatewayInfo {
+  bind: string;
+  mcp_path: string;
+  version: string;
+  build_commit?: string;
+  dev_mode: boolean;
+  dev_tenant?: string;
+  auth: {
+    mode: 'dev' | 'jwt' | string;
+    issuer?: string;
+    audiences?: string[];
+    jwks_url?: string;
+    tenant_claim?: string;
+    scope_claim?: string;
+  };
+}
+
+/**
  * Capability counts derived from the latest catalog snapshot for the
  * tenant. Zero across the board means no snapshot has been generated
  * yet — the UI renders an em-dash placeholder rather than "0 tools".
@@ -269,6 +292,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<{ status: string }>('/healthz'),
   ready: () => request<{ status: string }>('/readyz'),
+
+  /**
+   * Phase 10.9 — public read-only gateway connection facts. Returns
+   * the bind address, MCP path, version, and auth requirements so the
+   * Console can build copy-paste client configs without re-reading
+   * portico.yaml. The endpoint exposes only what an external client
+   * could already observe by probing the listener.
+   */
+  gatewayInfo: () => request<GatewayInfo>('/api/gateway/info'),
 
   listServers: () => request<ServerSummary[]>('/v1/servers'),
   getServer: (id: string) => request<ServerSpec>(`/v1/servers/${encodeURIComponent(id)}`),

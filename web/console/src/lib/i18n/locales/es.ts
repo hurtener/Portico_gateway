@@ -34,6 +34,7 @@ export default {
 
   // Navigation groups + items
   'nav.overview': 'Inicio',
+  'nav.connect': 'Conectar',
   'nav.section.catalog': 'Catálogo',
   'nav.section.operations': 'Operaciones',
   'nav.section.admin': 'Administración',
@@ -73,6 +74,64 @@ export default {
   'sidebar.degraded': 'Degradado',
   'sidebar.partialHealth': 'Parcial — preparación pendiente',
   'sidebar.unknown': 'Conectando…',
+
+  // Phase 10.9 — Connect page
+  'connect.title': 'Conectar',
+  'connect.error.title': 'No se pudo cargar la información del gateway',
+  'connect.error.description':
+    'El endpoint de info no respondió. Verifica que el binario esté corriendo y la dirección de bind sea alcanzable.',
+  'connect.toast.copied': '{what} copiado',
+  'connect.toast.copyFailed': 'Error al copiar',
+  'connect.metric.aria': 'Datos de conexión del gateway',
+  'connect.metric.endpoint': 'Endpoint',
+  'connect.metric.auth': 'Auth',
+  'connect.metric.auth.devHelper': 'No se requiere bearer',
+  'connect.metric.auth.jwtHelper': 'Se requiere JWT bearer',
+  'connect.metric.tenant': 'Tenant',
+  'connect.metric.tenant.devHelper': 'Tenant de dev fijo',
+  'connect.metric.tenant.jwtHelper': 'Leído de este claim del JWT',
+  'connect.metric.servers': 'Servidores',
+  'connect.metric.servers.helper': 'Backends registrados para enrutar',
+  'connect.section.quickstart': 'Inicio rápido',
+  'connect.section.quickstartHelp':
+    'Tres maneras de apuntar un cliente MCP a este gateway. La URL de bind se completa con la config en vivo.',
+  'connect.section.auth': 'Autenticación',
+  'connect.section.headers': 'Cabeceras estándar',
+  'connect.section.firstServer': 'Aún no hay servidores registrados',
+  'connect.firstServer.body':
+    'Conectar un agente funciona, pero sin backends solo recibirás un tools/list vacío. Añade un servidor para empezar a enrutar llamadas reales.',
+  'connect.firstServer.action': 'Añadir un servidor',
+  'connect.snippet.claude.title': 'Claude Desktop / cliente MCP genérico',
+  'connect.snippet.claude.what': 'Config del cliente',
+  'connect.snippet.claude.help':
+    'Pega este bloque bajo "mcpServers" en la config de tu cliente. Reemplaza el placeholder de bearer con un JWT scope-tenant cuando auth.mode sea "jwt".',
+  'connect.snippet.inspector.title': 'MCP Inspector',
+  'connect.snippet.inspector.what': 'Comando del inspector',
+  'connect.snippet.inspector.help':
+    'Lanza el MCP Inspector contra este gateway. Útil para inspeccionar el catálogo de tools con namespace sin escribir un cliente.',
+  'connect.snippet.curl.title': 'curl (tools/list)',
+  'connect.snippet.curl.what': 'Comando curl',
+  'connect.snippet.curl.help':
+    'Una solicitud JSON-RPC cruda que devuelve el catálogo de tools con namespace. Útil para verificar que el gateway responde antes de cablear un cliente.',
+  'connect.auth.devTitle': 'Modo dev activo',
+  'connect.auth.devBody':
+    'No hay validador JWT configurado. Cada request mapea al tenant "{tenant}". Seguro para desarrollo local; cambia a JWT antes de hacer bind a una dirección no localhost.',
+  'connect.auth.mode': 'Modo',
+  'connect.auth.issuer': 'Issuer',
+  'connect.auth.audiences': 'Audiences',
+  'connect.auth.jwksUrl': 'JWKS URL',
+  'connect.auth.tenantClaim': 'Claim de tenant',
+  'connect.auth.scopeClaim': 'Claim de scope',
+  'connect.auth.tenantsHint':
+    'La configuración por tenant (nombres, planes, retención) vive en',
+  'connect.headers.description':
+    'Requeridas o respetadas por el transporte MCP northbound.',
+  'connect.headers.origin': 'Solo navegador. Debe coincidir con la lista permitida o "*".',
+  'connect.headers.auth': 'Bearer JWT en modo JWT; ausente en modo dev.',
+  'connect.headers.session':
+    'Devuelta en initialize; reenviada en requests subsiguientes para reanudar SSE.',
+  'connect.headers.accept':
+    'Establece "application/json, text/event-stream" para el transporte streamable HTTP.',
 
   // Landing page
   'landing.title': 'Consola de Portico',
