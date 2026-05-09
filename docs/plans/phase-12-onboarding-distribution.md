@@ -31,6 +31,8 @@ Phases 0–11 complete. Specifically:
 - `make build` produces `bin/portico` already; CGo-free, static.
 - Existing `Dockerfile` produces a distroless image.
 
+Phase 11 explicitly deferred five items to Phase 12 (see "Phase 11 carry-overs" below). They are not optional — V1 cannot ship without them. Treat them as first-class deliverables alongside the V1-ship work.
+
 ## Deliverables
 
 1. **First-run wizard** at `/onboarding` (auto-redirect on first start when no tenants exist). Steps: welcome → create admin tenant + JWT issuer → register first server (mock by default; option to skip) → install one example skill (Phase 8 authored or Phase 8 git-source from a hosted reference repo) → run a sample call from the playground → "you're ready" with links into the Console.
@@ -45,6 +47,11 @@ Phases 0–11 complete. Specifically:
 10. **MCP conformance suite** — `cmd/portico conformance` runs a battery of tests against any deployed Portico instance to validate it conforms to the MCP 2025-11-25 protocol (initialize, tools/list, tools/call, resources/*, prompts/*, notifications/*, elicitation/*, capability negotiation). Outputs a structured report. Used in CI against the dev binary and offered to operators for their own deployments.
 11. **Upgrade path** — documented + tested. `portico upgrade-check` reads the current binary version, queries the release feed, reports available upgrades. Migrations forward-only (Phase 0 invariant) — `portico migrate` runs pending DB migrations on startup; `--dry-run` reports what would change.
 12. **Public website primer** (lightweight) — `web/site/` carries a single-page brand site (matching `docs/Design/Portico.png`) with the tagline + "Get started" CTA → docs site. Hosted from the same binary at `/`. Optional: deployable as a separate static site to `portico.dev` (or wherever the operator publishes it).
+13. **Bundle encryption (Phase 11 carry-over).** `internal/sessionbundle/crypto.go` lands age-encrypted bundles. `ExportOptions.Encrypt + RecipientKey` flow through to a real encrypted tar.gz; `manifest.encrypted` flips to true. The importer accepts age identities and reverses the operation. CLI flags: `portico session export --encrypt --recipient age1...` / `portico session import --identity ~/.config/portico/age.txt`. Recipient fingerprint is logged on export so operators can correlate "who can read this bundle." Unit + integration tests cover encrypt → import round-trip and refuse-on-bad-identity.
+14. **`inspect-session` CLI rewrite (Phase 11 carry-over).** `cmd/portico/cmd_inspect_session.go` keeps its current `--dsn` offline path and adds two more: `--base-url + --token` for live mode (consumes `/api/sessions/{sid}/bundle` with a JWT) and `--bundle <path>` for archive mode (no live URL needed). Shared rendering core so all three modes produce byte-identical JSON for a given input. Parity test enforces this in CI.
+15. **Vault root-key rotation (Phase 9 → 11 → 12 carry-over).** `internal/secrets/rotate_root.go` lands the transactional rotation Phase 9 stubbed and Phase 11 deferred. New `vault_keys_archive` table holds the previous master key for a configurable grace window (default 14 days). `POST /api/admin/secrets/rotate-root` replaces the 501 stub; partial-failure semantics — if 999 of 1000 entries succeed and the 1000th fails, the rotation aborts, the active key is restored, and a `vault.rotate_root.aborted` audit event is emitted. `PORTICO_VAULT_KEY_NEXT` env var is the new-key seam. Coverage gate: ≥ 80% on the rotation surface.
+16. **`entity_activity` retention sweep (Phase 9 → 11 → 12 carry-over).** Per-tenant retention worker aligned with the existing audit-event retention scheduler. Default 30 days; per-tenant override via `tenants.audit_retention_days` (column already exists from Phase 9 migration 0009). One sweep tick purges audit events, entity_activity rows, AND spans (the existing Phase 11 hourly span sweeper is moved into this unified worker so retention has one observability surface).
+17. **Phase 11 perf gates (carry-over).** Three measurements that Phase 11 acceptance criteria (#2, #3, #8) called for but couldn't run without populated data. The Phase 12 fixture pack (`make seed`) generates a corpus large enough to validate these in CI: bundle latency ≤ 200 ms for a typical session (≤ 100 audit events, ≤ 50 spans), inspector first-paint ≤ 1.5 s for 200 events, audit FTS search ≤ 500 ms for a tenant with 100k events. Failures block release.
 
 ## Acceptance criteria
 
@@ -60,6 +67,11 @@ Phases 0–11 complete. Specifically:
 10. Smoke: `scripts/smoke/phase-12.sh` covers init flow, wizard endpoints, docs page rendering, conformance, openapi.json. SKIP for unimplemented; OK ≥ 12 by phase close.
 11. Coverage: ≥ 75% on new packages (`internal/onboarding`, `internal/conformance`, `internal/release`).
 12. Documentation completeness: every public REST endpoint has a docs page with example request + response; every MCP method has a reference entry; every config field has a description.
+13. **Bundle encryption round-trip (Phase 11 carry-over).** `TestE2E_BundleEncryption_RoundTrip`: export with `--encrypt --recipient age1...`, import with the matching identity, decoded bundle bytes match the source. A bundle encrypted to one recipient cannot be opened with a different identity (typed `bundle_decrypt_failed` error).
+14. **`inspect-session` parity (Phase 11 carry-over).** Same input session, three transports (`--dsn`, `--base-url`, `--bundle`), byte-identical JSON output. CI runs the parity check and fails on diff.
+15. **Vault rotate-root happy path + abort (Phase 9 → 12 carry-over).** Integration tests cover: (a) full rotation succeeds, archived key purged after grace window; (b) one entry fails mid-rotation → entire transaction rolls back, active key unchanged, `vault.rotate_root.aborted` audit event written; (c) decrypt with archived key during grace window succeeds, after expiry fails.
+16. **Retention sweep (Phase 9 → 12 carry-over).** Integration test seeds audit + entity_activity + spans older than the per-tenant cutoff; one sweep tick purges all three; per-tenant override is honoured (tenant A 30 days vs tenant B 7 days produces independent purge results).
+17. **Phase 11 perf gates measured (carry-over).** Three CI benchmarks that fail the build on regression: bundle p95 ≤ 200 ms, audit FTS p95 ≤ 500 ms on a 100k-event tenant fixture, inspector first-paint ≤ 1.5 s in Playwright.
 
 ## Architecture
 
@@ -486,17 +498,31 @@ OK ≥ 12, FAIL = 0.
 - **Hosted SaaS.** Out of scope per RFC §15.
 - **Marketplace for skills/servers.** Skill sources cover discovery; a curated marketplace is post-V1.
 
+## Phase 11 carry-overs (binding)
+
+Phase 11 closed as MVP-complete with five items explicitly deferred. Phase 12 owns landing them — they are enumerated above as Deliverables 13–17 and Acceptance criteria 13–17. Reproduced here as a single-page index so they don't get lost in the body of the V1-ship work:
+
+| # | Item | Driver | Plan reference | Coverage gate |
+|---|------|--------|---------------|---------------|
+| 1 | Bundle encryption (age) | Operator wants to share bundles cross-org / regulated | Plan §"Deliverables" item 6 (Phase 11) | ≥ 80% on `internal/sessionbundle/crypto.go` |
+| 2 | `inspect-session` CLI rewrite (`--base-url`, `--bundle`) | Offline triage parity with the live binary | Plan §"CLI" + §"Step 7" (Phase 11) | parity test in CI |
+| 3 | Vault root-key rotation | Phase 9 deferred to Phase 11; Phase 11 deferred to here | Plan §"Phase 9 carry-overs" (Phase 11) | ≥ 80% on rotate-root surface |
+| 4 | `entity_activity` retention sweep | Phase 9 deferred to Phase 11; Phase 11 deferred to here | Plan §"Phase 9 carry-overs" (Phase 11) | integration test |
+| 5 | Phase 11 perf gates | Bundle / inspector / audit-FTS latency gates | Plan §"Acceptance criteria" 2/3/8 (Phase 11) | CI bench fails on regression |
+
+Each carry-over has a matching deliverable + acceptance criterion above. Do not close Phase 12 without them — the V1 promise (multi-tenant, observable, rotatable, scrubbable) breaks if any of these are missing on day one.
+
 ## Done definition
 
-1. All acceptance criteria pass.
+1. All acceptance criteria pass (including the five Phase 11 carry-overs, AC 13–17).
 2. `make preflight` green; `scripts/smoke/phase-12.sh` shows OK ≥ 12, FAIL = 0; prior smokes unaffected.
-3. Coverage gates met.
+3. Coverage gates met (including the Phase 11 carry-over coverage targets).
 4. `portico conformance` against `portico dev` passes 100%.
 5. `make release --dry-run` produces every artifact in CI.
 6. The docs site renders every page; pagefind index built; no broken internal links.
 7. README at repo root rewritten as the V1 quickstart (single screenful; deep links into the docs site).
 8. RFC-001-Portico.md updated to mark V1 as shipped (one-line note in §15).
-9. CHANGELOG.md created at repo root with the V1 release entry.
+9. CHANGELOG.md created at repo root with the V1 release entry. Phase 11 carry-overs explicitly named in the V1 entry so future readers know when each landed.
 10. The user opens the binary, follows the wizard, finishes the demo loop, and acknowledges V1.
 
 ## Hand-off to Phase 13
