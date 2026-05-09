@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
     occurred_at  TEXT NOT NULL,
     trace_id     TEXT,
     span_id      TEXT,
-    payload_json TEXT
+    payload_json TEXT,
+    summary      TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_audit_tenant_time ON audit_events(tenant_id, occurred_at DESC);`); err != nil {
 		t.Fatal(err)

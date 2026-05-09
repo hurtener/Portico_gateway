@@ -25,6 +25,7 @@ import (
 	apimw "github.com/hurtener/Portico_gateway/internal/server/api/middleware"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	"github.com/hurtener/Portico_gateway/internal/server/ui"
+	"github.com/hurtener/Portico_gateway/internal/sessionbundle"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
 
@@ -110,6 +111,15 @@ type Deps struct {
 	Playground       PlaygroundController
 	PlaygroundStore  ifaces.PlaygroundStore
 	ApprovalStoreRaw ifaces.ApprovalStore
+
+	// Phase 11: session inspector + bundle export/import + spanstore
+	// + audit FTS. All optional; handlers return 503 when nil so a
+	// partially-wired build still serves the surfaces it has.
+	BundleLoader   *sessionbundle.Loader
+	BundleImporter *sessionbundle.Importer
+	BundleStore    sessionbundle.ImportedStore
+	SpanReader     SpanReader
+	AuditSearch    AuditSearcher
 }
 
 // approvalFlow is the slice of internal/policy/approval.Flow the API
@@ -377,6 +387,29 @@ func NewRouter(d Deps) http.Handler {
 			r.Put("/api/playground/cases/{id}", updatePlaygroundCaseHandler(d))
 			r.Delete("/api/playground/cases/{id}", deletePlaygroundCaseHandler(d))
 			r.Get("/api/playground/cases/{id}/runs", caseRunsHandler(d))
+		}
+
+		// Phase 11: session inspector + bundle export/import.
+		// Specific paths first (sessions/imported, sessions/import) so
+		// chi prefers them over the {sid} catchall.
+		if d.BundleLoader != nil || d.BundleStore != nil {
+			r.Get("/api/sessions/imported", listImportedHandler(d))
+		}
+		if d.BundleImporter != nil {
+			r.Post("/api/sessions/import", importBundleHandler(d))
+		}
+		if d.BundleLoader != nil || d.BundleStore != nil {
+			r.Get("/api/sessions/{sid}/bundle", getSessionBundleHandler(d))
+			r.Post("/api/sessions/{sid}/export", exportSessionHandler(d))
+		}
+		if d.SpanReader != nil {
+			r.Get("/api/spans", listSpansHandler(d))
+		}
+		if d.AuditSearch != nil {
+			r.Get("/api/audit/search", auditSearchHandler(d))
+		}
+		if d.Playground != nil && d.PlaygroundStore != nil {
+			r.Post("/api/sessions/{sid}/calls/{cid}/replay", replayCallHandler(d))
 		}
 
 		// Phase 9: Policy editor endpoints. Mounted under the auth group;
