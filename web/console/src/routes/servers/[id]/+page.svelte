@@ -1,4 +1,21 @@
 <script lang="ts">
+  /**
+   * Server detail — Phase 10.8 detail-page sub-vocabulary.
+   *
+   * Already had Tabs (Overview / Logs / Activity); this rewrite
+   * normalizes the rest of the page on the new vocabulary:
+   *   - Header actions move into PageActionGroup (was a 4-button
+   *     <div slot="actions">).
+   *   - Mini-KPI strip above the tabs (Instances / Healthy / Log
+   *     lines streamed).
+   *   - Overview body uses .card sections with the <h4> SECTION-LABEL
+   *     header (was a hand-rolled .card h2 pattern).
+   *   - Logs pane wraps in a .card so styling is consistent.
+   *
+   * Log lines streamed counts the lines received this session, not
+   * a cumulative total — useful as an "is the stream working" signal
+   * which is the load-bearing operator question on this page.
+   */
   import { onDestroy, onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
@@ -16,6 +33,8 @@
     CodeBlock,
     EmptyState,
     KeyValueGrid,
+    MetricStrip,
+    PageActionGroup,
     PageHeader,
     StatusDot,
     Table,
@@ -27,6 +46,10 @@
   import IconRefreshCw from 'lucide-svelte/icons/refresh-cw';
   import IconRotateCcw from 'lucide-svelte/icons/rotate-ccw';
   import IconTrash from 'lucide-svelte/icons/trash-2';
+  import IconBox from 'lucide-svelte/icons/box';
+  import IconActivity from 'lucide-svelte/icons/activity';
+  import IconScroll from 'lucide-svelte/icons/scroll-text';
+  import type { ComponentType } from 'svelte';
 
   let server: ServerSpec | null = null;
   let instances: InstanceRecord[] = [];
@@ -87,10 +110,6 @@
       toast.success($t('serverDetail.toast.deleted'), id);
       void goto('/servers');
     } catch (e) {
-      // The Phase 10 approval gate may intercept some deletes with 202;
-      // when wired, this falls into the typed APIError code path above
-      // and the operator approves out-of-band. For now, surface the
-      // status to the user.
       const err = e as Error & { status?: number; code?: string };
       if (err.status === 202) {
         toast.info(
@@ -178,12 +197,21 @@
     return statusTone(s);
   }
 
+  function fmt(iso?: string): string {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleString();
+    } catch {
+      return iso;
+    }
+  }
+
   $: specItems = server
     ? [
         { label: $t('servers.field.transport'), value: server.transport, mono: true },
         { label: $t('servers.field.runtimeMode'), value: server.runtime_mode, mono: true },
         { label: $t('servers.field.status'), value: server.status },
-        { label: $t('servers.field.enabled'), value: server.enabled ? 'yes' : 'no' },
+        { label: $t('servers.field.enabled'), value: server.enabled ? $t('common.yes') : $t('common.no') },
         ...(server.stdio?.command
           ? [
               {
@@ -224,14 +252,77 @@
   ];
 
   $: activityColumns = [
-    { key: 'occurred_at', label: $t('activity.col.when') },
-    { key: 'event_type', label: $t('activity.col.event'), mono: true },
-    { key: 'actor_user_id', label: $t('activity.col.actor') },
+    { key: 'occurred_at', label: $t('activity.col.when'), width: '180px' },
+    { key: 'event_type', label: $t('activity.col.event'), mono: true, width: '220px' },
+    { key: 'actor_user_id', label: $t('activity.col.actor'), width: '160px' },
     { key: 'summary', label: $t('activity.col.summary') }
   ];
+
+  $: pageActions = [
+    {
+      label: $t('common.refresh'),
+      icon: IconRefreshCw,
+      onClick: () => refresh(),
+      loading
+    },
+    ...(server
+      ? [
+          {
+            label: $t('common.edit'),
+            icon: IconEdit,
+            href: `/servers/${encodeURIComponent(id)}/edit`
+          },
+          {
+            label: $t('servers.action.restart'),
+            icon: IconRotateCcw,
+            onClick: restartServer,
+            loading: restartPending
+          },
+          {
+            label: $t('servers.action.delete'),
+            icon: IconTrash,
+            variant: 'destructive' as const,
+            onClick: deleteServer,
+            loading: deletePending
+          }
+        ]
+      : [])
+  ];
+
+  $: healthyInstances = instances.filter((i) =>
+    ['ready', 'running', 'healthy'].includes(i.state.toLowerCase())
+  ).length;
+
+  $: metrics = server
+    ? [
+        {
+          id: 'instances',
+          label: $t('serverDetail.metric.instances'),
+          value: instances.length.toString(),
+          icon: IconBox as ComponentType<any>,
+          tone: 'brand' as const
+        },
+        {
+          id: 'healthy',
+          label: $t('serverDetail.metric.healthy'),
+          value: healthyInstances.toString(),
+          icon: IconActivity as ComponentType<any>,
+          tone: healthyInstances === instances.length && instances.length > 0
+            ? ('success' as const)
+            : ('default' as const),
+          attention: instances.length > 0 && healthyInstances === 0
+        },
+        {
+          id: 'logs',
+          label: $t('serverDetail.metric.logs'),
+          value: logLines.length.toString(),
+          icon: IconScroll as ComponentType<any>
+        }
+      ]
+    : [];
 </script>
 
-<PageHeader title={server?.display_name || id} description={server ? undefined : ''}>
+<PageHeader title={server?.display_name || id}>
   <Breadcrumbs
     slot="breadcrumbs"
     items={[{ label: $t('nav.servers'), href: '/servers' }, { label: id }]}
@@ -241,41 +332,25 @@
     {#if server}<Badge tone={statusTone(server.status)}>{server.status}</Badge>{/if}
   </div>
   <div slot="actions">
-    <Button variant="secondary" on:click={refresh} {loading}>
-      <IconRefreshCw slot="leading" size={14} />
-      {$t('common.refresh')}
-    </Button>
-    {#if server}
-      <Button variant="secondary" href={`/servers/${encodeURIComponent(id)}/edit`}>
-        <IconEdit slot="leading" size={14} />
-        {$t('common.edit')}
-      </Button>
-      <Button variant="secondary" on:click={restartServer} loading={restartPending}>
-        <IconRotateCcw slot="leading" size={14} />
-        {$t('servers.action.restart')}
-      </Button>
-      <Button variant="destructive" on:click={deleteServer} loading={deletePending}>
-        <IconTrash slot="leading" size={14} />
-        {$t('servers.action.delete')}
-      </Button>
-    {/if}
+    <PageActionGroup actions={pageActions} />
   </div>
 </PageHeader>
 
 {#if error}<p class="error">{error}</p>{/if}
 
 {#if server}
+  <MetricStrip {metrics} compact label={$t('serverDetail.metric.aria')} />
   <Tabs {tabs} bind:active={activeTab} />
 
   {#if activeTab === 'overview'}
-    <section class="grid">
-      <article class="card">
-        <h2>{$t('serverDetail.spec')}</h2>
+    <div class="grid">
+      <section class="card">
+        <h4>{$t('serverDetail.section.spec')}</h4>
         <KeyValueGrid items={specItems} columns={2} />
-      </article>
+      </section>
 
-      <article class="card">
-        <h2>{$t('serverDetail.instances', { count: instances.length })}</h2>
+      <section class="card">
+        <h4>{$t('serverDetail.section.instances', { count: instances.length })}</h4>
         {#if instances.length === 0}
           <EmptyState
             title={$t('serverDetail.instances.empty.title')}
@@ -294,12 +369,12 @@
             {/each}
           </ul>
         {/if}
-      </article>
-    </section>
+      </section>
+    </div>
   {:else if activeTab === 'logs'}
-    <section class="logs-section">
-      <div class="logs-header">
-        <h2>{$t('serverDetail.logs.title')}</h2>
+    <section class="card">
+      <header class="card-head">
+        <h4>{$t('serverDetail.logs.title')}</h4>
         <div class="logs-controls">
           {#if logState === 'streaming'}
             <Badge tone="success">{$t('serverDetail.logs.live')}</Badge>
@@ -313,23 +388,33 @@
             </Button>
           {/if}
         </div>
-      </div>
+      </header>
       {#if logError}<p class="error">{logError}</p>{/if}
-      <div class="logs-pane">
-        {#if logLines.length === 0}
-          <EmptyState
-            title={$t('serverDetail.logs.empty.title')}
-            description={$t('serverDetail.logs.empty.description')}
-            compact
-          />
-        {:else}
-          <CodeBlock language="text" code={logLines.join('\n')} />
-        {/if}
-      </div>
+      {#if logLines.length === 0}
+        <EmptyState
+          title={$t('serverDetail.logs.empty.title')}
+          description={$t('serverDetail.logs.empty.description')}
+          compact
+        />
+      {:else}
+        <CodeBlock language="text" code={logLines.join('\n')} />
+      {/if}
     </section>
   {:else if activeTab === 'activity'}
-    <section>
+    <section class="card">
+      <h4>{$t('serverDetail.section.activity')}</h4>
       <Table columns={activityColumns} rows={activity} empty={$t('common.empty')}>
+        <svelte:fragment slot="cell" let:row let:column>
+          {#if column.key === 'occurred_at'}
+            <span class="muted">{fmt(row.occurred_at)}</span>
+          {:else if column.key === 'event_type'}
+            <code class="mono">{row.event_type}</code>
+          {:else if column.key === 'actor_user_id'}
+            <span class="muted">{row.actor_user_id ?? '—'}</span>
+          {:else}
+            {row[column.key] ?? ''}
+          {/if}
+        </svelte:fragment>
         <svelte:fragment slot="empty">
           <EmptyState
             title={$t('activity.empty.title')}
@@ -353,6 +438,15 @@
     margin: 0 0 var(--space-4) 0;
     font-size: var(--font-size-body-sm);
   }
+  .muted {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-label);
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-mono-sm);
+    color: var(--color-text-primary);
+  }
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -368,13 +462,36 @@
     background: var(--color-bg-elevated);
     border: 1px solid var(--color-border-soft);
     border-radius: var(--radius-md);
-    padding: var(--space-5);
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
   }
-  .card h2 {
-    margin: 0 0 var(--space-4) 0;
-    font-size: var(--font-size-title);
+  .grid .card {
+    margin-top: 0;
+  }
+  /* Stand-alone cards (logs, activity) flow vertically */
+  .card:not(.grid > .card) {
+    margin-top: var(--space-4);
+  }
+  .card h4 {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--font-size-label);
     font-weight: var(--font-weight-semibold);
-    color: var(--color-text-primary);
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .logs-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
   }
   .instance-list {
     list-style: none;
@@ -400,31 +517,5 @@
     font-family: var(--font-mono);
     font-size: var(--font-size-mono-sm);
     color: var(--color-text-tertiary);
-  }
-  .logs-section {
-    margin-top: var(--space-4);
-    display: grid;
-    gap: var(--space-3);
-  }
-  .logs-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .logs-header h2 {
-    margin: 0;
-    font-size: var(--font-size-title);
-    font-weight: var(--font-weight-semibold);
-  }
-  .logs-controls {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-  .logs-pane {
-    background: var(--color-bg-elevated);
-    border: 1px solid var(--color-border-soft);
-    border-radius: var(--radius-md);
-    padding: var(--space-4);
   }
 </style>
