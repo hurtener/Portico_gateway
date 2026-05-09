@@ -1199,8 +1199,24 @@ export default {
 
   // Detalle del servidor (Phase 10.5)
   'serverDetail.tabs.overview': 'Resumen',
+  'serverDetail.tabs.connect': 'Conectar',
   'serverDetail.tabs.logs': 'Registros',
   'serverDetail.tabs.activity': 'Actividad',
+  // Phase 10.9 — Connect tab
+  'serverDetail.connect.routing': 'Datos de enrutamiento',
+  'serverDetail.connect.serverId': 'ID del servidor',
+  'serverDetail.connect.toolPrefix': 'Prefijo de tool',
+  'serverDetail.connect.endpoint': 'Endpoint del gateway',
+  'serverDetail.connect.auth': 'Auth',
+  'serverDetail.connect.auth.dev': 'Modo dev (sin JWT)',
+  'serverDetail.connect.auth.jwt': 'JWT (Bearer requerido)',
+  'serverDetail.connect.openGuide': 'Abrir la guía de conexión',
+  'serverDetail.connect.sample': 'Payload tools/call de ejemplo',
+  'serverDetail.connect.sampleHelp':
+    'Las tools de este servidor llevan el id del servidor como namespace. Reemplaza <tool> con un nombre de tools/list y aporta los arguments adecuados.',
+  'serverDetail.connect.payloadWhat': 'Payload de ejemplo',
+  'serverDetail.connect.listHint':
+    'Para ver el catálogo real de tools, abre una sesión interactiva en el',
   'serverDetail.confirmRestart': '¿Reiniciar el servidor "{id}"?',
   'serverDetail.confirmDelete':
     '¿Eliminar el servidor "{id}"? Las sesiones que lo usen recibirán un error tipado server_unavailable.',
