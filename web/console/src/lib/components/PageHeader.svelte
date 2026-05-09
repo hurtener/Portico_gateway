@@ -2,9 +2,15 @@
   export let title: string;
   export let description: string | undefined = undefined;
   export let eyebrow: string | undefined = undefined;
+  /**
+   * `compact` halves the bottom rhythm and removes the divider — useful on
+   * list pages where a KPI strip / filter bar follows directly under the
+   * header and doesn't need extra separation.
+   */
+  export let compact = false;
 </script>
 
-<header class="ph">
+<header class="ph" class:compact>
   <div class="left">
     {#if $$slots.breadcrumbs}
       <div class="bc"><slot name="breadcrumbs" /></div>
@@ -21,6 +27,12 @@
   {/if}
 </header>
 
+{#if $$slots.metrics}
+  <div class="metrics">
+    <slot name="metrics" />
+  </div>
+{/if}
+
 <style>
   .ph {
     display: flex;
@@ -30,6 +42,11 @@
     padding-bottom: var(--space-6);
     margin-bottom: var(--space-6);
     border-bottom: 1px solid var(--color-border-soft);
+  }
+  .ph.compact {
+    padding-bottom: 0;
+    margin-bottom: var(--space-6);
+    border-bottom: none;
   }
   .left {
     flex: 1;
@@ -73,5 +90,8 @@
     gap: var(--space-2);
     flex-shrink: 0;
     align-items: center;
+  }
+  .metrics {
+    margin-bottom: var(--space-7);
   }
 </style>

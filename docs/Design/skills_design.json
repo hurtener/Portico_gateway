@@ -1,0 +1,1398 @@
+{
+  "$schema": "https://portico.dev/schemas/ui-spec.v0.json",
+  "specName": "Portico Skills Page UI Spec",
+  "version": "0.1.0",
+  "status": "draft",
+  "surface": "Portico Gateway Console",
+  "pageId": "skills.index",
+  "description": "Detailed UI specification for the Portico Skills page: visual tokens, card structure, typography, color usage, spacing, negative space, interactions, component states, and responsive behavior.",
+  "designIntent": {
+    "pagePurpose": "Let operators and agent builders discover, inspect, attach, govern, test, and manage reusable skill packs connected to MCP servers.",
+    "mood": [
+      "calm",
+      "architectural",
+      "agent-builder friendly",
+      "operational",
+      "curated",
+      "trustworthy",
+      "technical but approachable"
+    ],
+    "principles": [
+      "Make skill packs feel like curated workflow modules, not raw prompt files.",
+      "Show the relationship between skills, MCP servers, tools, prompts, resources, policies, and UI apps at a glance.",
+      "Keep operational density balanced with enough negative space to make catalog browsing feel calm.",
+      "Use the same architectural console language as the Servers page for continuity.",
+      "Use policy and approval states clearly; skills often wrap high-impact tool behavior.",
+      "Reveal implementation detail progressively through the right inspector and detail pages."
+    ],
+    "visualMetaphor": "A curated library of workflow intelligence attached to governed gateways and servers. Skills are reusable packages that turn raw MCP capabilities into reliable agent behavior."
+  },
+  "tokens": {
+    "color": {
+      "mode": "light",
+      "brand": {
+        "primary": "#2D6F73",
+        "primaryHover": "#245D61",
+        "primaryActive": "#1D4D50",
+        "primarySoft": "#D8EAE8",
+        "primarySubtle": "#EAF4F3",
+        "primaryInk": "#123A3D",
+        "onPrimary": "#FFFFFF",
+        "warm": "#9A7653",
+        "warmHover": "#835F3F",
+        "warmSoft": "#EEE3D8",
+        "warmSubtle": "#F7F1EB"
+      },
+      "background": {
+        "canvas": "#F6F4EF",
+        "surface": "#FBFAF7",
+        "surfaceRaised": "#FFFFFF",
+        "surfaceSubtle": "#F1EEE8",
+        "surfaceTinted": "#F5F1EA",
+        "overlay": "#FFFFFF",
+        "sidebar": "#102D31",
+        "sidebarElevated": "#17383D",
+        "sidebarActive": "#245D61"
+      },
+      "text": {
+        "primary": "#1F252B",
+        "secondary": "#58616B",
+        "tertiary": "#7A848E",
+        "muted": "#98A1A8",
+        "inverse": "#F3F5F6",
+        "inverseSecondary": "#C7CED3",
+        "brand": "#123A3D",
+        "link": "#245D61",
+        "danger": "#B24A3B",
+        "warning": "#9A611A",
+        "success": "#2F7A55"
+      },
+      "border": {
+        "soft": "#E7E1D8",
+        "default": "#D9D1C5",
+        "strong": "#BDAF9E",
+        "focus": "#2D6F73",
+        "sidebar": "rgba(255,255,255,0.10)",
+        "table": "#EAE3DA"
+      },
+      "icon": {
+        "default": "#5E6872",
+        "subtle": "#8C959D",
+        "inverse": "#E7ECEE",
+        "brand": "#2D6F73"
+      },
+      "status": {
+        "enabled": {
+          "base": "#2F7A55",
+          "text": "#1E5D3F",
+          "soft": "#DDEFE4",
+          "subtle": "#EEF8F2",
+          "border": "#B7DEC5"
+        },
+        "draft": {
+          "base": "#68727C",
+          "text": "#58616B",
+          "soft": "#ECE8E1",
+          "subtle": "#F5F2EC",
+          "border": "#D9D1C5"
+        },
+        "review": {
+          "base": "#A36A1B",
+          "text": "#8A5411",
+          "soft": "#F5E7CD",
+          "subtle": "#FBF4E8",
+          "border": "#E8C88F"
+        },
+        "disabled": {
+          "base": "#B24A3B",
+          "text": "#963729",
+          "soft": "#F6DFDB",
+          "subtle": "#FCF0EE",
+          "border": "#E8B8B0"
+        }
+      },
+      "domain": {
+        "devtools": {
+          "bg": "#E8E2F2",
+          "fg": "#5A437E",
+          "border": "#D3C5E6"
+        },
+        "data": {
+          "bg": "#DCEAF4",
+          "fg": "#27597F",
+          "border": "#B8D4E8"
+        },
+        "comms": {
+          "bg": "#F4DEE6",
+          "fg": "#7D3F58",
+          "border": "#E6BCCE"
+        },
+        "knowledge": {
+          "bg": "#F5E7CD",
+          "fg": "#8A5411",
+          "border": "#E8C88F"
+        },
+        "productivity": {
+          "bg": "#D8EAE8",
+          "fg": "#245D61",
+          "border": "#C8DDDA"
+        }
+      },
+      "plan": {
+        "free": {
+          "bg": "#F5F2EC",
+          "fg": "#58616B",
+          "border": "#D9D1C5"
+        },
+        "pro": {
+          "bg": "#DCEAF4",
+          "fg": "#27597F",
+          "border": "#B8D4E8"
+        },
+        "enterprise": {
+          "bg": "#DDEFE4",
+          "fg": "#1E5D3F",
+          "border": "#B7DEC5"
+        }
+      },
+      "policy": {
+        "readOnly": {
+          "bg": "#DCEAF4",
+          "fg": "#27597F",
+          "border": "#B8D4E8"
+        },
+        "approvalWrite": {
+          "bg": "#F5E7CD",
+          "fg": "#8A5411",
+          "border": "#E8C88F"
+        },
+        "restricted": {
+          "bg": "#F6DFDB",
+          "fg": "#963729",
+          "border": "#E8B8B0"
+        }
+      },
+      "dataViz": {
+        "sparklineTeal": "#2D6F73",
+        "sparklineWarm": "#C78332",
+        "sparklineMuted": "#AAB3B9",
+        "gridLine": "#EAE3DA"
+      }
+    },
+    "typography": {
+      "families": {
+        "ui": "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "display": "Newsreader, Georgia, 'Times New Roman', serif",
+        "mono": "JetBrains Mono, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace"
+      },
+      "weights": {
+        "regular": 400,
+        "medium": 500,
+        "semibold": 600,
+        "bold": 700
+      },
+      "scale": {
+        "h1": {
+          "fontSize": 30,
+          "lineHeight": 38,
+          "fontWeight": 600,
+          "letterSpacing": "-0.025em"
+        },
+        "h2": {
+          "fontSize": 24,
+          "lineHeight": 32,
+          "fontWeight": 600,
+          "letterSpacing": "-0.02em"
+        },
+        "h3": {
+          "fontSize": 18,
+          "lineHeight": 26,
+          "fontWeight": 600,
+          "letterSpacing": "-0.01em"
+        },
+        "title": {
+          "fontSize": 16,
+          "lineHeight": 24,
+          "fontWeight": 600
+        },
+        "body": {
+          "fontSize": 14,
+          "lineHeight": 22,
+          "fontWeight": 400
+        },
+        "bodySm": {
+          "fontSize": 13,
+          "lineHeight": 20,
+          "fontWeight": 400
+        },
+        "caption": {
+          "fontSize": 12,
+          "lineHeight": 18,
+          "fontWeight": 400
+        },
+        "label": {
+          "fontSize": 12,
+          "lineHeight": 16,
+          "fontWeight": 600,
+          "letterSpacing": "0.01em"
+        },
+        "metric": {
+          "fontSize": 28,
+          "lineHeight": 34,
+          "fontWeight": 600,
+          "letterSpacing": "-0.03em"
+        },
+        "monoSm": {
+          "fontSize": 12,
+          "lineHeight": 18,
+          "fontWeight": 500,
+          "fontFamily": "mono"
+        }
+      },
+      "usage": {
+        "pageTitle": {
+          "family": "display",
+          "token": "h1",
+          "color": "text.primary"
+        },
+        "pageSubtitle": {
+          "family": "ui",
+          "token": "body",
+          "color": "text.secondary"
+        },
+        "sidebarBrand": {
+          "family": "display",
+          "fontSize": 22,
+          "lineHeight": 28,
+          "fontWeight": 600,
+          "letterSpacing": "0.16em",
+          "textTransform": "uppercase",
+          "color": "text.inverse"
+        },
+        "skillId": {
+          "family": "mono",
+          "fontSize": 13,
+          "lineHeight": 20,
+          "fontWeight": 600,
+          "color": "text.primary"
+        },
+        "skillName": {
+          "family": "ui",
+          "fontSize": 12,
+          "lineHeight": 18,
+          "fontWeight": 400,
+          "color": "text.secondary"
+        },
+        "tableHeader": {
+          "family": "ui",
+          "fontSize": 12,
+          "lineHeight": 16,
+          "fontWeight": 500,
+          "color": "text.tertiary"
+        },
+        "inspectorTitle": {
+          "family": "mono",
+          "fontSize": 17,
+          "lineHeight": 24,
+          "fontWeight": 600,
+          "color": "text.primary"
+        }
+      }
+    },
+    "spacing": {
+      "baseUnit": 4,
+      "scale": {
+        "0": 0,
+        "1": 4,
+        "2": 8,
+        "3": 12,
+        "4": 16,
+        "5": 20,
+        "6": 24,
+        "8": 32,
+        "10": 40,
+        "12": 48,
+        "16": 64,
+        "20": 80,
+        "24": 96
+      },
+      "semantic": {
+        "pagePaddingX": 32,
+        "pagePaddingY": 28,
+        "sectionGap": 28,
+        "cardPadding": 20,
+        "cardPaddingCompact": 16,
+        "tableCellPaddingX": 16,
+        "tableCellPaddingY": 14,
+        "controlGap": 8,
+        "filterGap": 8,
+        "sidebarPadding": 16,
+        "inspectorPadding": 20,
+        "inspectorSectionGap": 14
+      },
+      "negativeSpace": {
+        "pageOuterMargin": "Use 32px horizontal and 28px vertical content padding on desktop. The Skills page is a catalog and should feel more browseable than a pure operations page.",
+        "headerToMetrics": "Use 24px between page subtitle and metric cards. Skills are conceptual assets, so give the header enough breathing room before numbers appear.",
+        "metricsToFilterBar": "Use 28px. This separates global catalog state from browsing/filtering actions.",
+        "filterBarToTable": "Use 14px. Filters directly control the table and should remain visually connected.",
+        "tableRowBreathing": "Rows should be 72px minimum height because each skill row includes an icon, skill ID, human-readable title, status, domain, attached server, asset counts, policy, plan, version, and action menu.",
+        "skillIdentityBreathing": "Use 12px between skill icon and text. Skill IDs should not collide visually with human-readable names.",
+        "inspectorBreathing": "Inspector sections should use 14px gaps and 16px card padding. The inspector is a summary, not a configuration form.",
+        "assetGrouping": "Prompt/resource/app asset counts should appear in a compact two-line grouping with at least 4px between asset rows to preserve legibility.",
+        "whiteSpaceRatio": "Target 30% to 38% negative space in the main content area. The Skills page should feel like a curated catalog, less dense than logs or raw tool tables.",
+        "rightGutter": "Preserve a 24px gutter between the table and inspector. Skills include descriptive text, so the inspector needs separation to avoid visual noise."
+      }
+    },
+    "radius": {
+      "xs": 6,
+      "sm": 8,
+      "md": 12,
+      "lg": 16,
+      "xl": 20,
+      "pill": 999
+    },
+    "shadow": {
+      "none": "none",
+      "sm": "0 1px 2px rgba(16, 24, 40, 0.04)",
+      "md": "0 4px 12px rgba(16, 24, 40, 0.06)",
+      "lg": "0 12px 32px rgba(16, 24, 40, 0.08)",
+      "focusRing": "0 0 0 3px rgba(45, 111, 115, 0.18)"
+    },
+    "motion": {
+      "duration": {
+        "instant": "80ms",
+        "fast": "120ms",
+        "normal": "180ms",
+        "slow": "240ms"
+      },
+      "easing": {
+        "standard": "cubic-bezier(0.2, 0.0, 0.0, 1.0)",
+        "out": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "in": "cubic-bezier(0.32, 0, 0.67, 0)"
+      }
+    },
+    "layout": {
+      "desktop": {
+        "minWidth": 1280,
+        "idealWidth": 1440,
+        "sidebarWidth": 208,
+        "topbarHeight": 64,
+        "inspectorWidth": 304,
+        "contentGrid": "sidebar fixed, content fluid, inspector fixed"
+      },
+      "tablet": {
+        "minWidth": 768,
+        "sidebarWidth": 72,
+        "inspectorMode": "drawer",
+        "tableMode": "horizontal-scroll"
+      },
+      "mobile": {
+        "maxWidth": 767,
+        "sidebarMode": "bottom-nav-or-drawer",
+        "inspectorMode": "full-screen-drawer",
+        "tableMode": "skill-cards"
+      }
+    }
+  },
+  "page": {
+    "id": "skills.index",
+    "title": "Skills",
+    "subtitle": "Attach workflow intelligence to MCP servers with reusable skill packs, prompts, resources, policies, and UI apps.",
+    "primaryActions": [
+      {
+        "label": "Import Skill",
+        "variant": "secondary",
+        "icon": "Upload",
+        "hasDropdown": true
+      },
+      {
+        "label": "Validate Skills",
+        "variant": "secondary",
+        "icon": "BadgeCheck",
+        "hasDropdown": false
+      },
+      {
+        "label": "Create Skill",
+        "variant": "primarySplit",
+        "icon": "Plus",
+        "hasDropdown": true
+      }
+    ],
+    "layout": {
+      "root": {
+        "display": "grid",
+        "gridTemplateColumns": "208px minmax(0, 1fr)",
+        "minHeight": "100vh",
+        "background": "color.background.canvas"
+      },
+      "appShell": {
+        "display": "grid",
+        "gridTemplateRows": "64px minmax(0, 1fr)",
+        "minWidth": 0
+      },
+      "contentWithInspector": {
+        "display": "grid",
+        "gridTemplateColumns": "minmax(0, 1fr) 304px",
+        "gap": 24,
+        "padding": "28px 32px 32px 32px"
+      }
+    },
+    "regions": {
+      "sidebar": {
+        "component": "SidebarNavigation",
+        "activeItem": "Skills",
+        "width": 208,
+        "background": "color.background.sidebar",
+        "borderRight": "1px solid rgba(255,255,255,0.08)",
+        "padding": 16
+      },
+      "topbar": {
+        "component": "Topbar",
+        "height": 64,
+        "background": "rgba(251, 250, 247, 0.82)",
+        "backdropFilter": "blur(12px)",
+        "borderBottom": "1px solid color.border.soft",
+        "searchPlaceholder": "Search anything...",
+        "shortcut": "⌘K"
+      },
+      "main": {
+        "component": "SkillsCatalogWorkspace",
+        "structure": [
+          "pageHeader",
+          "metricCards",
+          "filterBar",
+          "skillsTable",
+          "pagination"
+        ]
+      },
+      "inspector": {
+        "component": "SkillInspector",
+        "width": 304,
+        "position": "sticky below topbar",
+        "top": 88,
+        "maxHeight": "calc(100vh - 112px)",
+        "overflow": "auto"
+      }
+    },
+    "components": {
+      "PageHeader": {
+        "layout": {
+          "display": "flex",
+          "justifyContent": "space-between",
+          "alignItems": "flex-start",
+          "gap": 24,
+          "marginBottom": 24
+        },
+        "title": {
+          "text": "Skills",
+          "typography": "typography.usage.pageTitle"
+        },
+        "subtitle": {
+          "text": "Attach workflow intelligence to MCP servers with reusable skill packs, prompts, resources, policies, and UI apps.",
+          "typography": "typography.usage.pageSubtitle",
+          "marginTop": 4
+        }
+      },
+      "MetricCardRow": {
+        "layout": {
+          "display": "grid",
+          "gridTemplateColumns": "repeat(5, minmax(0, 1fr))",
+          "gap": 12,
+          "marginBottom": 28
+        },
+        "card": {
+          "height": 144,
+          "padding": 18,
+          "borderRadius": 12,
+          "background": "color.background.surfaceRaised",
+          "border": "1px solid color.border.soft",
+          "shadow": "shadow.sm",
+          "negativeSpace": {
+            "topLabelToMetric": 10,
+            "metricToHelper": 8,
+            "helperToSparkline": 12,
+            "iconToLabel": 10
+          },
+          "states": {
+            "hover": {
+              "border": "color.border.default",
+              "shadow": "shadow.md"
+            }
+          }
+        },
+        "cards": [
+          {
+            "id": "skillsTotal",
+            "label": "Skills",
+            "metric": "48",
+            "unit": "total",
+            "helper": "36 enabled · 12 draft",
+            "icon": "Blocks",
+            "iconTone": "brand.primary",
+            "sparklineTone": "dataViz.sparklineTeal"
+          },
+          {
+            "id": "attachedServers",
+            "label": "Attached Servers",
+            "metric": "19",
+            "unit": "servers",
+            "helper": "Across 7 domains",
+            "icon": "Network",
+            "iconTone": "brand.primary",
+            "sparklineTone": "dataViz.sparklineTeal"
+          },
+          {
+            "id": "promptAssets",
+            "label": "Prompt Assets",
+            "metric": "124",
+            "unit": "assets",
+            "helper": "Prompts · guides · examples",
+            "icon": "FileText",
+            "iconTone": "text.secondary",
+            "sparklineTone": "dataViz.sparklineTeal"
+          },
+          {
+            "id": "uiApps",
+            "label": "UI Apps",
+            "metric": "18",
+            "unit": "apps",
+            "helper": "Embedded skill interfaces",
+            "icon": "PanelTop",
+            "iconTone": "text.secondary",
+            "sparklineTone": "dataViz.sparklineTeal"
+          },
+          {
+            "id": "approvalRules",
+            "label": "Approval Rules",
+            "metric": "9",
+            "unit": "rules",
+            "helper": "4 require review",
+            "icon": "ShieldAlert",
+            "iconTone": "status.review.base",
+            "background": "color.status.review.subtle",
+            "border": "color.status.review.border",
+            "sparklineTone": "dataViz.sparklineWarm",
+            "attention": "medium"
+          }
+        ]
+      },
+      "FilterBar": {
+        "layout": {
+          "display": "flex",
+          "alignItems": "center",
+          "gap": 8,
+          "marginBottom": 14,
+          "flexWrap": "nowrap"
+        },
+        "search": {
+          "width": 224,
+          "height": 34,
+          "borderRadius": 9,
+          "placeholder": "Search skills...",
+          "background": "color.background.surfaceRaised",
+          "border": "1px solid color.border.soft"
+        },
+        "chips": [
+          "All",
+          "Enabled",
+          "Draft",
+          "With UI",
+          "Approval-gated"
+        ],
+        "dropdowns": [
+          "Domain",
+          "Server",
+          "Plan",
+          "Filters"
+        ],
+        "chip": {
+          "height": 34,
+          "paddingX": 12,
+          "borderRadius": 9,
+          "fontSize": 12,
+          "fontWeight": 500,
+          "states": {
+            "default": {
+              "background": "color.background.surfaceRaised",
+              "border": "1px solid color.border.soft",
+              "color": "color.text.secondary"
+            },
+            "hover": {
+              "border": "color.border.default",
+              "color": "color.text.primary"
+            },
+            "active": {
+              "background": "color.brand.primarySubtle",
+              "border": "1px solid color.brand.primary",
+              "color": "color.brand.primaryInk"
+            }
+          }
+        }
+      },
+      "SkillsTable": {
+        "container": {
+          "background": "color.background.surfaceRaised",
+          "border": "1px solid color.border.soft",
+          "borderRadius": 12,
+          "overflow": "hidden",
+          "shadow": "shadow.sm"
+        },
+        "columns": [
+          {
+            "id": "select",
+            "label": "",
+            "width": 42,
+            "align": "center"
+          },
+          {
+            "id": "skill",
+            "label": "Skill",
+            "width": 240,
+            "align": "left"
+          },
+          {
+            "id": "status",
+            "label": "Status",
+            "width": 88,
+            "align": "left"
+          },
+          {
+            "id": "domain",
+            "label": "Domain",
+            "width": 96,
+            "align": "left"
+          },
+          {
+            "id": "attachedServer",
+            "label": "Attached Server",
+            "width": 126,
+            "align": "left"
+          },
+          {
+            "id": "assets",
+            "label": "Assets",
+            "width": 132,
+            "align": "left"
+          },
+          {
+            "id": "policies",
+            "label": "Policies",
+            "width": 112,
+            "align": "left"
+          },
+          {
+            "id": "plan",
+            "label": "Plan",
+            "width": 92,
+            "align": "left"
+          },
+          {
+            "id": "version",
+            "label": "Version",
+            "width": 82,
+            "align": "left"
+          },
+          {
+            "id": "lastUpdated",
+            "label": "Last updated",
+            "width": 92,
+            "align": "left"
+          },
+          {
+            "id": "actions",
+            "label": "Actions",
+            "width": 52,
+            "align": "right"
+          }
+        ],
+        "header": {
+          "height": 44,
+          "background": "color.background.surfaceRaised",
+          "borderBottom": "1px solid color.border.table",
+          "typography": "typography.usage.tableHeader",
+          "paddingX": 16
+        },
+        "row": {
+          "height": 72,
+          "paddingX": 16,
+          "borderBottom": "1px solid color.border.table",
+          "transition": "background-color 120ms, box-shadow 120ms, border-color 120ms",
+          "states": {
+            "default": {
+              "background": "color.background.surfaceRaised"
+            },
+            "hover": {
+              "background": "#FDFBF7"
+            },
+            "selected": {
+              "background": "#F8FBFA",
+              "boxShadow": "inset 0 0 0 1.5px #2D6F73",
+              "borderColor": "#2D6F73"
+            },
+            "draft": {
+              "background": "color.status.draft.subtle"
+            },
+            "review": {
+              "background": "color.status.review.subtle"
+            },
+            "disabled": {
+              "opacity": 0.58
+            }
+          },
+          "negativeSpace": {
+            "minHeight": "72px allows two-line skill identity, asset counts, and multiple badges without crowding.",
+            "cellPadding": "16px horizontal and 14px vertical. Skills are catalog items and need more breathing room than raw logs.",
+            "iconToTextGap": "12px between skill logo and text.",
+            "badgeGap": "6px between adjacent badges.",
+            "assetLineGap": "4px between prompt/resource/app asset lines.",
+            "rightActionGutter": "Keep 12px right padding before the action menu."
+          }
+        },
+        "skillIdentityCell": {
+          "checkbox": {
+            "size": 16,
+            "borderRadius": 4,
+            "checkedBackground": "color.brand.primary",
+            "checkedColor": "#FFFFFF"
+          },
+          "iconBox": {
+            "size": 38,
+            "borderRadius": 10,
+            "background": "color.background.surfaceRaised",
+            "border": "1px solid color.border.soft"
+          },
+          "skillId": {
+            "typography": "typography.usage.skillId"
+          },
+          "humanName": {
+            "typography": "typography.usage.skillName",
+            "maxLines": 1
+          }
+        },
+        "assetSummaryCell": {
+          "typography": "typography.scale.caption",
+          "color": "text.secondary",
+          "format": "{prompts} prompts · {resources} resources · {apps} app",
+          "lineBreakBehavior": "split into two lines when width is constrained"
+        },
+        "rows": [
+          {
+            "id": "github.code-review",
+            "displayName": "GitHub Code Review",
+            "icon": "github",
+            "status": "enabled",
+            "domain": "devtools",
+            "attachedServer": "github",
+            "assets": {
+              "prompts": 3,
+              "resources": 2,
+              "apps": 1
+            },
+            "policy": "readOnly",
+            "plan": "pro",
+            "version": "v0.1.3",
+            "lastUpdated": "2h ago",
+            "selected": true
+          },
+          {
+            "id": "databricks.sql-analyst",
+            "displayName": "SQL Analyst",
+            "icon": "databricks",
+            "status": "enabled",
+            "domain": "data",
+            "attachedServer": "databricks",
+            "assets": {
+              "prompts": 2,
+              "resources": 4,
+              "apps": 1
+            },
+            "policy": "approvalWrite",
+            "plan": "enterprise",
+            "version": "v1.2.0",
+            "lastUpdated": "5h ago"
+          },
+          {
+            "id": "linear.issue-triage",
+            "displayName": "Issue Triage Assistant",
+            "icon": "linear",
+            "status": "draft",
+            "domain": "devtools",
+            "attachedServer": "linear",
+            "assets": {
+              "prompts": 2,
+              "resources": 1,
+              "apps": 1
+            },
+            "policy": "approvalWrite",
+            "plan": "pro",
+            "version": "v0.3.4",
+            "lastUpdated": "1d ago"
+          },
+          {
+            "id": "notion.knowledge-curator",
+            "displayName": "Knowledge Curator",
+            "icon": "notion",
+            "status": "enabled",
+            "domain": "knowledge",
+            "attachedServer": "notion",
+            "assets": {
+              "prompts": 1,
+              "resources": 3,
+              "apps": 1
+            },
+            "policy": "readOnly",
+            "plan": "pro",
+            "version": "v0.4.1",
+            "lastUpdated": "2d ago"
+          },
+          {
+            "id": "slack.incident-commander",
+            "displayName": "Incident Commander",
+            "icon": "slack",
+            "status": "review",
+            "domain": "comms",
+            "attachedServer": "slack",
+            "assets": {
+              "prompts": 2,
+              "resources": 2,
+              "apps": 1
+            },
+            "policy": "approvalWrite",
+            "plan": "enterprise",
+            "version": "v0.2.1",
+            "lastUpdated": "3d ago"
+          },
+          {
+            "id": "postgres.schema-explorer",
+            "displayName": "Schema Explorer",
+            "icon": "postgres",
+            "status": "enabled",
+            "domain": "data",
+            "attachedServer": "postgres",
+            "assets": {
+              "prompts": 2,
+              "resources": 2,
+              "apps": 0
+            },
+            "policy": "restricted",
+            "plan": "enterprise",
+            "version": "v1.0.0",
+            "lastUpdated": "5d ago"
+          }
+        ]
+      },
+      "Badge": {
+        "base": {
+          "height": 24,
+          "paddingX": 9,
+          "borderRadius": 999,
+          "fontSize": 12,
+          "lineHeight": 16,
+          "fontWeight": 500,
+          "border": "1px solid transparent"
+        },
+        "variants": {
+          "statusEnabled": {
+            "background": "color.status.enabled.subtle",
+            "border": "color.status.enabled.border",
+            "color": "color.status.enabled.text"
+          },
+          "statusDraft": {
+            "background": "color.status.draft.subtle",
+            "border": "color.status.draft.border",
+            "color": "color.status.draft.text"
+          },
+          "statusReview": {
+            "background": "color.status.review.subtle",
+            "border": "color.status.review.border",
+            "color": "color.status.review.text"
+          },
+          "domainDevTools": {
+            "background": "color.domain.devtools.bg",
+            "border": "color.domain.devtools.border",
+            "color": "color.domain.devtools.fg"
+          },
+          "domainData": {
+            "background": "color.domain.data.bg",
+            "border": "color.domain.data.border",
+            "color": "color.domain.data.fg"
+          },
+          "domainComms": {
+            "background": "color.domain.comms.bg",
+            "border": "color.domain.comms.border",
+            "color": "color.domain.comms.fg"
+          },
+          "domainKnowledge": {
+            "background": "color.domain.knowledge.bg",
+            "border": "color.domain.knowledge.border",
+            "color": "color.domain.knowledge.fg"
+          },
+          "policyReadOnly": {
+            "background": "color.policy.readOnly.bg",
+            "border": "color.policy.readOnly.border",
+            "color": "color.policy.readOnly.fg"
+          },
+          "policyApprovalWrite": {
+            "background": "color.policy.approvalWrite.bg",
+            "border": "color.policy.approvalWrite.border",
+            "color": "color.policy.approvalWrite.fg"
+          },
+          "policyRestricted": {
+            "background": "color.policy.restricted.bg",
+            "border": "color.policy.restricted.border",
+            "color": "color.policy.restricted.fg"
+          },
+          "planPro": {
+            "background": "color.plan.pro.bg",
+            "border": "color.plan.pro.border",
+            "color": "color.plan.pro.fg"
+          },
+          "planEnterprise": {
+            "background": "color.plan.enterprise.bg",
+            "border": "color.plan.enterprise.border",
+            "color": "color.plan.enterprise.fg"
+          }
+        }
+      },
+      "SkillInspector": {
+        "container": {
+          "background": "color.background.surfaceRaised",
+          "border": "1px solid color.border.soft",
+          "borderRadius": 14,
+          "shadow": "shadow.sm",
+          "padding": 18
+        },
+        "header": {
+          "layout": {
+            "display": "grid",
+            "gridTemplateColumns": "48px minmax(0, 1fr) auto",
+            "gap": 12,
+            "alignItems": "start",
+            "paddingBottom": 16,
+            "borderBottom": "1px solid color.border.soft"
+          },
+          "icon": {
+            "size": 48,
+            "borderRadius": 12,
+            "background": "color.background.surfaceRaised",
+            "border": "1px solid color.border.soft"
+          },
+          "title": {
+            "text": "github.code-review",
+            "typography": "typography.usage.inspectorTitle"
+          },
+          "badges": [
+            "Enabled",
+            "DevTools",
+            "Pro"
+          ]
+        },
+        "tabs": {
+          "items": [
+            "Overview",
+            "Assets",
+            "Policy",
+            "Usage",
+            "More"
+          ],
+          "height": 44,
+          "borderBottom": "1px solid color.border.soft",
+          "activeColor": "brand.primaryInk",
+          "activeIndicator": "2px solid color.brand.primary"
+        },
+        "sections": {
+          "gap": 14,
+          "card": {
+            "padding": 16,
+            "borderRadius": 12,
+            "background": "color.background.surfaceRaised",
+            "border": "1px solid color.border.soft"
+          },
+          "title": {
+            "fontSize": 14,
+            "lineHeight": 20,
+            "fontWeight": 600,
+            "color": "text.primary"
+          }
+        },
+        "overviewCard": {
+          "title": "Overview",
+          "description": "Review pull requests, inspect diffs, summarize changes, and optionally create review comments.",
+          "descriptionTypography": "typography.scale.bodySm"
+        },
+        "attachedServerCard": {
+          "title": "Attached Server",
+          "server": "github",
+          "icon": "github",
+          "interaction": "click opens server detail page"
+        },
+        "requiredToolsCard": {
+          "title": "Required Tools",
+          "tools": [
+            "get_pull_request",
+            "get_pull_request_diff",
+            "get_file_contents",
+            "create_review_comment"
+          ],
+          "typography": "typography.scale.monoSm"
+        },
+        "assetsCard": {
+          "title": "Assets",
+          "layout": "three-column compact metric row",
+          "items": [
+            {
+              "label": "Prompts",
+              "value": 2,
+              "icon": "MessageSquare"
+            },
+            {
+              "label": "Resources",
+              "value": 3,
+              "icon": "Database"
+            },
+            {
+              "label": "App",
+              "value": 1,
+              "icon": "PanelTop"
+            }
+          ]
+        },
+        "policyCard": {
+          "title": "Policy",
+          "summary": "Read allowed · comments require approval · destructive actions denied",
+          "badge": "Read-only"
+        },
+        "uiAppCard": {
+          "title": "UI App",
+          "uri": "ui://github/code-review-panel.html",
+          "uriTypography": "typography.scale.monoSm",
+          "action": "open preview"
+        },
+        "actionsCard": {
+          "buttons": [
+            {
+              "label": "View details",
+              "variant": "primary",
+              "icon": "ExternalLink",
+              "fullWidth": true
+            },
+            {
+              "label": "Test skill",
+              "variant": "secondary",
+              "icon": "Play"
+            },
+            {
+              "label": "Disable",
+              "variant": "destructiveOutline",
+              "icon": "Power"
+            }
+          ]
+        },
+        "negativeSpace": {
+          "sectionGap": "Use 14px between inspector cards. The inspector is narrow, but skill cards need enough separation to avoid turning into a manifest dump.",
+          "headerBottomGap": "Use 16px under the header before content/tabs. Skill ID plus badges need a clear identity block.",
+          "cardInterior": "Use 16px padding. Tool lists in monospace need slightly more line-height than labels.",
+          "actionsCard": "Primary 'View details' spans full width; Test and Disable sit side-by-side below with 8px gap. Destructive action uses outline red, not filled red."
+        }
+      },
+      "Pagination": {
+        "layout": {
+          "display": "flex",
+          "alignItems": "center",
+          "justifyContent": "space-between",
+          "marginTop": 18
+        },
+        "summary": {
+          "text": "Showing 1 to 6 of 48 skills",
+          "typography": "typography.scale.bodySm",
+          "color": "text.secondary"
+        },
+        "pageButton": {
+          "size": 32,
+          "borderRadius": 8,
+          "activeBackground": "color.brand.primarySubtle",
+          "activeBorder": "color.brand.primary",
+          "activeColor": "color.brand.primaryInk"
+        },
+        "rowsPerPage": {
+          "default": 25,
+          "options": [
+            10,
+            25,
+            50,
+            100
+          ]
+        }
+      }
+    }
+  },
+  "interactions": {
+    "skillSelection": {
+      "trigger": "click skill row",
+      "result": "row becomes selected and inspector updates in place",
+      "animation": {
+        "duration": "120ms",
+        "properties": [
+          "background-color",
+          "box-shadow",
+          "border-color"
+        ]
+      },
+      "keyboard": {
+        "focusRow": "Tab into table, arrow keys move selection, Enter opens details, Space toggles checkbox selection"
+      }
+    },
+    "skillDetails": {
+      "trigger": "View details button or double-click row",
+      "result": "navigate to /skills/{skillId}",
+      "preserveState": [
+        "filters",
+        "selectedSkill",
+        "pagination"
+      ]
+    },
+    "createSkill": {
+      "trigger": "Create Skill button",
+      "result": "opens Create Skill wizard",
+      "steps": [
+        "Choose attached MCP server",
+        "Select required tools",
+        "Add prompts and resource guides",
+        "Attach optional UI app",
+        "Define policies and approval rules",
+        "Set plan/tenant availability",
+        "Validate manifest",
+        "Publish as draft or enabled"
+      ]
+    },
+    "importSkill": {
+      "trigger": "Import Skill button",
+      "result": "opens drawer accepting YAML, JSON, Git URL, local file, or registry source",
+      "validation": "validate manifest schema and required tool availability before saving"
+    },
+    "validateSkills": {
+      "trigger": "Validate Skills button",
+      "result": "checks all skills against attached server capabilities, schema hashes, policies, and UI resource availability",
+      "loadingState": "button spinner and subtle progress line under metric cards",
+      "successState": "toast with validation summary",
+      "errorState": "toast with View issues action"
+    },
+    "filtering": {
+      "trigger": "search, chips, dropdowns",
+      "result": "table filters immediately with 120ms debounce for chips and 250ms debounce for text search",
+      "emptyState": "No skills match these filters. Clear filters or create a skill."
+    },
+    "rowActionMenu": {
+      "trigger": "vertical ellipsis",
+      "items": [
+        "View details",
+        "Edit manifest",
+        "Test skill",
+        "Duplicate",
+        "Export skill",
+        "Disable"
+      ],
+      "dangerZone": [
+        "Disable"
+      ]
+    },
+    "testSkill": {
+      "trigger": "Test skill button",
+      "result": "opens a test run drawer with sample inputs, resolved tools, policy preview, and dry-run mode",
+      "defaultMode": "dry_run",
+      "requiresServerHealth": true
+    },
+    "disableSkill": {
+      "trigger": "Disable button",
+      "result": "confirmation dialog",
+      "confirmationCopy": "Disable github.code-review? Agents will no longer receive this skill in newly resolved catalogs. Existing catalog snapshots remain auditable.",
+      "successState": "skill row updates to disabled and inspector status changes"
+    },
+    "openUiApp": {
+      "trigger": "click UI App URI or preview icon",
+      "result": "opens sandboxed UI resource preview drawer",
+      "securityNotice": "Show resource URI, MIME type, sandbox status, and associated skill/server before rendering."
+    }
+  },
+  "states": {
+    "loadingInitial": {
+      "sidebar": "render normally",
+      "topbar": "render normally",
+      "metrics": "skeleton cards with low-opacity shimmer",
+      "table": "6 skeleton rows",
+      "inspector": "empty skeleton panel"
+    },
+    "loadingValidation": {
+      "metrics": "small spinner in Prompt Assets and Approval Rules cards",
+      "table": "keep data visible; show 'Validating skills...' inline near filters",
+      "rows": "affected rows show subtle activity pulse"
+    },
+    "emptyNoSkills": {
+      "title": "No skills created yet.",
+      "description": "Create your first skill to package MCP tools with prompts, resources, policies, and optional UI apps.",
+      "primaryAction": "Create Skill",
+      "secondaryAction": "Import Skill",
+      "illustration": "faint line-art portico arch with small connected blocks"
+    },
+    "emptyFiltered": {
+      "title": "No skills match these filters.",
+      "description": "Try clearing filters or search by skill ID, server, domain, policy, or plan.",
+      "action": "Clear filters"
+    },
+    "skillDraft": {
+      "badge": "Draft",
+      "meaning": "The skill exists but is not exposed in resolved catalogs unless explicitly requested in draft mode.",
+      "rowTone": "neutral"
+    },
+    "skillReviewRequired": {
+      "badge": "Review",
+      "meaning": "The skill changed, references missing tools, or introduces policy-sensitive behavior.",
+      "rowTone": "warning",
+      "actions": [
+        "Review manifest",
+        "Validate",
+        "Disable"
+      ]
+    },
+    "skillDisabled": {
+      "badge": "Disabled",
+      "meaning": "The skill is hidden from newly resolved catalogs and cannot be requested by agents.",
+      "rowOpacity": 0.58
+    },
+    "missingAttachedServer": {
+      "badge": "Server missing",
+      "tone": "danger",
+      "message": "This skill references an MCP server that is not currently registered or enabled.",
+      "recommendedAction": "Attach another server or disable skill."
+    },
+    "missingRequiredTool": {
+      "badge": "Tool missing",
+      "tone": "warning",
+      "message": "One or more required tools are not present in the current server catalog.",
+      "recommendedAction": "Refresh catalog or update skill manifest."
+    },
+    "uiResourceUnavailable": {
+      "badge": "UI unavailable",
+      "tone": "warning",
+      "message": "The skill references a UI resource that could not be read or validated."
+    }
+  },
+  "detailPagePreview": {
+    "route": "/skills/{skillId}",
+    "tabs": [
+      "Overview",
+      "Manifest",
+      "Instructions",
+      "Tools",
+      "Prompts",
+      "Resources",
+      "UI App",
+      "Policies",
+      "Entitlements",
+      "Tests",
+      "Usage",
+      "History"
+    ],
+    "overviewSections": [
+      "Identity and status",
+      "Attached servers",
+      "Required and optional tools",
+      "Skill instructions",
+      "Prompt/resource assets",
+      "UI app binding",
+      "Policy summary",
+      "Validation results",
+      "Recent usage"
+    ]
+  },
+  "accessibility": {
+    "contrast": {
+      "minimumTextContrast": "4.5:1 for normal text, 3:1 for large text and icons",
+      "avoidStatusOnlyColor": true,
+      "statusBadgesIncludeText": true
+    },
+    "keyboard": {
+      "allButtonsFocusable": true,
+      "rowSelectionKeyboardAccessible": true,
+      "checkboxSelectionKeyboardAccessible": true,
+      "escapeClosesMenusAndDrawers": true,
+      "commandKFocusesSearch": true
+    },
+    "aria": {
+      "skillsTable": "aria-label='Skill packs catalog'",
+      "statusBadges": "include aria-label with status and reason",
+      "inspector": "aria-label='Selected skill details'",
+      "destructiveActions": "aria-describedby references confirmation text"
+    },
+    "reducedMotion": {
+      "respectPrefersReducedMotion": true,
+      "replaceSlideWithFade": true,
+      "disableSkeletonShimmer": true
+    }
+  },
+  "responsiveBehavior": {
+    "desktop1440": {
+      "sidebar": "208px fixed",
+      "main": "fluid",
+      "inspector": "304px fixed right column",
+      "metricCards": "5 columns",
+      "table": "full table"
+    },
+    "desktop1280": {
+      "sidebar": "208px fixed",
+      "inspector": "280px fixed right column",
+      "metricCards": "5 columns with compact helper text",
+      "table": "hide human-readable skill name if width constrained"
+    },
+    "tablet": {
+      "sidebar": "72px icon-only or collapsible",
+      "inspector": "right drawer",
+      "metricCards": "2 or 3 columns",
+      "table": "horizontal scroll with sticky skill column"
+    },
+    "mobile": {
+      "sidebar": "drawer or bottom nav",
+      "inspector": "full-screen sheet",
+      "metricCards": "single column or horizontal snap carousel",
+      "skillRows": "card list with skill ID, status, server, policy, and actions",
+      "filters": "filter sheet"
+    }
+  },
+  "implementationHints": {
+    "componentStack": [
+      "AppShell",
+      "SidebarNavigation",
+      "Topbar",
+      "PageHeader",
+      "MetricCard",
+      "FilterBar",
+      "SkillsTable",
+      "Badge",
+      "SkillInspector",
+      "ActionMenu",
+      "CreateSkillWizard",
+      "SkillManifestEditor",
+      "SkillTestDrawer",
+      "UiResourcePreviewDrawer",
+      "Dialog",
+      "Toast"
+    ],
+    "preferredIconStyle": "Lucide-style 1.75px outline icons, rounded stroke caps, consistent 16/18/20px sizes. Product/server icons may use official marks only when licensing allows; otherwise use abstract glyphs.",
+    "avoid": [
+      "making skills look like plain prompt snippets",
+      "showing too much manifest YAML in the index table",
+      "using aggressive colors for every domain badge",
+      "overcrowding the inspector with full instructions",
+      "hiding policy information behind a details page only",
+      "status indicated only by color"
+    ],
+    "frontendNotes": [
+      "Use semantic tokens instead of direct hex references in components.",
+      "Skill IDs should use monospace; human-readable titles should use regular UI typography.",
+      "Keep table row height stable even when asset counts change.",
+      "Preserve filter and selected skill state when switching inspector tabs.",
+      "Use the display serif only for page title and occasional brand/entity moments, not for table content.",
+      "Use manifest validation results to drive Review and Missing Tool states."
+    ]
+  }
+}

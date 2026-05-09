@@ -103,6 +103,10 @@ func (s *stubPlaygroundController) Replay(_ context.Context, _, _, _ string) (*P
 	return &PlaygroundRunDTO{ID: "run_1", Status: "ok"}, nil
 }
 
+func (s *stubPlaygroundController) SetSkillEnabled(_ context.Context, _ string, _ string, _ bool) error {
+	return nil
+}
+
 // in-memory playground store for handler tests.
 type memPlaygroundStore struct {
 	cases map[string]*ifaces.PlaygroundCaseRecord

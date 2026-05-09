@@ -1,89 +1,70 @@
 <script lang="ts">
+  /**
+   * New server — Phase 10.8 Step 5 form-page sub-vocabulary.
+   *
+   * Thin wrapper around ServerForm; this rewrite adds Breadcrumbs
+   * back to /servers and a compact PageHeader so the form page reads
+   * the same as every other operator entry point. ServerForm itself
+   * is out of scope (its own audit comes in a follow-up).
+   */
   import { goto } from '$app/navigation';
-  import { api } from '$lib/api';
-  import { Button, Input, PageHeader, Select, toast, Textarea } from '$lib/components';
+  import { api, type ServerSpec } from '$lib/api';
+  import { Breadcrumbs, PageHeader, ServerForm, toast } from '$lib/components';
   import { t } from '$lib/i18n';
 
-  let id = '';
-  let displayName = '';
-  let transport: 'stdio' | 'http' = 'stdio';
-  let command = '';
-  let argsRaw = '';
-  let envRaw = '';
-  let url = '';
   let saving = false;
   let error = '';
 
-  async function save() {
+  async function onSubmit(e: CustomEvent<Partial<ServerSpec>>) {
     saving = true;
     error = '';
+    const spec = e.detail;
+    if (!spec.id) {
+      error = 'Missing id';
+      saving = false;
+      return;
+    }
     try {
-      const args = argsRaw.split(/\s+/).filter(Boolean);
-      const env = envRaw
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const payload: Record<string, unknown> = {
-        id,
-        display_name: displayName || id,
-        transport,
-        runtime_mode: 'shared_global'
-      };
-      if (transport === 'stdio') {
-        payload.stdio = { command, args, env };
-      } else {
-        payload.http = { url };
-      }
-      // upsertServer hits /v1/servers — equivalent to /api/servers POST
-      // for create; the back-end accepts the same payload on both paths.
-      await api.upsertServer(payload as Record<string, never>);
+      await api.upsertServer(spec);
+      const id = spec.id as string;
       toast.success($t('crud.createdToast'), id);
+      await waitForReady(id, 3000);
       void goto(`/servers/${encodeURIComponent(id)}`);
-    } catch (e) {
-      error = (e as Error).message;
+    } catch (err) {
+      error = (err as Error).message;
     } finally {
       saving = false;
     }
   }
 
-  $: transportOptions = [
-    { value: 'stdio', label: 'stdio' },
-    { value: 'http', label: 'http' }
-  ];
+  async function waitForReady(id: string, timeoutMs: number): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        const h = await api.serverHealth(id);
+        if (h.status === 'ready' || h.status === 'running' || h.status === 'healthy') {
+          return;
+        }
+      } catch {
+        // 503 or absent supervisor — fall through.
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+
+  function onCancel() {
+    void goto('/servers');
+  }
 </script>
 
-<PageHeader title={$t('servers.new.title')} description={$t('servers.new.subtitle')} />
+<PageHeader title={$t('servers.new.title')} compact>
+  <Breadcrumbs
+    slot="breadcrumbs"
+    items={[
+      { label: $t('nav.servers'), href: '/servers' },
+      { label: $t('servers.new.title') }
+    ]}
+  />
+</PageHeader>
 
-<form class="grid" on:submit|preventDefault={save}>
-  <Input bind:value={id} label={$t('servers.field.id')} required block={false} />
-  <Input bind:value={displayName} label={$t('servers.field.displayName')} block={false} />
-  <Select bind:value={transport} label={$t('servers.field.transport')} options={transportOptions} />
-  {#if transport === 'stdio'}
-    <Input bind:value={command} label={$t('servers.field.command')} required block={false} />
-    <Input bind:value={argsRaw} label={$t('servers.field.args')} block={false} />
-    <Textarea bind:value={envRaw} label={$t('servers.field.env')} rows={4} />
-  {:else}
-    <Input bind:value={url} label={$t('servers.field.url')} required block={false} />
-  {/if}
-  {#if error}<p class="error">{error}</p>{/if}
-  <div class="actions">
-    <Button type="submit" loading={saving}>{$t('servers.action.saveStart')}</Button>
-  </div>
-</form>
-
-<style>
-  .grid {
-    display: grid;
-    gap: var(--space-3);
-    max-width: 720px;
-  }
-  .actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: var(--space-3);
-  }
-  .error {
-    color: var(--color-danger);
-    margin: 0;
-  }
-</style>
+<ServerForm mode="create" {saving} {error} on:submit={onSubmit} on:cancel={onCancel} />

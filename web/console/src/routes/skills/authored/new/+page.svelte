@@ -1,8 +1,39 @@
 <script lang="ts">
+  /**
+   * New authored skill — Phase 10.8 Step 5 form-page sub-vocabulary.
+   *
+   * The pre-10.8 page invented its own two-pane layout with a
+   * bespoke "validation aside" that didn't share vocabulary with
+   * the rest of the console. This rewrite reuses the same
+   * `.layout.has-selection` two-column grid the list pages use, and
+   * the right pane is a real `Inspector` primitive (with its own
+   * tabs and close behaviour) instead of a hand-rolled `<aside>`.
+   *
+   * The Inspector "open" state is always true here — there's no
+   * row-selection on this page; the validation panel is the
+   * inspector's reason-for-being. Closing it is a no-op (no
+   * close button is shown by the consumer-side handling — see the
+   * Inspector primitive for details).
+   *
+   * Validation runs on every edit (debounced 500ms) and lands in
+   * the Inspector's `validation` tab. The `schema` tab provides a
+   * quick reference card so the operator doesn't need to leave the
+   * page to remember the manifest shape.
+   */
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { api, type SkillValidationResult } from '$lib/api';
-  import { Badge, Breadcrumbs, Button, PageHeader, Tabs, Textarea, toast } from '$lib/components';
+  import {
+    Badge,
+    Breadcrumbs,
+    Button,
+    Inspector,
+    PageActionGroup,
+    PageHeader,
+    Tabs,
+    Textarea,
+    toast
+  } from '$lib/components';
   import { t } from '$lib/i18n';
   import IconCheck from 'lucide-svelte/icons/check';
   import IconAlertTriangle from 'lucide-svelte/icons/alert-triangle';
@@ -24,6 +55,14 @@ binding:
   let skillBody = '# Example skill\n\nDescribe how this skill is used here.\n';
   let promptBody = '';
   let activeTab = 'manifest';
+  let inspectorTab = 'validation';
+  /**
+   * The inspector stays open by default — validation is the page's
+   * reason for being. The operator may still click the close button
+   * (collapse for a wider editor), and a "Validation" PageActionGroup
+   * action toggles it back.
+   */
+  let inspectorOpen = true;
   let validation: SkillValidationResult | null = null;
   let validating = false;
   let validationDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -90,14 +129,48 @@ binding:
     if (validationDebounce) clearTimeout(validationDebounce);
   });
 
-  const tabs = [
+  const editorTabs = [
     { id: 'manifest', label: $t('authored.editor.manifest') },
     { id: 'skillmd', label: $t('authored.editor.skillMd') },
     { id: 'prompts', label: $t('authored.editor.prompts') }
   ];
+
+  const inspectorTabs = [
+    { id: 'validation', label: $t('authored.editor.validate') },
+    { id: 'schema', label: $t('authoredNew.inspector.tab.schema') }
+  ];
+
+  $: pageActions = [
+    ...(inspectorOpen
+      ? []
+      : [
+          {
+            label: $t('authoredNew.action.showValidation'),
+            icon: IconCheck,
+            variant: 'ghost' as const,
+            onClick: () => {
+              inspectorOpen = true;
+            }
+          }
+        ]),
+    {
+      label: $t('authored.editor.savedraft'),
+      icon: IconSave,
+      variant: 'secondary' as const,
+      onClick: saveDraft,
+      loading: saving
+    },
+    {
+      label: $t('authored.editor.publish'),
+      icon: IconUpload,
+      variant: 'primary' as const,
+      onClick: publishNow,
+      loading: saving
+    }
+  ];
 </script>
 
-<PageHeader title={$t('authored.editor.title')} description={$t('authored.editor.description')}>
+<PageHeader title={$t('authored.editor.title')}>
   <Breadcrumbs
     slot="breadcrumbs"
     items={[
@@ -107,85 +180,143 @@ binding:
     ]}
   />
   <div slot="actions">
-    <Button variant="secondary" on:click={saveDraft} loading={saving}>
-      <IconSave slot="leading" size={14} />
-      {$t('authored.editor.savedraft')}
-    </Button>
-    <Button on:click={publishNow} loading={saving}>
-      <IconUpload slot="leading" size={14} />
-      {$t('authored.editor.publish')}
-    </Button>
+    <PageActionGroup actions={pageActions} />
   </div>
 </PageHeader>
 
-<div class="layout">
-  <section class="editor">
-    <Tabs {tabs} bind:active={activeTab} />
-    {#if activeTab === 'manifest'}
-      <Textarea bind:value={manifestBody} rows={20} mono label={$t('authored.editor.manifest')} />
-    {:else if activeTab === 'skillmd'}
-      <Textarea bind:value={skillBody} rows={20} mono label={$t('authored.editor.skillMd')} />
-    {:else if activeTab === 'prompts'}
-      <Textarea bind:value={promptBody} rows={20} mono label={$t('authored.editor.prompts')} />
-    {/if}
-  </section>
+<div class="layout" class:has-selection={inspectorOpen}>
+  <div class="main-col">
+    <section class="card">
+      <Tabs tabs={editorTabs} bind:active={activeTab} />
+      {#if activeTab === 'manifest'}
+        <Textarea
+          bind:value={manifestBody}
+          rows={20}
+          mono
+          label={$t('authored.editor.manifest')}
+        />
+      {:else if activeTab === 'skillmd'}
+        <Textarea bind:value={skillBody} rows={20} mono label={$t('authored.editor.skillMd')} />
+      {:else if activeTab === 'prompts'}
+        <Textarea bind:value={promptBody} rows={20} mono label={$t('authored.editor.prompts')} />
+      {/if}
+    </section>
+  </div>
 
-  <aside class="validation">
-    <h3>{$t('authored.editor.validate')}</h3>
-    {#if validating}
-      <p class="muted">{$t('common.loading')}</p>
-    {:else if !validation}
-      <p class="muted">{$t('common.dash')}</p>
-    {:else if validation.valid}
-      <div class="ok">
-        <IconCheck size={16} />
-        <span>{$t('authored.validation.valid')}</span>
-      </div>
-    {:else}
-      <div class="warn">
-        <IconAlertTriangle size={16} />
-        <span>{$t('authored.validation.errors', { n: validation.violations.length })}</span>
-      </div>
-      <ul class="violations">
-        {#each validation.violations as v}
+  <Inspector
+    bind:open={inspectorOpen}
+    tabs={inspectorTabs}
+    bind:activeTab={inspectorTab}
+    title={$t('authored.editor.validate')}
+    emptyTitle={$t('authoredNew.inspector.empty.title')}
+    emptyDescription={$t('authoredNew.inspector.empty.description')}
+  >
+    {#if inspectorTab === 'validation'}
+      <section class="card">
+        <h4>{$t('authored.editor.validate')}</h4>
+        {#if validating}
+          <p class="muted">{$t('common.loading')}</p>
+        {:else if !validation}
+          <p class="muted">{$t('common.dash')}</p>
+        {:else if validation.valid}
+          <div class="ok">
+            <IconCheck size={16} />
+            <span>{$t('authored.validation.valid')}</span>
+          </div>
+        {:else}
+          <div class="warn">
+            <IconAlertTriangle size={16} />
+            <span>{$t('authored.validation.errors', { n: validation.violations.length })}</span>
+          </div>
+          <ul class="violations">
+            {#each validation.violations as v}
+              <li>
+                <code class="ptr">{v.pointer || '/'}</code>
+                <span class="reason">{v.reason}</span>
+                {#if v.line && v.line > 0}
+                  <Badge tone="neutral">
+                    {$t('authored.validation.line', { line: v.line, col: v.col ?? 0 })}
+                  </Badge>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </section>
+    {:else if inspectorTab === 'schema'}
+      <section class="card">
+        <h4>{$t('authoredNew.inspector.section.schema')}</h4>
+        <p class="muted body">{$t('authoredNew.inspector.section.schemaHelp')}</p>
+        <ul class="schema-list">
+          <li><code class="mono">id</code> — {$t('authoredNew.schema.id')}</li>
+          <li><code class="mono">title</code> — {$t('authoredNew.schema.title')}</li>
+          <li><code class="mono">version</code> — {$t('authoredNew.schema.version')}</li>
+          <li><code class="mono">spec</code> — {$t('authoredNew.schema.spec')}</li>
+          <li><code class="mono">description</code> — {$t('authoredNew.schema.description')}</li>
+          <li><code class="mono">instructions</code> — {$t('authoredNew.schema.instructions')}</li>
           <li>
-            <code class="ptr">{v.pointer || '/'}</code>
-            <span class="reason">{v.reason}</span>
-            {#if v.line && v.line > 0}
-              <Badge tone="neutral"
-                >{$t('authored.validation.line', { line: v.line, col: v.col ?? 0 })}</Badge
-              >
-            {/if}
+            <code class="mono">binding.required_tools</code> — {$t('authoredNew.schema.tools')}
           </li>
-        {/each}
-      </ul>
+          <li>
+            <code class="mono">binding.required_servers</code> — {$t('authoredNew.schema.servers')}
+          </li>
+        </ul>
+      </section>
     {/if}
-  </aside>
+  </Inspector>
 </div>
 
 <style>
   .layout {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    gap: var(--space-4);
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
+    align-items: start;
     margin-top: var(--space-4);
   }
-  .editor {
-    background: var(--color-surface-1);
-    border-radius: var(--radius-md);
-    padding: var(--space-3);
+  .layout.has-selection {
+    grid-template-columns: minmax(0, 1fr) 320px;
   }
-  .validation {
-    background: var(--color-surface-1);
-    border-radius: var(--radius-md);
-    padding: var(--space-3);
-    align-self: start;
+  @media (max-width: 1279px) {
+    .layout.has-selection {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
-  .validation h3 {
-    margin: 0 0 var(--space-3) 0;
-    font-size: var(--font-size-body-sm);
-    font-weight: 600;
+  .main-col {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .card {
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border-soft);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .card h4 {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--font-size-label);
+    font-weight: var(--font-weight-semibold);
     color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .muted {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-label);
+  }
+  .body {
+    line-height: 1.5;
+    font-size: var(--font-size-body-sm);
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-mono-sm);
+    color: var(--color-text-primary);
   }
   .ok {
     color: var(--color-success);
@@ -201,17 +332,18 @@ binding:
   }
   .violations {
     list-style: none;
-    margin: var(--space-3) 0 0 0;
+    margin: 0;
     padding: 0;
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
   }
   .violations li {
-    background: var(--color-surface-2);
+    background: var(--color-bg-canvas);
     padding: var(--space-2);
     border-radius: var(--radius-sm);
     font-size: var(--font-size-body-sm);
+    border: 1px solid var(--color-border-soft);
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
@@ -224,7 +356,14 @@ binding:
   .reason {
     color: var(--color-text-primary);
   }
-  .muted {
-    color: var(--color-text-tertiary);
+  .schema-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    font-size: var(--font-size-body-sm);
+    color: var(--color-text-secondary);
   }
 </style>

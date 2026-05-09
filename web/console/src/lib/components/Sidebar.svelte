@@ -26,6 +26,10 @@
   type Item = { labelKey: string; href: string; Icon: typeof IconHome };
   type Group = { labelKey?: string; items: Item[] };
 
+  // Fixed in 10.6: previous version had two groups labelled
+  // `nav.section.operations`, which rendered as duplicate "OPERATIONS"
+  // headers. Policy collapses into the same Operations group so the
+  // taxonomy stays flat.
   const groups: Group[] = [
     {
       items: [{ labelKey: 'nav.overview', href: '/', Icon: IconHome }]
@@ -45,14 +49,11 @@
       items: [
         { labelKey: 'nav.sessions', href: '/sessions', Icon: IconActivity },
         { labelKey: 'nav.approvals', href: '/approvals', Icon: IconShieldCheck },
+        { labelKey: 'nav.policy', href: '/policy', Icon: IconScale },
         { labelKey: 'nav.audit', href: '/audit', Icon: IconHistory },
         { labelKey: 'nav.snapshots', href: '/snapshots', Icon: IconDatabase },
         { labelKey: 'nav.playground', href: '/playground', Icon: IconPlay }
       ]
-    },
-    {
-      labelKey: 'nav.section.operations',
-      items: [{ labelKey: 'nav.policy', href: '/policy', Icon: IconScale }]
     },
     {
       labelKey: 'nav.section.admin',
@@ -63,10 +64,6 @@
     }
   ];
 
-  // Reactive `isActive` — Svelte's template tracker only sees variables it
-  // reads in {...}. A plain function that closes over `pathname` doesn't
-  // get re-evaluated on navigation, so we wrap it in $: which produces
-  // a fresh closure whenever pathname changes.
   $: pathname = $page.url.pathname;
   $: isActive = (href: string): boolean => {
     if (href === '/') return pathname === '/';
@@ -101,7 +98,6 @@
     if (pollHandle !== null) clearInterval(pollHandle);
   });
 
-  // Aggregated status — one indicator instead of two redundant green dots.
   type Tone = 'neutral' | 'success' | 'warning' | 'danger';
   $: overallTone = ((): Tone => {
     if (healthOk === null && readyOk === null) return 'neutral';
@@ -109,16 +105,25 @@
     if (readyOk === false) return 'warning';
     return 'success';
   })();
+  $: statusCopy = ((): string => {
+    if (overallTone === 'success') return $t('sidebar.allSystemsOperational');
+    if (overallTone === 'warning') return $t('sidebar.partialHealth');
+    if (overallTone === 'danger') return $t('sidebar.degraded');
+    return $t('sidebar.unknown');
+  })();
   $: statusTitle = `${$t('sidebar.health')}: ${
     healthOk === null ? '…' : healthOk ? $t('landing.status.ok') : $t('landing.status.down')
   } · ${$t('sidebar.ready')}: ${
     readyOk === null ? '…' : readyOk ? $t('landing.status.ok') : $t('landing.status.pending')
   }`;
+
+  // Build-time injected; see vite.config.ts.
+  const version = `v${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'}`;
 </script>
 
 <aside class="sidebar" class:collapsed={$sidebarCollapsed} aria-label="Primary">
   <a class="brand" href="/" aria-label={$t('brand.name')}>
-    <Logo size={28} withWordmark={!$sidebarCollapsed} />
+    <Logo size={28} variant="onDark" withWordmark={!$sidebarCollapsed} />
   </a>
 
   <nav class="nav" aria-label="Sections">
@@ -137,7 +142,7 @@
               aria-current={isActive(it.href) ? 'page' : undefined}
               title={$sidebarCollapsed ? $t(it.labelKey) : undefined}
             >
-              <span class="ico"><it.Icon size={16} /></span>
+              <span class="ico"><it.Icon size={17} /></span>
               {#if !$sidebarCollapsed}
                 <span class="lbl">{$t(it.labelKey)}</span>
               {/if}
@@ -149,25 +154,40 @@
   </nav>
 
   <div class="foot">
-    <span class="status-row" title={statusTitle} aria-label={statusTitle}>
-      <StatusDot tone={overallTone} />
-      {#if !$sidebarCollapsed}
-        <span class="env-badge">{$t('topbar.envBadge')}</span>
-      {/if}
-    </span>
-    <button
-      type="button"
-      class="collapse-btn"
-      on:click={toggleSidebar}
-      aria-label={$sidebarCollapsed ? $t('sidebar.expand') : $t('sidebar.collapse')}
-      title={$sidebarCollapsed ? $t('sidebar.expand') : $t('sidebar.collapse')}
-    >
-      {#if $sidebarCollapsed}
-        <IconChevronRight size={14} />
-      {:else}
+    {#if !$sidebarCollapsed}
+      <div class="status-card" title={statusTitle} aria-label={statusTitle}>
+        <div class="status-card-head">
+          <span class="card-title">{$t('sidebar.gateway')}</span>
+          <span class="card-version">{version}</span>
+        </div>
+        <div class="status-card-body">
+          <StatusDot tone={overallTone} />
+          <span class="status-copy">{statusCopy}</span>
+        </div>
+      </div>
+      <button
+        type="button"
+        class="collapse-btn"
+        on:click={toggleSidebar}
+        aria-label={$t('sidebar.collapse')}
+        title={$t('sidebar.collapse')}
+      >
         <IconChevronLeft size={14} />
-      {/if}
-    </button>
+      </button>
+    {:else}
+      <span class="status-row" title={statusTitle} aria-label={statusTitle}>
+        <StatusDot tone={overallTone} />
+      </span>
+      <button
+        type="button"
+        class="collapse-btn"
+        on:click={toggleSidebar}
+        aria-label={$t('sidebar.expand')}
+        title={$t('sidebar.expand')}
+      >
+        <IconChevronRight size={14} />
+      </button>
+    {/if}
   </div>
 </aside>
 
@@ -175,16 +195,17 @@
   .sidebar {
     width: var(--layout-sidebar-width);
     flex-shrink: 0;
-    background: var(--color-bg-surface);
-    border-right: 1px solid var(--color-border-soft);
+    background: var(--color-bg-sidebar);
+    border-right: 1px solid var(--color-border-on-sidebar);
     display: flex;
     flex-direction: column;
-    padding: var(--space-4) 0;
+    padding: var(--space-4) 0 var(--space-3);
     height: 100vh;
     position: sticky;
     top: 0;
     z-index: var(--z-sidebar);
     transition: width var(--motion-panel) var(--ease-default);
+    color: var(--color-text-on-sidebar);
   }
   .sidebar.collapsed {
     width: var(--layout-sidebar-width-collapsed);
@@ -194,7 +215,7 @@
     padding: 0 var(--space-4) var(--space-4);
     text-decoration: none;
     color: inherit;
-    border-bottom: 1px solid var(--color-border-soft);
+    border-bottom: 1px solid var(--color-border-on-sidebar);
     margin-bottom: var(--space-3);
     display: flex;
     align-items: center;
@@ -215,19 +236,22 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding: 0 var(--space-2);
+    /* tighter group rhythm to match the design spec */
+    --nav-group-gap: var(--space-3);
   }
   .g-label {
-    font-size: var(--font-size-label);
-    color: var(--color-text-tertiary);
+    font-size: 11px;
+    line-height: 14px;
+    color: var(--color-text-on-sidebar-muted);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     padding: var(--space-3) var(--space-3) var(--space-1);
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-semibold);
     white-space: nowrap;
   }
   .g-rule {
     height: 1px;
-    background: var(--color-border-soft);
+    background: var(--color-border-on-sidebar);
     margin: var(--space-3) var(--space-2) var(--space-1);
   }
   .g-list {
@@ -244,11 +268,13 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: 8px var(--space-3);
+    padding: 9px var(--space-3);
     border-radius: var(--radius-sm);
-    color: var(--color-text-secondary);
+    color: var(--color-text-on-sidebar-soft);
     font-family: var(--font-sans);
-    font-size: var(--font-size-body-sm);
+    font-size: 13px;
+    line-height: 20px;
+    font-weight: var(--font-weight-medium);
     text-decoration: none;
     transition:
       background var(--motion-fast) var(--ease-default),
@@ -257,28 +283,29 @@
   }
   .sidebar.collapsed a {
     justify-content: center;
-    padding: 8px 0;
+    padding: 9px 0;
   }
   a:hover {
-    background: var(--color-bg-subtle);
-    color: var(--color-text-primary);
+    background: var(--color-bg-sidebar-hover);
+    color: var(--color-text-inverse);
   }
   a:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus);
+    box-shadow: 0 0 0 3px rgba(216, 234, 232, 0.2);
   }
   a.active {
-    background: var(--color-accent-primary-subtle);
-    color: var(--color-accent-primary);
-    font-weight: var(--font-weight-medium);
+    background: var(--color-bg-sidebar-active);
+    color: var(--color-text-inverse);
+    font-weight: var(--font-weight-semibold);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   }
   a.active::before {
     content: '';
     position: absolute;
-    left: 0;
+    left: -2px;
     top: 6px;
     bottom: 6px;
-    width: 2px;
+    width: 3px;
     border-radius: 1px;
     background: var(--color-accent-primary);
   }
@@ -287,11 +314,14 @@
   }
   .ico {
     display: inline-flex;
-    color: var(--color-icon-default);
+    color: var(--color-text-on-sidebar-soft);
     flex-shrink: 0;
   }
+  a:hover .ico {
+    color: var(--color-text-inverse);
+  }
   a.active .ico {
-    color: var(--color-accent-primary);
+    color: var(--color-text-inverse);
   }
   .lbl {
     overflow: hidden;
@@ -300,43 +330,72 @@
 
   .foot {
     padding: var(--space-3) var(--space-3) 0;
-    border-top: 1px solid var(--color-border-soft);
+    border-top: 1px solid var(--color-border-on-sidebar);
     margin-top: var(--space-2);
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-label);
+    color: var(--color-text-on-sidebar-muted);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .sidebar.collapsed .foot {
+    align-items: center;
+    padding: var(--space-3) var(--space-2) 0;
+  }
+  .status-card {
+    background: var(--color-bg-sidebar-elevated);
+    border: 1px solid var(--color-border-on-sidebar);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .status-card-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
   }
-  .sidebar.collapsed .foot {
-    flex-direction: column;
-    padding: var(--space-3) var(--space-2) 0;
-    gap: var(--space-2);
+  .card-title {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-on-sidebar);
+    letter-spacing: 0.01em;
   }
-  .status-row {
+  .card-version {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 14px;
+    color: var(--color-text-on-sidebar-muted);
+    padding: 2px 6px;
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .status-card-body {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
-    min-width: 0;
+    color: var(--color-text-on-sidebar-soft);
+    font-size: 11px;
+    line-height: 16px;
   }
-  .env-badge {
-    font-family: var(--font-mono);
-    color: var(--color-text-tertiary);
-    padding: 2px var(--space-2);
-    border-radius: var(--radius-pill);
-    background: var(--color-bg-subtle);
-    border: 1px solid var(--color-border-soft);
-    font-size: var(--font-size-label);
+  .status-copy {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .status-row {
+    display: inline-flex;
+    align-items: center;
+  }
   .collapse-btn {
     appearance: none;
     background: transparent;
-    border: none;
-    color: var(--color-icon-default);
+    border: 1px solid var(--color-border-on-sidebar);
+    color: var(--color-text-on-sidebar-muted);
     cursor: pointer;
     width: 28px;
     height: 28px;
@@ -345,16 +404,22 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    align-self: flex-end;
     transition:
       background var(--motion-fast) var(--ease-default),
-      color var(--motion-fast) var(--ease-default);
+      color var(--motion-fast) var(--ease-default),
+      border-color var(--motion-fast) var(--ease-default);
+  }
+  .sidebar.collapsed .collapse-btn {
+    align-self: center;
   }
   .collapse-btn:hover {
-    background: var(--color-bg-subtle);
-    color: var(--color-text-primary);
+    background: var(--color-bg-sidebar-hover);
+    color: var(--color-text-inverse);
+    border-color: rgba(255, 255, 255, 0.18);
   }
   .collapse-btn:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus);
+    box-shadow: 0 0 0 3px rgba(216, 234, 232, 0.2);
   }
 </style>

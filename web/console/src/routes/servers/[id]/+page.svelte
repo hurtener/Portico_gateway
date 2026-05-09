@@ -1,23 +1,75 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  /**
+   * Server detail — Phase 10.8 detail-page sub-vocabulary.
+   *
+   * Already had Tabs (Overview / Logs / Activity); this rewrite
+   * normalizes the rest of the page on the new vocabulary:
+   *   - Header actions move into PageActionGroup (was a 4-button
+   *     <div slot="actions">).
+   *   - Mini-KPI strip above the tabs (Instances / Healthy / Log
+   *     lines streamed).
+   *   - Overview body uses .card sections with the <h4> SECTION-LABEL
+   *     header (was a hand-rolled .card h2 pattern).
+   *   - Logs pane wraps in a .card so styling is consistent.
+   *
+   * Log lines streamed counts the lines received this session, not
+   * a cumulative total — useful as an "is the stream working" signal
+   * which is the load-bearing operator question on this page.
+   */
+  import { onDestroy, onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { api, type ServerSpec, type InstanceRecord } from '$lib/api';
+  import {
+    api,
+    isFeatureUnavailable,
+    type ServerSpec,
+    type InstanceRecord,
+    type EntityActivityRow
+  } from '$lib/api';
   import {
     Badge,
     Breadcrumbs,
     Button,
+    CodeBlock,
     EmptyState,
     KeyValueGrid,
+    MetricStrip,
+    PageActionGroup,
     PageHeader,
-    StatusDot
+    StatusDot,
+    Table,
+    Tabs,
+    toast
   } from '$lib/components';
   import { t } from '$lib/i18n';
+  import IconEdit from 'lucide-svelte/icons/pencil';
   import IconRefreshCw from 'lucide-svelte/icons/refresh-cw';
+  import IconRotateCcw from 'lucide-svelte/icons/rotate-ccw';
+  import IconTrash from 'lucide-svelte/icons/trash-2';
+  import IconBox from 'lucide-svelte/icons/box';
+  import IconActivity from 'lucide-svelte/icons/activity';
+  import IconScroll from 'lucide-svelte/icons/scroll-text';
+  import type { ComponentType } from 'svelte';
 
   let server: ServerSpec | null = null;
   let instances: InstanceRecord[] = [];
   let loading = true;
   let error = '';
+  let activeTab = 'overview';
+
+  // Logs tab state — SSE-driven from /api/servers/{id}/logs.
+  let logLines: string[] = [];
+  let logState: 'idle' | 'streaming' | 'error' = 'idle';
+  let logError = '';
+  let logStream: EventSource | null = null;
+
+  // Activity tab state.
+  let activity: EntityActivityRow[] = [];
+  let activityLoading = false;
+
+  // Destructive-action state.
+  let restartPending = false;
+  let deletePending = false;
 
   $: id = $page.params.id ?? '';
 
@@ -27,8 +79,7 @@
     error = '';
     try {
       server = await api.getServer(id);
-      const inst = await api.listInstances(id);
-      instances = inst.items ?? [];
+      instances = (await api.listInstances(id)) ?? [];
     } catch (e) {
       error = (e as Error).message;
     } finally {
@@ -36,22 +87,106 @@
     }
   }
 
-  async function reload() {
-    if (!id) return;
+  async function restartServer() {
+    if (!id || !confirm($t('serverDetail.confirmRestart', { id }))) return;
+    restartPending = true;
     try {
-      await api.reloadServer(id);
+      await api.restartServer(id, 'console.user_restart');
+      toast.info($t('serverDetail.toast.restartIssued'));
       await refresh();
     } catch (e) {
-      error = (e as Error).message;
+      toast.danger($t('serverDetail.toast.restartFailed.title'), (e as Error).message);
+    } finally {
+      restartPending = false;
+    }
+  }
+
+  async function deleteServer() {
+    if (!id) return;
+    if (!confirm($t('serverDetail.confirmDelete', { id }))) return;
+    deletePending = true;
+    try {
+      await api.deleteServer(id);
+      toast.success($t('serverDetail.toast.deleted'), id);
+      void goto('/servers');
+    } catch (e) {
+      const err = e as Error & { status?: number; code?: string };
+      if (err.status === 202) {
+        toast.info(
+          $t('serverDetail.toast.approvalRequired.title'),
+          $t('serverDetail.toast.approvalRequired.description')
+        );
+      } else {
+        toast.danger($t('serverDetail.toast.deleteFailed.title'), err.message);
+      }
+    } finally {
+      deletePending = false;
+    }
+  }
+
+  function startLogStream() {
+    stopLogStream();
+    if (!id) return;
+    logState = 'streaming';
+    logError = '';
+    logLines = [];
+    const url = `/api/servers/${encodeURIComponent(id)}/logs`;
+    try {
+      logStream = new EventSource(url, { withCredentials: true });
+      logStream.onmessage = (ev) => {
+        if (typeof ev.data !== 'string') return;
+        logLines = [...logLines, ev.data].slice(-500);
+      };
+      logStream.onerror = () => {
+        logState = 'error';
+        logError = $t('serverDetail.logs.error');
+        stopLogStream();
+      };
+    } catch (e) {
+      logState = 'error';
+      logError = (e as Error).message;
+    }
+  }
+
+  function stopLogStream() {
+    if (logStream) {
+      logStream.close();
+      logStream = null;
+    }
+    if (logState === 'streaming') logState = 'idle';
+  }
+
+  async function loadActivity() {
+    if (!id) return;
+    activityLoading = true;
+    try {
+      activity = (await api.serverActivity(id, 50)) ?? [];
+    } catch (e) {
+      if (!isFeatureUnavailable(e)) {
+        toast.danger($t('common.error'), (e as Error).message);
+      }
+      activity = [];
+    } finally {
+      activityLoading = false;
+    }
+  }
+
+  // React to tab change — start/stop streams + lazy fetches.
+  $: {
+    if (activeTab === 'logs' && logState === 'idle') startLogStream();
+    if (activeTab !== 'logs') stopLogStream();
+    if (activeTab === 'activity' && activity.length === 0 && !activityLoading) {
+      void loadActivity();
     }
   }
 
   onMount(refresh);
+  onDestroy(stopLogStream);
 
   type Tone = 'success' | 'danger' | 'warning' | 'neutral' | 'info';
   function statusTone(s?: string): Tone {
     const v = (s ?? '').toLowerCase();
-    if (v === 'ready' || v === 'running') return 'success';
+    if (v === 'ready' || v === 'running' || v === 'healthy') return 'success';
     if (v === 'crashed' || v === 'error') return 'danger';
     if (v === 'circuit_open' || v === 'backoff') return 'warning';
     if (v === 'starting') return 'info';
@@ -62,19 +197,35 @@
     return statusTone(s);
   }
 
+  function fmt(iso?: string): string {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleString();
+    } catch {
+      return iso;
+    }
+  }
+
   $: specItems = server
     ? [
-        { label: 'Transport', value: server.transport, mono: true },
-        { label: 'Runtime mode', value: server.runtime_mode, mono: true },
-        { label: 'Status', value: server.status },
-        { label: 'Enabled', value: server.enabled ? 'yes' : 'no' },
+        { label: $t('servers.field.transport'), value: server.transport, mono: true },
+        { label: $t('servers.field.runtimeMode'), value: server.runtime_mode, mono: true },
+        { label: $t('servers.field.status'), value: server.status },
+        { label: $t('servers.field.enabled'), value: server.enabled ? $t('common.yes') : $t('common.no') },
         ...(server.stdio?.command
-          ? [{ label: 'Command', value: server.stdio.command, mono: true, full: true as const }]
+          ? [
+              {
+                label: $t('servers.field.command'),
+                value: server.stdio.command,
+                mono: true,
+                full: true as const
+              }
+            ]
           : []),
         ...(server.stdio?.args && server.stdio.args.length > 0
           ? [
               {
-                label: 'Args',
+                label: $t('servers.field.args'),
                 value: server.stdio.args.join(' '),
                 mono: true,
                 full: true as const
@@ -82,13 +233,96 @@
             ]
           : []),
         ...(server.http?.url
-          ? [{ label: 'URL', value: server.http.url, mono: true, full: true as const }]
+          ? [
+              {
+                label: $t('servers.field.url'),
+                value: server.http.url,
+                mono: true,
+                full: true as const
+              }
+            ]
           : [])
+      ]
+    : [];
+
+  $: tabs = [
+    { id: 'overview', label: $t('serverDetail.tabs.overview') },
+    { id: 'logs', label: $t('serverDetail.tabs.logs') },
+    { id: 'activity', label: $t('serverDetail.tabs.activity') }
+  ];
+
+  $: activityColumns = [
+    { key: 'occurred_at', label: $t('activity.col.when'), width: '180px' },
+    { key: 'event_type', label: $t('activity.col.event'), mono: true, width: '220px' },
+    { key: 'actor_user_id', label: $t('activity.col.actor'), width: '160px' },
+    { key: 'summary', label: $t('activity.col.summary') }
+  ];
+
+  $: pageActions = [
+    {
+      label: $t('common.refresh'),
+      icon: IconRefreshCw,
+      onClick: () => refresh(),
+      loading
+    },
+    ...(server
+      ? [
+          {
+            label: $t('common.edit'),
+            icon: IconEdit,
+            href: `/servers/${encodeURIComponent(id)}/edit`
+          },
+          {
+            label: $t('servers.action.restart'),
+            icon: IconRotateCcw,
+            onClick: restartServer,
+            loading: restartPending
+          },
+          {
+            label: $t('servers.action.delete'),
+            icon: IconTrash,
+            variant: 'destructive' as const,
+            onClick: deleteServer,
+            loading: deletePending
+          }
+        ]
+      : [])
+  ];
+
+  $: healthyInstances = instances.filter((i) =>
+    ['ready', 'running', 'healthy'].includes(i.state.toLowerCase())
+  ).length;
+
+  $: metrics = server
+    ? [
+        {
+          id: 'instances',
+          label: $t('serverDetail.metric.instances'),
+          value: instances.length.toString(),
+          icon: IconBox as ComponentType<any>,
+          tone: 'brand' as const
+        },
+        {
+          id: 'healthy',
+          label: $t('serverDetail.metric.healthy'),
+          value: healthyInstances.toString(),
+          icon: IconActivity as ComponentType<any>,
+          tone: healthyInstances === instances.length && instances.length > 0
+            ? ('success' as const)
+            : ('default' as const),
+          attention: instances.length > 0 && healthyInstances === 0
+        },
+        {
+          id: 'logs',
+          label: $t('serverDetail.metric.logs'),
+          value: logLines.length.toString(),
+          icon: IconScroll as ComponentType<any>
+        }
       ]
     : [];
 </script>
 
-<PageHeader title={server?.display_name || id} description={server ? undefined : ''}>
+<PageHeader title={server?.display_name || id}>
   <Breadcrumbs
     slot="breadcrumbs"
     items={[{ label: $t('nav.servers'), href: '/servers' }, { label: id }]}
@@ -98,47 +332,99 @@
     {#if server}<Badge tone={statusTone(server.status)}>{server.status}</Badge>{/if}
   </div>
   <div slot="actions">
-    <Button variant="secondary" on:click={refresh} {loading}>
-      <IconRefreshCw slot="leading" size={14} />
-      {$t('common.refresh')}
-    </Button>
-    {#if server}
-      <Button on:click={reload}>{$t('serverDetail.action.reload')}</Button>
-    {/if}
+    <PageActionGroup actions={pageActions} />
   </div>
 </PageHeader>
 
 {#if error}<p class="error">{error}</p>{/if}
 
 {#if server}
-  <section class="grid">
-    <article class="card">
-      <h2>{$t('serverDetail.spec')}</h2>
-      <KeyValueGrid items={specItems} columns={2} />
-    </article>
+  <MetricStrip {metrics} compact label={$t('serverDetail.metric.aria')} />
+  <Tabs {tabs} bind:active={activeTab} />
 
-    <article class="card">
-      <h2>{$t('serverDetail.instances', { count: instances.length })}</h2>
-      {#if instances.length === 0}
+  {#if activeTab === 'overview'}
+    <div class="grid">
+      <section class="card">
+        <h4>{$t('serverDetail.section.spec')}</h4>
+        <KeyValueGrid items={specItems} columns={2} />
+      </section>
+
+      <section class="card">
+        <h4>{$t('serverDetail.section.instances', { count: instances.length })}</h4>
+        {#if instances.length === 0}
+          <EmptyState
+            title={$t('serverDetail.instances.empty.title')}
+            description={$t('serverDetail.instances.empty.description')}
+            compact
+          />
+        {:else}
+          <ul class="instance-list">
+            {#each instances as i (i.instance_key)}
+              <li>
+                <StatusDot tone={instanceTone(i.state)} />
+                <code class="key">{i.instance_key}</code>
+                <Badge tone={instanceTone(i.state)}>{i.state}</Badge>
+                {#if i.pid}<span class="pid">pid {i.pid}</span>{/if}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </section>
+    </div>
+  {:else if activeTab === 'logs'}
+    <section class="card">
+      <header class="card-head">
+        <h4>{$t('serverDetail.logs.title')}</h4>
+        <div class="logs-controls">
+          {#if logState === 'streaming'}
+            <Badge tone="success">{$t('serverDetail.logs.live')}</Badge>
+            <Button size="sm" variant="secondary" on:click={stopLogStream}>
+              {$t('serverDetail.logs.pause')}
+            </Button>
+          {:else}
+            <Badge tone="neutral">{$t('serverDetail.logs.idle')}</Badge>
+            <Button size="sm" variant="secondary" on:click={startLogStream}>
+              {$t('serverDetail.logs.resume')}
+            </Button>
+          {/if}
+        </div>
+      </header>
+      {#if logError}<p class="error">{logError}</p>{/if}
+      {#if logLines.length === 0}
         <EmptyState
-          title={$t('serverDetail.instances.empty.title')}
-          description={$t('serverDetail.instances.empty.description')}
+          title={$t('serverDetail.logs.empty.title')}
+          description={$t('serverDetail.logs.empty.description')}
           compact
         />
       {:else}
-        <ul class="instance-list">
-          {#each instances as i (i.instance_key)}
-            <li>
-              <StatusDot tone={instanceTone(i.state)} />
-              <code class="key">{i.instance_key}</code>
-              <Badge tone={instanceTone(i.state)}>{i.state}</Badge>
-              {#if i.pid}<span class="pid">pid {i.pid}</span>{/if}
-            </li>
-          {/each}
-        </ul>
+        <CodeBlock language="text" code={logLines.join('\n')} />
       {/if}
-    </article>
-  </section>
+    </section>
+  {:else if activeTab === 'activity'}
+    <section class="card">
+      <h4>{$t('serverDetail.section.activity')}</h4>
+      <Table columns={activityColumns} rows={activity} empty={$t('common.empty')}>
+        <svelte:fragment slot="cell" let:row let:column>
+          {#if column.key === 'occurred_at'}
+            <span class="muted">{fmt(row.occurred_at)}</span>
+          {:else if column.key === 'event_type'}
+            <code class="mono">{row.event_type}</code>
+          {:else if column.key === 'actor_user_id'}
+            <span class="muted">{row.actor_user_id ?? '—'}</span>
+          {:else}
+            {row[column.key] ?? ''}
+          {/if}
+        </svelte:fragment>
+        <svelte:fragment slot="empty">
+          <EmptyState
+            title={$t('activity.empty.title')}
+            description={$t('activity.empty.description')}
+            compact
+          />
+        </svelte:fragment>
+      </Table>
+    </section>
+  {/if}
 {:else if !loading}
   <EmptyState
     title={$t('serverDetail.notFound.title')}
@@ -152,10 +438,20 @@
     margin: 0 0 var(--space-4) 0;
     font-size: var(--font-size-body-sm);
   }
+  .muted {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-label);
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-mono-sm);
+    color: var(--color-text-primary);
+  }
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-4);
+    margin-top: var(--space-4);
   }
   @media (max-width: 880px) {
     .grid {
@@ -166,13 +462,36 @@
     background: var(--color-bg-elevated);
     border: 1px solid var(--color-border-soft);
     border-radius: var(--radius-md);
-    padding: var(--space-5);
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
   }
-  .card h2 {
-    margin: 0 0 var(--space-4) 0;
-    font-size: var(--font-size-title);
+  .grid .card {
+    margin-top: 0;
+  }
+  /* Stand-alone cards (logs, activity) flow vertically */
+  .card:not(.grid > .card) {
+    margin-top: var(--space-4);
+  }
+  .card h4 {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--font-size-label);
     font-weight: var(--font-weight-semibold);
-    color: var(--color-text-primary);
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .logs-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
   }
   .instance-list {
     list-style: none;

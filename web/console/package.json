@@ -11,10 +11,13 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write .",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install chromium --with-deps",
     "postinstall": "node -e \"require('fs').writeFileSync('node_modules/go.mod','module ignored\\n')\"",
     "postbuild": "node -e \"require('fs').writeFileSync('build/.gitkeep','# placeholder so //go:embed succeeds even with no build output\\n')\""
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@sveltejs/adapter-static": "^3.0.5",
     "@sveltejs/kit": "^2.5.18",
     "@sveltejs/vite-plugin-svelte": "^3.1.1",

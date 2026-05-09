@@ -397,12 +397,22 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 			pgExec := newPlaybackExecutor(auditEmitter)
 			pgPlayback := playground.NewPlayback(pgSvc, pgBinder, backend.Playground(), auditEmitter, pgExec)
 			pgCorrelator := playground.NewCorrelator(auditStore)
-			playgroundCtl = newPlaygroundAdapter(pgSvc, pgBinder, pgPlayback, pgCorrelator, auditEmitter, snapshotService, backend.Playground(), logger.With("component", "playground"))
+			playgroundCtl = newPlaygroundAdapter(pgSvc, pgBinder, pgPlayback, pgCorrelator, auditEmitter, snapshotService, backend.Playground(), dispatcher, sessions, skillsMgr, logger.With("component", "playground"))
 		} else {
 			logger.Warn("playground service init failed", "err", err)
 		}
 	} else {
 		logger.Warn("playground signing key generation failed", "err", err)
+	}
+
+	// Skills runtime is optional (no sources → buildSkillsManager
+	// returns nil). Cast to the interface explicitly so a typed-nil
+	// pointer collapses into the interface's untyped-nil — without
+	// this, every `d.Skills == nil` check downstream is a false-positive
+	// against a typed-nil and dereferencing would panic.
+	var skillsDep api.SkillsManager
+	if skillsMgr != nil {
+		skillsDep = skillsMgr
 	}
 
 	deps := api.Deps{
@@ -420,7 +430,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		Registry:       reg,
 		Apps:           appsReg,
 		AllowedOrigins: cfg.Server.AllowedOrigins,
-		Skills:         skillsMgr,
+		Skills:         skillsDep,
 		Approvals:      backend.Approvals(),
 		ApprovalFlow:   api.NewApprovalFlowAdapter(approvalFlowResolverFor(approvalFlow)),
 		Vault:          vault,

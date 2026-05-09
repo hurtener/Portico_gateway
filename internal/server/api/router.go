@@ -337,11 +337,14 @@ func NewRouter(d Deps) http.Handler {
 		// requires the store.
 		if d.Playground != nil {
 			r.Post("/api/playground/sessions", startPlaygroundSessionHandler(d))
+			r.Get("/api/playground/sessions/{sid}", getPlaygroundSessionHandler(d))
 			r.Delete("/api/playground/sessions/{sid}", endPlaygroundSessionHandler(d))
 			r.Get("/api/playground/sessions/{sid}/catalog", catalogPlaygroundHandler(d))
 			r.Post("/api/playground/sessions/{sid}/calls", issueCallHandler(d))
 			r.Get("/api/playground/sessions/{sid}/calls/{cid}/stream", streamCallHandler(d))
 			r.Get("/api/playground/sessions/{sid}/correlation", playgroundCorrelationHandler(d))
+			r.Post("/api/playground/sessions/{sid}/skills/{skill_id}/enable", setSessionSkillEnabledHandler(d, true))
+			r.Post("/api/playground/sessions/{sid}/skills/{skill_id}/disable", setSessionSkillEnabledHandler(d, false))
 			r.Post("/api/playground/cases/{id}/replay", replayPlaygroundCaseHandler(d))
 			r.Get("/api/playground/runs/{run_id}", runDetailHandler(d))
 			r.Get("/api/playground/runs/{run_id}/correlation", runCorrelationHandler(d))

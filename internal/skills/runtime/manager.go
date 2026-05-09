@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/hurtener/Portico_gateway/internal/skills/loader"
 	"github.com/hurtener/Portico_gateway/internal/skills/source"
@@ -102,6 +103,7 @@ func (m *Manager) Start(ctx context.Context, sources []source.Source) error {
 			Source:   r.Source,
 			Ref:      r.Ref,
 			Warnings: r.Warnings,
+			LoadedAt: time.Now().UTC(),
 		})
 		m.log.Info("skill loaded", "skill_id", r.Manifest.ID, "version", r.Manifest.Version, "warnings", r.Warnings)
 	}

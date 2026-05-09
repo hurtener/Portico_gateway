@@ -41,7 +41,7 @@
   });
 </script>
 
-<PageHeader title={$t('playground.cases.detail')} description={$t('playground.subtitle')}>
+<PageHeader title={$t('playground.cases.detail')}>
   <svelte:fragment slot="actions">
     <Button on:click={replay}>{$t('playground.cases.replay')}</Button>
   </svelte:fragment>

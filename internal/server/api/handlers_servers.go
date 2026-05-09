@@ -29,10 +29,14 @@ func listServersHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "list_failed", err.Error(), nil)
 			return
 		}
+		// Phase 10.6: prefetch tenant substrate once so per-row
+		// derivation is O(1). Best-effort — missing dependencies
+		// degrade gracefully (substrate fields render as zero / "none").
+		agg := prepareTenantSubstrate(r.Context(), d, tenantID)
 		// Empty array, not null, when nothing is registered.
 		out := make([]map[string]any, 0, len(snaps))
 		for _, s := range snaps {
-			out = append(out, snapshotJSON(s))
+			out = append(out, snapshotJSONWithSubstrate(s, agg))
 		}
 		writeJSON(w, http.StatusOK, out)
 	}
@@ -60,7 +64,10 @@ func getServerHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "get_failed", err.Error(), nil)
 			return
 		}
-		body := snapshotJSON(snap)
+		// Phase 10.6: detail view carries the same substrate so the
+		// inspector can render side-by-side with the table.
+		agg := prepareTenantSubstrate(r.Context(), d, tenantID)
+		body := snapshotJSONWithSubstrate(snap, agg)
 		// Detail view also includes the live instance list.
 		instances, ierr := d.Registry.ListInstances(r.Context(), tenantID, id)
 		if ierr == nil {
@@ -244,6 +251,11 @@ func listInstancesHandler(d Deps) http.HandlerFunc {
 
 // snapshotJSON renders a Snapshot for JSON output. We flatten the most-used
 // fields to the top level so clients don't have to traverse `.record.*`.
+//
+// The substrate fields (capabilities, skills_count, policy_state, etc) are
+// added by snapshotJSONWithSubstrate; this thin wrapper preserves the
+// pre-Phase-10.6 signature for callers that don't need them (single-row
+// upserts, restart endpoints, etc).
 func snapshotJSON(s *registry.Snapshot) map[string]any {
 	if s == nil {
 		return nil
@@ -264,6 +276,26 @@ func snapshotJSON(s *registry.Snapshot) map[string]any {
 		"updated_at":    r.UpdatedAt,
 		"spec":          s.Spec,
 	}
+}
+
+// snapshotJSONWithSubstrate renders a server snapshot AND the new
+// Phase 10.6 substrate fields (capabilities counts, attached-skills,
+// policy/auth state, last_seen). Callers prepare the tenant aggregate
+// once and pass it in — derive runs in O(1) per server.
+func snapshotJSONWithSubstrate(s *registry.Snapshot, agg tenantSubstrate) map[string]any {
+	out := snapshotJSON(s)
+	if out == nil {
+		return nil
+	}
+	sub := deriveServerSubstrate(s, agg)
+	out["capabilities"] = sub.Capabilities
+	out["skills_count"] = sub.SkillsCount
+	out["policy_state"] = sub.PolicyState
+	out["auth_state"] = sub.AuthState
+	if sub.LastSeen != "" {
+		out["last_seen"] = sub.LastSeen
+	}
+	return out
 }
 
 // tenantOfRequest extracts the tenant ID from the request context. Wraps

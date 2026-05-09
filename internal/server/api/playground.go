@@ -38,6 +38,13 @@ type PlaygroundController interface {
 
 	// Replay.
 	Replay(ctx context.Context, tenantID, actorID, caseID string) (*PlaygroundRunDTO, error)
+
+	// Skill enablement scoped to the playground's underlying mcpgw
+	// session. Returns the skill id + new state on success. The adapter
+	// resolves the playground sid → mcpgw session id internally so the
+	// REST handler doesn't need to know that the playground keeps two
+	// session ids in sync.
+	SetSkillEnabled(ctx context.Context, sid, skillID string, enabled bool) error
 }
 
 // PlaygroundStartSessionRequest is the JSON body for POST /api/playground/sessions.
@@ -146,6 +153,33 @@ func startPlaygroundSessionHandler(d Deps) http.HandlerFunc {
 	}
 }
 
+// getPlaygroundSessionHandler GET /api/playground/sessions/{sid}.
+// Returns 404 when the session has expired or never existed; the Console
+// uses this to decide whether to resume a sessionStorage-cached id or
+// mint a fresh one.
+func getPlaygroundSessionHandler(d Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d.Playground == nil {
+			writeJSONError(w, http.StatusServiceUnavailable, "playground_unavailable", "playground not configured", nil)
+			return
+		}
+		sid := chi.URLParam(r, "sid")
+		sess := d.Playground.GetSession(sid)
+		if sess == nil {
+			writeJSONError(w, http.StatusNotFound, "not_found", "session not found", nil)
+			return
+		}
+		// Cross-tenant guard: a stored session id from a different tenant
+		// must not resolve here.
+		id, _ := tenant.From(r.Context())
+		if sess.TenantID != id.TenantID && !id.HasScope("admin") {
+			writeJSONError(w, http.StatusNotFound, "not_found", "session not found", nil)
+			return
+		}
+		writeJSON(w, http.StatusOK, sess)
+	}
+}
+
 // endPlaygroundSessionHandler DELETE /api/playground/sessions/{sid}.
 func endPlaygroundSessionHandler(d Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -250,6 +284,35 @@ func streamCallHandler(d Deps) http.HandlerFunc {
 				}
 			}
 		}
+	}
+}
+
+// setSessionSkillEnabledHandler toggles a skill for the playground
+// session's underlying mcpgw session. enabled=true → enable, false →
+// disable. The route exists so operators don't have to chase the
+// mcpgw session id manually — the playground knows the mapping.
+func setSessionSkillEnabledHandler(d Deps, enabled bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d.Playground == nil {
+			writeJSONError(w, http.StatusServiceUnavailable, "playground_unavailable", "playground not configured", nil)
+			return
+		}
+		sid := chi.URLParam(r, "sid")
+		skillID := chi.URLParam(r, "skill_id")
+		if skillID == "" {
+			writeJSONError(w, http.StatusBadRequest, "missing_skill_id", "skill_id required", nil)
+			return
+		}
+		if err := d.Playground.SetSkillEnabled(r.Context(), sid, skillID, enabled); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "enablement_failed", err.Error(), nil)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"session_id": sid,
+			"skill_id":   skillID,
+			"enabled":    enabled,
+			"scope":      "playground_session",
+		})
 	}
 }
 

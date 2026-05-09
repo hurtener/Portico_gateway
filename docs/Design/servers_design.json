@@ -1,0 +1,1556 @@
+{
+  "$schema": "https://portico.dev/schemas/ui-spec.v0.json",
+  "specName": "Portico Servers Page UI Spec",
+  "version": "0.1.0",
+  "status": "draft",
+  "surface": "Portico Gateway Console",
+  "pageId": "servers.index",
+  "description": "Detailed UI specification for the Portico MCP Servers page: visual tokens, card structure, typography, colors, spacing, negative space, interactions, and component states.",
+  "designIntent": {
+    "mood": [
+      "calm",
+      "architectural",
+      "trustworthy",
+      "operational",
+      "premium infrastructure",
+      "technical but humane"
+    ],
+    "principles": [
+      "Use restrained contrast and typography to create hierarchy instead of excessive decoration.",
+      "Favor structured surfaces over floating cards everywhere.",
+      "Make health, risk, policy, runtime, and credential state instantly legible.",
+      "Use negative space deliberately so the dense operational content still feels calm.",
+      "Keep the page useful at a glance, then reveal detail progressively through inspector panels and drawers.",
+      "Avoid neon, cyberpunk, generic cloud-console blue, or overly playful SaaS styling."
+    ],
+    "visualMetaphor": "A controlled architectural threshold: many external MCP servers pass through one governed, observable gateway."
+  },
+  "tokens": {
+    "color": {
+      "mode": "light",
+      "brand": {
+        "primary": "#2D6F73",
+        "primaryHover": "#245D61",
+        "primaryActive": "#1D4D50",
+        "primarySoft": "#D8EAE8",
+        "primarySubtle": "#EAF4F3",
+        "primaryInk": "#123A3D",
+        "onPrimary": "#FFFFFF",
+        "warm": "#9A7653",
+        "warmHover": "#835F3F",
+        "warmSoft": "#EEE3D8",
+        "warmSubtle": "#F7F1EB"
+      },
+      "background": {
+        "canvas": "#F6F4EF",
+        "canvasWarm": "#F8F5EF",
+        "surface": "#FBFAF7",
+        "surfaceRaised": "#FFFFFF",
+        "surfaceSubtle": "#F1EEE8",
+        "surfaceTinted": "#F5F1EA",
+        "overlay": "#FFFFFF",
+        "sidebar": "#102D31",
+        "sidebarElevated": "#17383D",
+        "sidebarActive": "#245D61",
+        "sidebarActiveSoft": "#2D6F73"
+      },
+      "text": {
+        "primary": "#1F252B",
+        "secondary": "#58616B",
+        "tertiary": "#7A848E",
+        "muted": "#98A1A8",
+        "inverse": "#F3F5F6",
+        "inverseSecondary": "#C7CED3",
+        "brand": "#123A3D",
+        "link": "#245D61",
+        "danger": "#B24A3B",
+        "warning": "#9A611A",
+        "success": "#2F7A55"
+      },
+      "border": {
+        "soft": "#E7E1D8",
+        "default": "#D9D1C5",
+        "strong": "#BDAF9E",
+        "focus": "#2D6F73",
+        "sidebar": "rgba(255,255,255,0.10)",
+        "table": "#EAE3DA"
+      },
+      "icon": {
+        "default": "#5E6872",
+        "subtle": "#8C959D",
+        "inverse": "#E7ECEE",
+        "brand": "#2D6F73"
+      },
+      "status": {
+        "success": {
+          "base": "#2F7A55",
+          "text": "#1E5D3F",
+          "soft": "#DDEFE4",
+          "subtle": "#EEF8F2",
+          "border": "#B7DEC5"
+        },
+        "warning": {
+          "base": "#A36A1B",
+          "text": "#8A5411",
+          "soft": "#F5E7CD",
+          "subtle": "#FBF4E8",
+          "border": "#E8C88F"
+        },
+        "danger": {
+          "base": "#B24A3B",
+          "text": "#963729",
+          "soft": "#F6DFDB",
+          "subtle": "#FCF0EE",
+          "border": "#E8B8B0"
+        },
+        "info": {
+          "base": "#356E9A",
+          "text": "#27597F",
+          "soft": "#DCEAF4",
+          "subtle": "#EEF6FB",
+          "border": "#B8D4E8"
+        },
+        "neutral": {
+          "base": "#68727C",
+          "text": "#58616B",
+          "soft": "#ECE8E1",
+          "subtle": "#F5F2EC",
+          "border": "#D9D1C5"
+        }
+      },
+      "risk": {
+        "read": {
+          "bg": "#EAF4F3",
+          "fg": "#245D61",
+          "border": "#C8DDDA"
+        },
+        "write": {
+          "bg": "#F5E7CD",
+          "fg": "#8A5411",
+          "border": "#E8C88F"
+        },
+        "destructive": {
+          "bg": "#F6DFDB",
+          "fg": "#963729",
+          "border": "#E8B8B0"
+        },
+        "sensitiveRead": {
+          "bg": "#E8E2F2",
+          "fg": "#5A437E",
+          "border": "#D3C5E6"
+        }
+      },
+      "dataViz": {
+        "sparklineTeal": "#2D6F73",
+        "sparklineWarm": "#C78332",
+        "sparklineMuted": "#AAB3B9",
+        "gridLine": "#EAE3DA"
+      }
+    },
+    "typography": {
+      "families": {
+        "ui": "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "display": "Newsreader, Georgia, 'Times New Roman', serif",
+        "mono": "JetBrains Mono, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace"
+      },
+      "weights": {
+        "regular": 400,
+        "medium": 500,
+        "semibold": 600,
+        "bold": 700
+      },
+      "scale": {
+        "displayLg": {
+          "fontSize": 44,
+          "lineHeight": 52,
+          "fontWeight": 600,
+          "letterSpacing": "-0.035em"
+        },
+        "h1": {
+          "fontSize": 30,
+          "lineHeight": 38,
+          "fontWeight": 600,
+          "letterSpacing": "-0.025em"
+        },
+        "h2": {
+          "fontSize": 24,
+          "lineHeight": 32,
+          "fontWeight": 600,
+          "letterSpacing": "-0.02em"
+        },
+        "h3": {
+          "fontSize": 18,
+          "lineHeight": 26,
+          "fontWeight": 600,
+          "letterSpacing": "-0.01em"
+        },
+        "title": {
+          "fontSize": 16,
+          "lineHeight": 24,
+          "fontWeight": 600
+        },
+        "body": {
+          "fontSize": 14,
+          "lineHeight": 22,
+          "fontWeight": 400
+        },
+        "bodySm": {
+          "fontSize": 13,
+          "lineHeight": 20,
+          "fontWeight": 400
+        },
+        "caption": {
+          "fontSize": 12,
+          "lineHeight": 18,
+          "fontWeight": 400
+        },
+        "label": {
+          "fontSize": 12,
+          "lineHeight": 16,
+          "fontWeight": 600,
+          "letterSpacing": "0.01em"
+        },
+        "metric": {
+          "fontSize": 28,
+          "lineHeight": 34,
+          "fontWeight": 600,
+          "letterSpacing": "-0.03em"
+        },
+        "monoSm": {
+          "fontSize": 12,
+          "lineHeight": 18,
+          "fontWeight": 500,
+          "fontFamily": "mono"
+        },
+        "monoXs": {
+          "fontSize": 11,
+          "lineHeight": 16,
+          "fontWeight": 500,
+          "fontFamily": "mono"
+        }
+      },
+      "usage": {
+        "pageTitle": {
+          "family": "display",
+          "token": "h1",
+          "color": "text.primary"
+        },
+        "pageSubtitle": {
+          "family": "ui",
+          "token": "body",
+          "color": "text.secondary"
+        },
+        "sidebarBrand": {
+          "family": "display",
+          "fontSize": 22,
+          "lineHeight": 28,
+          "fontWeight": 600,
+          "letterSpacing": "0.16em",
+          "textTransform": "uppercase",
+          "color": "text.inverse"
+        },
+        "cardLabel": {
+          "family": "ui",
+          "token": "label",
+          "color": "text.secondary"
+        },
+        "tableHeader": {
+          "family": "ui",
+          "fontSize": 12,
+          "lineHeight": 16,
+          "fontWeight": 500,
+          "color": "text.tertiary"
+        },
+        "tablePrimary": {
+          "family": "ui",
+          "token": "bodySm",
+          "fontWeight": 600,
+          "color": "text.primary"
+        },
+        "tableSecondary": {
+          "family": "ui",
+          "token": "caption",
+          "color": "text.secondary"
+        }
+      }
+    },
+    "spacing": {
+      "baseUnit": 4,
+      "scale": {
+        "0": 0,
+        "1": 4,
+        "2": 8,
+        "3": 12,
+        "4": 16,
+        "5": 20,
+        "6": 24,
+        "8": 32,
+        "10": 40,
+        "12": 48,
+        "16": 64,
+        "20": 80,
+        "24": 96
+      },
+      "semantic": {
+        "pagePaddingX": 32,
+        "pagePaddingY": 28,
+        "sectionGap": 28,
+        "cardPadding": 20,
+        "cardPaddingCompact": 16,
+        "tableCellPaddingX": 16,
+        "tableCellPaddingY": 14,
+        "controlGap": 8,
+        "filterGap": 8,
+        "sidebarPadding": 16,
+        "sidebarItemGap": 6,
+        "inspectorPadding": 20,
+        "inspectorSectionGap": 16
+      },
+      "negativeSpace": {
+        "pageOuterMargin": "The main content should breathe around the top, left, and right edges. Use 32px horizontal padding and 28px top padding on desktop. Avoid pushing content flush against the topbar or inspector.",
+        "betweenHeaderAndMetrics": "Use 24px between the page heading block and the metric cards. This creates a calm pause before operational data begins.",
+        "betweenMetricsAndFilters": "Use 28px between the metric row and the filter/search row. This separates high-level status from table operations.",
+        "betweenFiltersAndTable": "Use 14px between filters and the table. The relationship should feel direct, but not cramped.",
+        "tableRowBreathing": "Rows should be 64px minimum height. Server rows include primary and secondary text, badges, and action menu; allow enough vertical room to avoid enterprise-console density.",
+        "inspectorBreathing": "Inspector sections use 16px vertical gap and 20px padding. Each section should look like a calm stack of small facts, not a compressed form.",
+        "sidebarBreathing": "Sidebar groups should have 24px vertical separation. Items use 40px height with 8px internal gap to keep navigation clear in a dark surface.",
+        "whiteSpaceRatio": "Target roughly 28% to 36% negative space in the main content area on a 1440px desktop viewport. Dense pages may fall to 24%, but should never look like a spreadsheet-first admin console.",
+        "emptyRightGutters": "Preserve a 24px gutter between the main table and right inspector. This visual break prevents the inspector from feeling glued to the operational table.",
+        "cardInteriorWhitespace": "Metric cards should not be packed. Leave 12px between label and metric, 12px between metric and helper text, and at least 10px above miniature sparklines."
+      }
+    },
+    "radius": {
+      "xs": 6,
+      "sm": 8,
+      "md": 12,
+      "lg": 16,
+      "xl": 20,
+      "pill": 999
+    },
+    "shadow": {
+      "none": "none",
+      "sm": "0 1px 2px rgba(16, 24, 40, 0.04)",
+      "md": "0 4px 12px rgba(16, 24, 40, 0.06)",
+      "lg": "0 12px 32px rgba(16, 24, 40, 0.08)",
+      "sidebarInset": "inset -1px 0 0 rgba(255,255,255,0.08)",
+      "focusRing": "0 0 0 3px rgba(45, 111, 115, 0.18)"
+    },
+    "border": {
+      "width": {
+        "hairline": 1,
+        "focus": 2
+      },
+      "style": "solid"
+    },
+    "motion": {
+      "duration": {
+        "instant": "80ms",
+        "fast": "120ms",
+        "normal": "180ms",
+        "slow": "240ms"
+      },
+      "easing": {
+        "standard": "cubic-bezier(0.2, 0.0, 0.0, 1.0)",
+        "out": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "in": "cubic-bezier(0.32, 0, 0.67, 0)"
+      },
+      "rules": [
+        "Use subtle transitions only: opacity, border color, background color, transform up to 1px, and panel slide.",
+        "Avoid bouncy animation in the console; this is an operational system.",
+        "Use skeleton shimmer only in low-opacity neutral tones."
+      ]
+    },
+    "layout": {
+      "desktop": {
+        "minWidth": 1280,
+        "idealWidth": 1440,
+        "sidebarWidth": 208,
+        "topbarHeight": 64,
+        "inspectorWidth": 304,
+        "mainMaxWidth": "none",
+        "contentGrid": "sidebar fixed, content fluid, inspector fixed"
+      },
+      "tablet": {
+        "minWidth": 768,
+        "sidebarWidth": 72,
+        "inspectorMode": "drawer",
+        "tableMode": "horizontal-scroll"
+      },
+      "mobile": {
+        "maxWidth": 767,
+        "sidebarMode": "bottom-nav-or-drawer",
+        "inspectorMode": "full-screen-drawer",
+        "tableMode": "server-cards"
+      }
+    }
+  },
+  "page": {
+    "id": "servers.index",
+    "title": "MCP Servers",
+    "subtitle": "Manage registered MCP servers, runtime modes, health, exposed capabilities, and policies.",
+    "layout": {
+      "root": {
+        "display": "grid",
+        "gridTemplateColumns": "208px minmax(0, 1fr)",
+        "minHeight": "100vh",
+        "background": "color.background.canvas"
+      },
+      "appShell": {
+        "display": "grid",
+        "gridTemplateRows": "64px minmax(0, 1fr)",
+        "minWidth": 0
+      },
+      "contentWithInspector": {
+        "display": "grid",
+        "gridTemplateColumns": "minmax(0, 1fr) 304px",
+        "gap": 24,
+        "padding": "28px 32px 32px 32px"
+      }
+    },
+    "regions": {
+      "sidebar": {
+        "component": "SidebarNavigation",
+        "width": 208,
+        "background": "color.background.sidebar",
+        "borderRight": "1px solid rgba(255,255,255,0.08)",
+        "padding": 16,
+        "structure": [
+          "brandLockup",
+          "primaryNavigation",
+          "gatewayGroup",
+          "systemGroup",
+          "statusCard"
+        ],
+        "negativeSpace": {
+          "brandToOverviewGap": 28,
+          "groupGap": 24,
+          "statusCardBottomInset": 16
+        }
+      },
+      "topbar": {
+        "component": "Topbar",
+        "height": 64,
+        "background": "rgba(251, 250, 247, 0.82)",
+        "backdropFilter": "blur(12px)",
+        "borderBottom": "1px solid color.border.soft",
+        "contentAlignment": "search centered, utilities right",
+        "paddingX": 32
+      },
+      "main": {
+        "component": "ServerRegistryWorkspace",
+        "structure": [
+          "pageHeader",
+          "metricCards",
+          "filterBar",
+          "serverTable",
+          "pagination"
+        ]
+      },
+      "inspector": {
+        "component": "ServerInspector",
+        "width": 304,
+        "position": "sticky below topbar",
+        "top": 88,
+        "maxHeight": "calc(100vh - 112px)",
+        "overflow": "auto"
+      }
+    },
+    "components": {
+      "SidebarNavigation": {
+        "brandLockup": {
+          "height": 48,
+          "display": "flex",
+          "alignItems": "center",
+          "gap": 12,
+          "logo": {
+            "size": 34,
+            "color": "rgba(243,245,246,0.78)",
+            "style": "line-art portico arch"
+          },
+          "wordmark": {
+            "text": "PORTICO",
+            "typography": "typography.usage.sidebarBrand"
+          }
+        },
+        "navItem": {
+          "height": 40,
+          "padding": "0 12px",
+          "borderRadius": 10,
+          "gap": 10,
+          "iconSize": 17,
+          "typography": {
+            "fontSize": 13,
+            "lineHeight": 20,
+            "fontWeight": 500
+          },
+          "states": {
+            "default": {
+              "background": "transparent",
+              "text": "rgba(243,245,246,0.76)",
+              "icon": "rgba(243,245,246,0.70)"
+            },
+            "hover": {
+              "background": "rgba(255,255,255,0.06)",
+              "text": "#FFFFFF",
+              "icon": "#FFFFFF"
+            },
+            "active": {
+              "background": "linear-gradient(90deg, rgba(45,111,115,0.95), rgba(36,93,97,0.72))",
+              "text": "#FFFFFF",
+              "icon": "#FFFFFF",
+              "shadow": "inset 0 0 0 1px rgba(255,255,255,0.08)"
+            },
+            "focus": {
+              "outline": "none",
+              "boxShadow": "0 0 0 3px rgba(216,234,232,0.20)"
+            }
+          }
+        },
+        "groupLabel": {
+          "fontSize": 11,
+          "lineHeight": 14,
+          "fontWeight": 600,
+          "letterSpacing": "0.06em",
+          "textTransform": "uppercase",
+          "color": "rgba(243,245,246,0.52)",
+          "marginBottom": 8
+        },
+        "statusCard": {
+          "position": "near bottom",
+          "padding": 16,
+          "borderRadius": 12,
+          "background": "rgba(255,255,255,0.055)",
+          "border": "1px solid rgba(255,255,255,0.10)",
+          "title": "Portico Gateway",
+          "version": "v0.3.0",
+          "status": "All systems operational",
+          "statusColor": "#76D39A"
+        }
+      },
+      "Topbar": {
+        "search": {
+          "width": 320,
+          "height": 36,
+          "borderRadius": 10,
+          "background": "color.background.surfaceRaised",
+          "border": "1px solid color.border.soft",
+          "placeholder": "Search anything...",
+          "shortcut": "⌘K",
+          "states": {
+            "default": {
+              "border": "color.border.soft"
+            },
+            "hover": {
+              "border": "color.border.default"
+            },
+            "focus": {
+              "border": "color.border.focus",
+              "boxShadow": "shadow.focusRing"
+            }
+          }
+        },
+        "utilityIconButton": {
+          "size": 36,
+          "borderRadius": 10,
+          "background": "transparent",
+          "iconColor": "color.icon.default",
+          "states": {
+            "hover": {
+              "background": "color.background.surfaceSubtle",
+              "iconColor": "color.text.primary"
+            },
+            "active": {
+              "background": "color.brand.primarySubtle",
+              "iconColor": "color.brand.primary"
+            }
+          }
+        },
+        "userMenu": {
+          "avatarSize": 36,
+          "avatarBackground": "#343A40",
+          "avatarText": "#FFFFFF",
+          "nameTypography": "typography.scale.bodySm",
+          "orgTypography": "typography.scale.caption"
+        }
+      },
+      "PageHeader": {
+        "layout": {
+          "display": "flex",
+          "justifyContent": "space-between",
+          "alignItems": "flex-start",
+          "gap": 24,
+          "marginBottom": 24
+        },
+        "title": {
+          "text": "MCP Servers",
+          "typography": "typography.usage.pageTitle"
+        },
+        "subtitle": {
+          "text": "Manage registered MCP servers, runtime modes, health, exposed capabilities, and policies.",
+          "typography": "typography.usage.pageSubtitle",
+          "marginTop": 4
+        },
+        "actions": [
+          {
+            "label": "Import Config",
+            "variant": "secondary",
+            "icon": null,
+            "hasDropdown": true
+          },
+          {
+            "label": "Refresh Catalog",
+            "variant": "secondary",
+            "icon": "RefreshCw",
+            "hasDropdown": true
+          },
+          {
+            "label": "Add Server",
+            "variant": "primarySplit",
+            "icon": "Plus",
+            "hasDropdown": true
+          }
+        ]
+      },
+      "Button": {
+        "sizes": {
+          "sm": {
+            "height": 32,
+            "paddingX": 12,
+            "fontSize": 12
+          },
+          "md": {
+            "height": 40,
+            "paddingX": 16,
+            "fontSize": 13
+          },
+          "lg": {
+            "height": 48,
+            "paddingX": 20,
+            "fontSize": 14
+          }
+        },
+        "base": {
+          "borderRadius": 10,
+          "fontWeight": 600,
+          "transition": "background-color 120ms, border-color 120ms, transform 120ms, box-shadow 120ms"
+        },
+        "variants": {
+          "primary": {
+            "background": "linear-gradient(180deg, #2D6F73 0%, #245D61 100%)",
+            "border": "1px solid #1D4D50",
+            "color": "#FFFFFF",
+            "shadow": "0 1px 2px rgba(16,24,40,0.08)",
+            "hover": {
+              "background": "#245D61"
+            },
+            "active": {
+              "background": "#1D4D50",
+              "transform": "translateY(1px)"
+            }
+          },
+          "secondary": {
+            "background": "color.background.surfaceRaised",
+            "border": "1px solid color.border.default",
+            "color": "color.text.primary",
+            "hover": {
+              "background": "color.background.surfaceSubtle",
+              "border": "color.border.strong"
+            }
+          },
+          "ghost": {
+            "background": "transparent",
+            "border": "1px solid transparent",
+            "color": "color.text.secondary",
+            "hover": {
+              "background": "color.background.surfaceSubtle",
+              "color": "color.text.primary"
+            }
+          },
+          "destructiveOutline": {
+            "background": "transparent",
+            "border": "1px solid color.status.danger.base",
+            "color": "color.status.danger.base",
+            "hover": {
+              "background": "color.status.danger.subtle"
+            }
+          }
+        }
+      },
+      "MetricCardRow": {
+        "layout": {
+          "display": "grid",
+          "gridTemplateColumns": "repeat(5, minmax(0, 1fr))",
+          "gap": 12,
+          "marginBottom": 28
+        },
+        "card": {
+          "height": 144,
+          "padding": 18,
+          "borderRadius": 12,
+          "background": "color.background.surfaceRaised",
+          "border": "1px solid color.border.soft",
+          "shadow": "shadow.sm",
+          "states": {
+            "hover": {
+              "border": "color.border.default",
+              "shadow": "shadow.md"
+            }
+          },
+          "negativeSpace": {
+            "topLabelToMetric": 10,
+            "metricToHelper": 8,
+            "helperToSparkline": 12,
+            "iconToLabel": 10
+          }
+        },
+        "cards": [
+          {
+            "id": "servers",
+            "label": "Servers",
+            "metric": "12",
+            "unit": "total",
+            "helper": "11 online · 1 offline",
+            "icon": "Server",
+            "iconTone": "brand.primary",
+            "sparklineTone": "dataViz.sparklineTeal"
+          },
+          {
+            "id": "runtimeProcesses",
+            "label": "Runtime Processes",
+            "metric": "34",
+            "unit": "active",
+            "helper": "8 idle · 2 restarting",
+            "icon": "Workflow",
+            "iconTone": "brand.primary",
+            "sparklineTone": "dataViz.sparklineTeal"
+          },
+          {
+            "id": "capabilities",
+            "label": "Capabilities",
+            "metric": "184",
+            "unit": "tools",
+            "helper": "39 resources · 22 prompts",
+            "icon": "Box",
+            "iconTone": "text.secondary",
+            "sparklineTone": "dataViz.sparklineWarm"
+          },
+          {
+            "id": "policies",
+            "label": "Policies",
+            "metric": "27",
+            "unit": "enforced",
+            "helper": "3 approval-gated",
+            "icon": "Shield",
+            "iconTone": "text.secondary",
+            "sparklineTone": "dataViz.sparklineWarm"
+          },
+          {
+            "id": "catalogDrift",
+            "label": "Catalog Drift",
+            "metric": "2",
+            "unit": "changed",
+            "helper": "Review required",
+            "icon": "ShieldAlert",
+            "iconTone": "status.warning.base",
+            "background": "color.status.warning.subtle",
+            "border": "color.status.warning.border",
+            "sparklineTone": "dataViz.sparklineWarm",
+            "attention": "medium"
+          }
+        ]
+      },
+      "FilterBar": {
+        "layout": {
+          "display": "flex",
+          "alignItems": "center",
+          "gap": 8,
+          "marginBottom": 14,
+          "flexWrap": "nowrap"
+        },
+        "search": {
+          "width": 176,
+          "height": 34,
+          "borderRadius": 9,
+          "placeholder": "Search servers...",
+          "background": "color.background.surfaceRaised",
+          "border": "1px solid color.border.soft"
+        },
+        "chips": [
+          "All",
+          "Online",
+          "Offline",
+          "Needs review",
+          "Has skills",
+          "Auth error"
+        ],
+        "dropdowns": [
+          "Transport",
+          "Runtime",
+          "Scope",
+          "Filters"
+        ],
+        "chip": {
+          "height": 34,
+          "paddingX": 12,
+          "borderRadius": 9,
+          "fontSize": 12,
+          "fontWeight": 500,
+          "states": {
+            "default": {
+              "background": "color.background.surfaceRaised",
+              "border": "1px solid color.border.soft",
+              "color": "color.text.secondary"
+            },
+            "hover": {
+              "border": "color.border.default",
+              "color": "color.text.primary"
+            },
+            "active": {
+              "background": "color.brand.primarySubtle",
+              "border": "1px solid color.brand.primary",
+              "color": "color.brand.primaryInk"
+            }
+          }
+        }
+      },
+      "ServerTable": {
+        "container": {
+          "background": "color.background.surfaceRaised",
+          "border": "1px solid color.border.soft",
+          "borderRadius": 12,
+          "overflow": "hidden",
+          "shadow": "shadow.sm"
+        },
+        "columns": [
+          {
+            "id": "server",
+            "label": "Server",
+            "width": 176,
+            "align": "left"
+          },
+          {
+            "id": "status",
+            "label": "Status",
+            "width": 80,
+            "align": "left"
+          },
+          {
+            "id": "transport",
+            "label": "Transport",
+            "width": 76,
+            "align": "left"
+          },
+          {
+            "id": "runtime",
+            "label": "Runtime",
+            "width": 100,
+            "align": "left"
+          },
+          {
+            "id": "scope",
+            "label": "Scope",
+            "width": 84,
+            "align": "left"
+          },
+          {
+            "id": "capabilities",
+            "label": "Capabilities",
+            "width": 112,
+            "align": "left"
+          },
+          {
+            "id": "skills",
+            "label": "Skills",
+            "width": 60,
+            "align": "center"
+          },
+          {
+            "id": "policy",
+            "label": "Policy",
+            "width": 88,
+            "align": "left"
+          },
+          {
+            "id": "auth",
+            "label": "Auth",
+            "width": 96,
+            "align": "left"
+          },
+          {
+            "id": "version",
+            "label": "Version",
+            "width": 70,
+            "align": "left"
+          },
+          {
+            "id": "lastSeen",
+            "label": "Last seen",
+            "width": 78,
+            "align": "left"
+          },
+          {
+            "id": "actions",
+            "label": "Actions",
+            "width": 52,
+            "align": "right"
+          }
+        ],
+        "header": {
+          "height": 44,
+          "background": "color.background.surfaceRaised",
+          "borderBottom": "1px solid color.border.table",
+          "typography": "typography.usage.tableHeader",
+          "paddingX": 16
+        },
+        "row": {
+          "height": 72,
+          "paddingX": 16,
+          "borderBottom": "1px solid color.border.table",
+          "transition": "background-color 120ms, box-shadow 120ms, border-color 120ms",
+          "states": {
+            "default": {
+              "background": "color.background.surfaceRaised"
+            },
+            "hover": {
+              "background": "#FDFBF7"
+            },
+            "selected": {
+              "background": "#F8FBFA",
+              "boxShadow": "inset 0 0 0 1.5px #2D6F73",
+              "borderColor": "#2D6F73"
+            },
+            "disabled": {
+              "opacity": 0.58
+            },
+            "error": {
+              "background": "color.status.danger.subtle"
+            },
+            "needsReview": {
+              "background": "color.status.warning.subtle"
+            }
+          },
+          "negativeSpace": {
+            "minHeight": "72px ensures two-line server identity plus badges remain calm.",
+            "cellPadding": "16px horizontal and 14px vertical; badges should not touch row borders.",
+            "iconToTextGap": "12px; server logos should have enough separation from text.",
+            "badgeGap": "6px minimum between badges and adjacent text.",
+            "actionMenuGutter": "Keep at least 12px right padding so the vertical ellipsis does not feel clipped."
+          }
+        },
+        "serverIdentityCell": {
+          "iconBox": {
+            "size": 36,
+            "borderRadius": 9,
+            "background": "color.background.surfaceSubtle",
+            "border": "1px solid color.border.soft"
+          },
+          "name": {
+            "typography": "typography.usage.tablePrimary"
+          },
+          "description": {
+            "typography": "typography.usage.tableSecondary",
+            "maxLines": 1
+          }
+        },
+        "rows": [
+          {
+            "id": "filesystem",
+            "name": "filesystem",
+            "description": "Local filesystem access",
+            "status": "online",
+            "transport": "stdio",
+            "runtime": "per_session",
+            "scope": "Core",
+            "capabilities": {
+              "tools": 12,
+              "resources": 4,
+              "prompts": 2,
+              "apps": 1
+            },
+            "skills": 2,
+            "policy": "enforced",
+            "auth": "env/token",
+            "version": "1.2.0",
+            "lastSeen": "just now",
+            "selected": true
+          },
+          {
+            "id": "github",
+            "name": "github",
+            "description": "GitHub API and repos",
+            "status": "online",
+            "transport": "stdio",
+            "runtime": "per_user",
+            "scope": "DevTools",
+            "capabilities": {
+              "tools": 31,
+              "resources": 0,
+              "prompts": 6,
+              "apps": 0
+            },
+            "skills": 5,
+            "policy": "approval_write",
+            "auth": "OAuth",
+            "version": "0.9.8",
+            "lastSeen": "1m ago"
+          },
+          {
+            "id": "postgres",
+            "name": "postgres",
+            "description": "PostgreSQL database",
+            "status": "online",
+            "transport": "http",
+            "runtime": "per_tenant",
+            "scope": "Data",
+            "capabilities": {
+              "tools": 18,
+              "resources": 8,
+              "prompts": 0,
+              "apps": 0
+            },
+            "skills": 3,
+            "policy": "enforced",
+            "auth": "OAuth",
+            "version": "1.4.1",
+            "lastSeen": "12s ago"
+          },
+          {
+            "id": "slack",
+            "name": "slack",
+            "description": "Slack workspace",
+            "status": "offline",
+            "transport": "http",
+            "runtime": "remote_static",
+            "scope": "Comms",
+            "capabilities": {
+              "tools": 10,
+              "resources": 2,
+              "prompts": 0,
+              "apps": 0
+            },
+            "skills": 1,
+            "policy": "disabled",
+            "auth": "missing_token",
+            "version": "1.0.2",
+            "lastSeen": "2h ago"
+          }
+        ]
+      },
+      "Badge": {
+        "base": {
+          "height": 24,
+          "paddingX": 9,
+          "borderRadius": 999,
+          "fontSize": 12,
+          "lineHeight": 16,
+          "fontWeight": 500,
+          "border": "1px solid transparent"
+        },
+        "variants": {
+          "statusOnline": {
+            "background": "color.status.success.subtle",
+            "border": "color.status.success.border",
+            "color": "color.status.success.text",
+            "dot": "color.status.success.base"
+          },
+          "statusOffline": {
+            "background": "color.status.danger.subtle",
+            "border": "color.status.danger.border",
+            "color": "color.status.danger.text",
+            "dot": "color.status.danger.base"
+          },
+          "statusDegraded": {
+            "background": "color.status.warning.subtle",
+            "border": "color.status.warning.border",
+            "color": "color.status.warning.text",
+            "dot": "color.status.warning.base"
+          },
+          "transport": {
+            "background": "color.status.neutral.soft",
+            "border": "color.status.neutral.border",
+            "color": "color.text.secondary"
+          },
+          "runtimePerSession": {
+            "background": "#D8EAE8",
+            "border": "#C8DDDA",
+            "color": "#245D61",
+            "fontFamily": "typography.families.mono"
+          },
+          "runtimePerUser": {
+            "background": "#E8E2F2",
+            "border": "#D3C5E6",
+            "color": "#5A437E",
+            "fontFamily": "typography.families.mono"
+          },
+          "runtimePerTenant": {
+            "background": "#DCEAF4",
+            "border": "#B8D4E8",
+            "color": "#27597F",
+            "fontFamily": "typography.families.mono"
+          },
+          "policyEnforced": {
+            "background": "color.status.success.subtle",
+            "border": "color.status.success.border",
+            "color": "color.status.success.text"
+          },
+          "policyApproval": {
+            "background": "color.status.warning.subtle",
+            "border": "color.status.warning.border",
+            "color": "color.status.warning.text"
+          },
+          "policyDisabled": {
+            "background": "color.status.neutral.soft",
+            "border": "color.status.neutral.border",
+            "color": "color.text.secondary"
+          }
+        }
+      },
+      "Pagination": {
+        "layout": {
+          "display": "flex",
+          "alignItems": "center",
+          "justifyContent": "space-between",
+          "marginTop": 18
+        },
+        "summary": {
+          "text": "Showing 1 to 8 of 12 servers",
+          "typography": "typography.scale.bodySm",
+          "color": "text.secondary"
+        },
+        "pageButton": {
+          "size": 32,
+          "borderRadius": 8,
+          "activeBackground": "color.brand.primarySubtle",
+          "activeBorder": "color.brand.primary",
+          "activeColor": "color.brand.primaryInk"
+        }
+      },
+      "ServerInspector": {
+        "container": {
+          "background": "color.background.surfaceRaised",
+          "border": "1px solid color.border.soft",
+          "borderRadius": 14,
+          "shadow": "shadow.sm",
+          "padding": 18
+        },
+        "header": {
+          "layout": {
+            "display": "grid",
+            "gridTemplateColumns": "40px minmax(0, 1fr) auto",
+            "gap": 12,
+            "alignItems": "start",
+            "paddingBottom": 18,
+            "borderBottom": "1px solid color.border.soft"
+          },
+          "icon": {
+            "size": 40,
+            "borderRadius": 10,
+            "background": "#121A1D",
+            "color": "#FFFFFF"
+          },
+          "title": {
+            "fontFamily": "typography.families.display",
+            "fontSize": 22,
+            "lineHeight": 28,
+            "fontWeight": 600,
+            "color": "text.primary"
+          },
+          "description": {
+            "typography": "typography.scale.caption",
+            "color": "text.secondary",
+            "marginTop": 2
+          }
+        },
+        "tabs": {
+          "items": [
+            "Overview",
+            "Tools",
+            "Resources",
+            "Skills",
+            "More"
+          ],
+          "height": 44,
+          "borderBottom": "1px solid color.border.soft",
+          "activeColor": "brand.primaryInk",
+          "activeIndicator": "2px solid color.brand.primary"
+        },
+        "sections": {
+          "gap": 14,
+          "card": {
+            "padding": 16,
+            "borderRadius": 12,
+            "background": "color.background.surfaceRaised",
+            "border": "1px solid color.border.soft"
+          },
+          "title": {
+            "fontSize": 14,
+            "lineHeight": 20,
+            "fontWeight": 600,
+            "color": "text.primary"
+          }
+        },
+        "healthCard": {
+          "gauge": {
+            "size": 72,
+            "strokeWidth": 8,
+            "trackColor": "color.status.success.soft",
+            "valueColor": "color.status.success.base",
+            "centerText": "98%"
+          },
+          "metrics": [
+            {
+              "label": "Initialize latency",
+              "value": "124 ms",
+              "tone": "warning"
+            },
+            {
+              "label": "Avg tool latency",
+              "value": "842 ms",
+              "tone": "warning"
+            },
+            {
+              "label": "Error rate (24h)",
+              "value": "0.7%",
+              "tone": "warning"
+            },
+            {
+              "label": "Restart count",
+              "value": "1",
+              "tone": "warning"
+            }
+          ]
+        },
+        "runtimeCard": {
+          "facts": [
+            {
+              "label": "Transport",
+              "value": "stdio"
+            },
+            {
+              "label": "Runtime mode",
+              "value": "per_session"
+            },
+            {
+              "label": "Process strategy",
+              "value": "managed"
+            },
+            {
+              "label": "Idle timeout",
+              "value": "15 minutes"
+            },
+            {
+              "label": "Max concurrent sessions",
+              "value": "20"
+            }
+          ],
+          "valueStyle": {
+            "fontFamily": "typography.families.mono",
+            "fontSize": 11,
+            "background": "color.status.neutral.soft",
+            "borderRadius": 6,
+            "padding": "2px 6px"
+          }
+        },
+        "capabilitiesCard": {
+          "items": [
+            {
+              "label": "Tools",
+              "value": "12",
+              "icon": "Wand"
+            },
+            {
+              "label": "Resources",
+              "value": "4",
+              "icon": "FileText"
+            },
+            {
+              "label": "Prompts",
+              "value": "2",
+              "icon": "MessageSquare"
+            },
+            {
+              "label": "Apps (UI)",
+              "value": "1",
+              "icon": "PanelTop"
+            }
+          ]
+        },
+        "attachedSkillsCard": {
+          "items": [
+            {
+              "id": "filesystem.browse",
+              "version": "v0.1.0"
+            },
+            {
+              "id": "file.search",
+              "version": "v0.1.0"
+            }
+          ],
+          "link": "View all skills →"
+        },
+        "actionsCard": {
+          "buttons": [
+            {
+              "label": "View details",
+              "variant": "secondary",
+              "icon": "ExternalLink"
+            },
+            {
+              "label": "Restart",
+              "variant": "secondary",
+              "icon": "RefreshCw"
+            },
+            {
+              "label": "Disable server",
+              "variant": "destructiveOutline",
+              "icon": "CircleAlert",
+              "fullWidth": true
+            }
+          ]
+        },
+        "negativeSpace": {
+          "sectionGap": "Use 14px between inspector cards. The inspector is narrow, so excessive gaps waste space, but less than 12px feels cramped.",
+          "headerBottomGap": "Use 18px under the header before tabs to clearly separate identity from operational details.",
+          "cardInterior": "Use 16px padding inside each card. Fact rows should be 24px minimum height with 8px between label and value.",
+          "actionsCard": "Buttons should have 8px horizontal gap and 10px vertical gap. Destructive action sits alone with full width to avoid accidental clicks."
+        }
+      }
+    }
+  },
+  "interactions": {
+    "serverSelection": {
+      "trigger": "click server row",
+      "result": "row becomes selected and inspector updates in place",
+      "animation": {
+        "duration": "120ms",
+        "properties": [
+          "background-color",
+          "box-shadow",
+          "border-color"
+        ]
+      },
+      "keyboard": {
+        "focusRow": "Tab into table, arrow keys move selection, Enter opens details, Space toggles selection"
+      }
+    },
+    "serverDetails": {
+      "trigger": "View details button or double-click row",
+      "result": "navigate to /servers/{serverId} or open full detail route",
+      "preserveState": [
+        "filters",
+        "selectedServer",
+        "pagination"
+      ]
+    },
+    "refreshCatalog": {
+      "trigger": "Refresh Catalog button",
+      "result": "runs initialize/tools/list/resources/list/prompts/list against enabled servers",
+      "loadingState": "button spinner plus per-card subtle skeleton for affected counts",
+      "successState": "toast: Catalog refreshed. 2 changes require review.",
+      "errorState": "toast with View logs action"
+    },
+    "importConfig": {
+      "trigger": "Import Config button",
+      "result": "opens drawer/wizard for YAML, URL, or registry source",
+      "validation": "show config schema validation inline before saving"
+    },
+    "addServer": {
+      "trigger": "Add Server button",
+      "result": "opens Add Server wizard",
+      "steps": [
+        "Choose transport",
+        "Configure connection/runtime",
+        "Configure auth",
+        "Discover capabilities",
+        "Attach skills",
+        "Apply policy",
+        "Review and enable"
+      ]
+    },
+    "filtering": {
+      "trigger": "search, chips, dropdowns",
+      "result": "table filters immediately with 120ms debounce for chips and 250ms debounce for text search",
+      "emptyState": "No servers match these filters. Clear filters or add a server."
+    },
+    "rowActionMenu": {
+      "trigger": "vertical ellipsis",
+      "items": [
+        "View details",
+        "Refresh capabilities",
+        "Restart runtime",
+        "View logs",
+        "Export config",
+        "Disable server"
+      ],
+      "dangerZone": [
+        "Disable server"
+      ]
+    },
+    "inspectorTabs": {
+      "trigger": "click tab",
+      "result": "switch inspector body without navigation",
+      "tabs": [
+        "Overview",
+        "Tools",
+        "Resources",
+        "Skills",
+        "More"
+      ]
+    },
+    "disableServer": {
+      "trigger": "Disable server button",
+      "result": "confirmation dialog",
+      "confirmationCopy": "Disable filesystem? Active sessions will stop using this MCP server. Existing catalog snapshots remain auditable.",
+      "requiresExplicitConfirmText": false,
+      "successState": "server row becomes disabled and inspector status updates"
+    }
+  },
+  "states": {
+    "loadingInitial": {
+      "sidebar": "render normally",
+      "topbar": "render normally",
+      "metrics": "skeleton cards with low-opacity shimmer",
+      "table": "8 skeleton rows",
+      "inspector": "empty skeleton panel"
+    },
+    "loadingRefresh": {
+      "metrics": "small spinner in affected card header",
+      "table": "keep data visible; show 'Refreshing...' inline near filters",
+      "rows": "only affected rows show subtle activity pulse"
+    },
+    "emptyNoServers": {
+      "title": "No MCP servers registered yet.",
+      "description": "Add your first server to expose tools, resources, prompts, and skills through Portico.",
+      "primaryAction": "Add Server",
+      "secondaryAction": "Import Config",
+      "illustration": "faint line-art portico arch with connected nodes",
+      "tone": "calm, helpful, not alarming"
+    },
+    "emptyFiltered": {
+      "title": "No servers match these filters.",
+      "description": "Try clearing filters or search by server name, transport, runtime, or scope.",
+      "action": "Clear filters"
+    },
+    "serverOffline": {
+      "rowBackground": "color.status.danger.subtle",
+      "statusBadge": "statusOffline",
+      "inspectorMessage": "This server is offline. Last successful initialization was 2 hours ago. Reason: missing credential.",
+      "actions": [
+        "Reconnect",
+        "View logs",
+        "Disable"
+      ]
+    },
+    "authError": {
+      "badge": "Missing token",
+      "badgeTone": "danger",
+      "recommendedAction": "Reconnect or rotate secret",
+      "visibility": "show in Auth column and inspector Auth section"
+    },
+    "catalogDrift": {
+      "metricCardTone": "warning",
+      "rowIndicator": "small amber shield icon near server name",
+      "message": "Capabilities changed. Review new or modified schemas before applying to active catalogs.",
+      "actions": [
+        "Review changes",
+        "Ignore for now",
+        "Disable server"
+      ]
+    },
+    "policyApprovalRequired": {
+      "badge": "Approval write",
+      "background": "color.status.warning.subtle",
+      "text": "color.status.warning.text",
+      "meaning": "Read operations are allowed, write operations require approval."
+    },
+    "allSystemsOperational": {
+      "sidebarStatusDot": "#76D39A",
+      "copy": "All systems operational"
+    }
+  },
+  "accessibility": {
+    "contrast": {
+      "minimumTextContrast": "4.5:1 for normal text, 3:1 for large text and icons",
+      "avoidStatusOnlyColor": true,
+      "statusBadgesIncludeText": true
+    },
+    "keyboard": {
+      "allButtonsFocusable": true,
+      "rowSelectionKeyboardAccessible": true,
+      "escapeClosesMenusAndDrawers": true,
+      "commandKFocusesSearch": true
+    },
+    "aria": {
+      "serverTable": "aria-label='MCP servers registry'",
+      "statusBadges": "include aria-label with status and reason",
+      "inspector": "aria-label='Selected server details'",
+      "destructiveActions": "aria-describedby references confirmation text"
+    },
+    "reducedMotion": {
+      "respectPrefersReducedMotion": true,
+      "replaceSlideWithFade": true,
+      "disableSkeletonShimmer": true
+    }
+  },
+  "responsiveBehavior": {
+    "desktop1440": {
+      "sidebar": "208px fixed",
+      "main": "fluid",
+      "inspector": "304px fixed right column",
+      "metricCards": "5 columns",
+      "table": "full table"
+    },
+    "desktop1280": {
+      "sidebar": "208px fixed",
+      "inspector": "280px fixed right column",
+      "metricCards": "5 columns, compact typography if needed",
+      "table": "hide secondary descriptions if width constrained"
+    },
+    "tablet": {
+      "sidebar": "72px icon-only or collapsible",
+      "inspector": "right drawer",
+      "metricCards": "2 or 3 columns",
+      "table": "horizontal scroll with sticky server column"
+    },
+    "mobile": {
+      "sidebar": "drawer or bottom nav",
+      "inspector": "full-screen sheet",
+      "metricCards": "single column or horizontal snap carousel",
+      "serverRows": "card list with primary fields only",
+      "filters": "filter sheet"
+    }
+  },
+  "implementationHints": {
+    "componentStack": [
+      "AppShell",
+      "SidebarNavigation",
+      "Topbar",
+      "PageHeader",
+      "MetricCard",
+      "FilterBar",
+      "ServerTable",
+      "Badge",
+      "ServerInspector",
+      "ActionMenu",
+      "Drawer",
+      "Dialog",
+      "Toast"
+    ],
+    "preferredIconStyle": "Lucide-style 1.75px outline icons, rounded stroke caps, consistent 16/18/20px sizes.",
+    "avoid": [
+      "large saturated gradients",
+      "hard pure black text on warm backgrounds except inside dark sidebar",
+      "too many card shadows",
+      "dense 44px table rows",
+      "status indicated only by color",
+      "overly rounded consumer-app pills for every surface"
+    ],
+    "frontendNotes": [
+      "Use semantic tokens instead of direct hex references in components.",
+      "Keep table row height stable even when metadata changes.",
+      "Preserve server table state when the inspector tab changes.",
+      "Use monospaced typography only for identifiers, runtime modes, versions, schema hashes, and commands.",
+      "Use the display serif only for page titles, inspector entity names, and brand/editorial moments; not for tables or dense controls."
+    ]
+  }
+}

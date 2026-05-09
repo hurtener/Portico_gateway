@@ -44,7 +44,7 @@
   onMount(reload);
 </script>
 
-<PageHeader title={$t('playground.cases.title')} description={$t('playground.subtitle')} />
+<PageHeader title={$t('playground.cases.title')} />
 
 {#if loading}
   <p>{$t('common.loading')}</p>

@@ -7,6 +7,16 @@
   export let id: string | undefined = undefined;
   export let name: string | undefined = undefined;
   export let label: string | undefined = undefined;
+
+  // Auto-generate an id when a label is present but no id was given,
+  // so screen readers + tests using getByLabel can resolve the input.
+  let _autoId = '';
+  $: if (label && !id) {
+    if (!_autoId) {
+      _autoId = `inp-${Math.random().toString(36).slice(2, 9)}`;
+    }
+  }
+  $: resolvedId = id ?? (label ? _autoId : undefined);
   export let hint: string | undefined = undefined;
   export let error: string | undefined = undefined;
   export let disabled = false;
@@ -27,7 +37,7 @@
 
 <div class="field" class:block>
   {#if label}
-    <label for={id} class="label">
+    <label for={resolvedId} class="label">
       {label}
       {#if required}<span class="req" aria-hidden="true">*</span>{/if}
     </label>
@@ -39,7 +49,7 @@
     <input
       class="input {size}"
       class:mono
-      {id}
+      id={resolvedId}
       {name}
       {type}
       {placeholder}

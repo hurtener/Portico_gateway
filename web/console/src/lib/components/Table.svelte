@@ -23,6 +23,9 @@
   export let empty: string = 'No items.';
   export let zebra = false;
   export let compact = false;
+  /** When set, the row whose `rowKeyField` matches gets the selected state (Phase 10.6). */
+  export let selectedKey: string | null = null;
+  export let rowKeyField: string = 'id';
 
   function toggleSort(c: Column) {
     if (!c.sortable || !onSort) return;
@@ -66,6 +69,7 @@
       {#each rows as row, i (i)}
         <tr
           class:clickable={!!onRowClick}
+          class:selected={selectedKey != null && row[rowKeyField] === selectedKey}
           on:click={() => onRowClick?.(row)}
           tabindex={onRowClick ? 0 : undefined}
           on:keydown={(e) => {
@@ -174,6 +178,15 @@
     outline: none;
     background: var(--color-bg-subtle);
     box-shadow: inset 0 0 0 2px var(--color-accent-primary);
+  }
+  tbody tr.selected {
+    background: var(--color-accent-primary-subtle);
+  }
+  tbody tr.selected td {
+    border-bottom-color: var(--color-accent-primary-soft);
+  }
+  tbody tr.selected:hover {
+    background: var(--color-accent-primary-subtle);
   }
   table.zebra tbody tr:nth-child(even) {
     background: var(--color-bg-subtle);
