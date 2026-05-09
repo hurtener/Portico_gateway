@@ -28,6 +28,21 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
 
+// GatewayInfo carries the connection facts the Console / external
+// operators need to actually use the gateway. Populated at startup
+// from cfg.Server + cfg.Auth so handlers can serve the public
+// /api/gateway/info read-only endpoint without re-reading the file.
+type GatewayInfo struct {
+	Bind    string
+	MCPPath string
+	// JWT — empty when DevMode is true.
+	JWTIssuer      string
+	JWTAudiences   []string
+	JWTJWKSURL     string
+	JWTTenantClaim string
+	JWTScopeClaim  string
+}
+
 // Deps bundles the runtime objects every route handler needs.
 type Deps struct {
 	Logger      *slog.Logger
@@ -38,6 +53,7 @@ type Deps struct {
 	Audit       ifaces.AuditStore
 	Version     string
 	BuildCommit string
+	Gateway     GatewayInfo
 
 	// Phase 1 additions: MCP gateway. Optional in tests (nil = no /mcp).
 	Sessions   *mcpgw.SessionRegistry
@@ -145,6 +161,11 @@ func NewRouter(d Deps) http.Handler {
 	// most defensible posture).
 	r.Get("/healthz", healthzHandler)
 	r.Get("/readyz", readyzHandler(d))
+
+	// Phase 10.9: gateway connection info. Public read-only — exposes
+	// only what an operator can already observe by probing the
+	// listener. See handlers_gateway.go for the rationale.
+	r.Get("/api/gateway/info", gatewayInfoHandler(d))
 
 	// Auth applies to everything below.
 	r.Group(func(r chi.Router) {

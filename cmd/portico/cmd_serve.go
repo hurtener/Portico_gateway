@@ -415,6 +415,28 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		skillsDep = skillsMgr
 	}
 
+	gatewayInfo := api.GatewayInfo{
+		Bind:    cfg.Server.Bind,
+		MCPPath: "/mcp",
+	}
+	if cfg.Auth != nil {
+		gatewayInfo.JWTIssuer = cfg.Auth.JWT.Issuer
+		gatewayInfo.JWTAudiences = cfg.Auth.JWT.Audiences
+		gatewayInfo.JWTJWKSURL = cfg.Auth.JWT.JWKSURL
+		// Defaults applied in the validator: surface them so /connect
+		// can show what the gateway *actually* checks for.
+		tenantClaim := cfg.Auth.JWT.TenantClaim
+		if tenantClaim == "" {
+			tenantClaim = "tenant"
+		}
+		scopeClaim := cfg.Auth.JWT.ScopeClaim
+		if scopeClaim == "" {
+			scopeClaim = "scope"
+		}
+		gatewayInfo.JWTTenantClaim = tenantClaim
+		gatewayInfo.JWTScopeClaim = scopeClaim
+	}
+
 	deps := api.Deps{
 		Logger:         logger,
 		Validator:      validator,
@@ -424,6 +446,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		Audit:          audit,
 		Version:        version,
 		BuildCommit:    buildCommit,
+		Gateway:        gatewayInfo,
 		Sessions:       sessions,
 		Dispatcher:     dispatcher,
 		Manager:        manager,
