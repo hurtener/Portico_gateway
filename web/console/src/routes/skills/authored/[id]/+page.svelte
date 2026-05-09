@@ -189,7 +189,7 @@
   }
   .card {
     margin-top: var(--space-4);
-    background: var(--color-surface-1);
+    background: var(--color-bg-elevated);
     border-radius: var(--radius-md);
     padding: var(--space-4);
   }

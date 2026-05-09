@@ -41,9 +41,22 @@
   export let metrics: Metric[] = [];
   /** Optional ARIA label for the overall strip. */
   export let label = 'Page metrics';
+  /**
+   * Compact variant for detail-page mini-KPI strips. Halves the card
+   * padding and drops the value type from 28px → 22px. The helper line
+   * is hidden in compact mode (truncated below 22px gets unreadable);
+   * use the default variant when helper text is load-bearing.
+   */
+  export let compact = false;
 </script>
 
-<section class="strip" aria-label={label} data-region="kpi">
+<section
+  class="strip"
+  class:compact
+  aria-label={label}
+  data-region="kpi"
+  data-variant={compact ? 'compact' : 'default'}
+>
   {#each metrics as m (m.id)}
     {@const tone = m.tone ?? 'default'}
     {@const interactive = m.href || m.onClick}
@@ -62,13 +75,13 @@
       <div class="head">
         {#if m.icon}
           <span class="icon" aria-hidden="true">
-            <svelte:component this={m.icon} size={18} />
+            <svelte:component this={m.icon} size={compact ? 14 : 18} />
           </span>
         {/if}
         <span class="label">{m.label}</span>
       </div>
       <div class="value">{m.value}</div>
-      {#if m.helper}
+      {#if m.helper && !compact}
         <div class="helper">{m.helper}</div>
       {/if}
     </svelte:element>
@@ -82,8 +95,16 @@
     gap: var(--space-3);
     margin-bottom: var(--space-7);
   }
+  .strip.compact {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-2);
+    margin-bottom: var(--space-5);
+  }
   @media (max-width: 1279px) {
     .strip {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .strip.compact {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
@@ -91,9 +112,13 @@
     .strip {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+    .strip.compact {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
   @media (max-width: 600px) {
-    .strip {
+    .strip,
+    .strip.compact {
       grid-template-columns: 1fr;
     }
   }
@@ -119,6 +144,11 @@
     appearance: none;
     font: inherit;
     cursor: default;
+  }
+  .strip.compact .card {
+    padding: var(--space-3);
+    gap: var(--space-1);
+    box-shadow: none;
   }
   .card[data-interactive='true'] {
     cursor: pointer;
@@ -181,6 +211,13 @@
     font-weight: var(--font-weight-semibold);
     color: var(--color-text-primary);
     letter-spacing: -0.02em;
+  }
+  .strip.compact .value {
+    font-size: 22px;
+    line-height: 28px;
+  }
+  .strip.compact .label {
+    font-size: var(--font-size-label-sm, var(--font-size-label));
   }
   .helper {
     font-family: var(--font-sans);

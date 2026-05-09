@@ -171,12 +171,12 @@ binding:
     margin-top: var(--space-4);
   }
   .editor {
-    background: var(--color-surface-1);
+    background: var(--color-bg-elevated);
     border-radius: var(--radius-md);
     padding: var(--space-3);
   }
   .validation {
-    background: var(--color-surface-1);
+    background: var(--color-bg-elevated);
     border-radius: var(--radius-md);
     padding: var(--space-3);
     align-self: start;
@@ -208,7 +208,7 @@ binding:
     gap: var(--space-2);
   }
   .violations li {
-    background: var(--color-surface-2);
+    background: var(--color-bg-subtle);
     padding: var(--space-2);
     border-radius: var(--radius-sm);
     font-size: var(--font-size-body-sm);
