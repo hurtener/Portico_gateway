@@ -88,8 +88,9 @@ export default {
   'connect.metric.auth.devHelper': 'No se requiere bearer',
   'connect.metric.auth.jwtHelper': 'Se requiere JWT bearer',
   'connect.metric.tenant': 'Tenant',
+  'connect.metric.tenant.jwtValue': 'del JWT',
   'connect.metric.tenant.devHelper': 'Tenant de dev fijo',
-  'connect.metric.tenant.jwtHelper': 'Leído de este claim del JWT',
+  'connect.metric.tenant.jwtHelper': 'Leído del claim "{claim}"',
   'connect.metric.servers': 'Servidores',
   'connect.metric.servers.helper': 'Backends registrados para enrutar',
   'connect.section.quickstart': 'Inicio rápido',
@@ -109,10 +110,10 @@ export default {
   'connect.snippet.inspector.what': 'Comando del inspector',
   'connect.snippet.inspector.help':
     'Lanza el MCP Inspector contra este gateway. Útil para inspeccionar el catálogo de tools con namespace sin escribir un cliente.',
-  'connect.snippet.curl.title': 'curl (tools/list)',
+  'connect.snippet.curl.title': 'curl (handshake initialize)',
   'connect.snippet.curl.what': 'Comando curl',
   'connect.snippet.curl.help':
-    'Una solicitud JSON-RPC cruda que devuelve el catálogo de tools con namespace. Útil para verificar que el gateway responde antes de cablear un cliente.',
+    'Ejecuta el handshake initialize de MCP. El flag -i imprime las cabeceras de respuesta — busca Mcp-Session-Id. Un 200 + session id significa que el gateway responde y está sano. Las llamadas siguientes deben repetir esa cabecera.',
   'connect.auth.devTitle': 'Modo dev activo',
   'connect.auth.devBody':
     'No hay validador JWT configurado. Cada request mapea al tenant "{tenant}". Seguro para desarrollo local; cambia a JWT antes de hacer bind a una dirección no localhost.',
@@ -171,6 +172,7 @@ export default {
   'landing.system.down': 'caído',
   // Phase 10.9 — setup-and-status landing
   'landing.metric.endpoint': 'Endpoint',
+  'landing.metric.servers': 'Servidores',
   'landing.metric.servers.helper': 'Backends registrados para enrutar',
   'landing.metric.skills': 'Skills',
   'landing.metric.skills.helper': 'Skill packs componibles disponibles',
@@ -180,8 +182,11 @@ export default {
   'landing.metric.auth.dev': 'Modo dev (sin JWT)',
   'landing.metric.auth.jwt': 'Validación JWT activa',
   'landing.status.title': 'Estado de configuración',
-  'landing.status.allGreen':
-    'La configuración está bien. Servidores, tenants y auth están cableados.',
+  'landing.status.allGreen': 'La configuración está bien.',
+  'landing.status.allGreen.dev':
+    'La configuración para desarrollo local está completa. Cambia a auth JWT antes de exponer el gateway fuera de localhost.',
+  'landing.status.allGreen.jwt':
+    'La configuración está completa. Servidores, tenants y auth JWT están cableados.',
   'landing.status.next': 'Siguiente:',
   'landing.status.check.servers': 'Al menos un servidor registrado',
   'landing.status.check.servers.hint':

@@ -319,7 +319,7 @@
 
 <section class="grid-two">
   <!-- Configuration Status -->
-  <section class="card status-card" class:ok={allGreen}>
+  <section class="card setup-status-card" class:ok={allGreen}>
     <header class="card-head">
       <h4>
         {#if allGreen}
@@ -331,7 +331,11 @@
       </h4>
     </header>
     {#if allGreen}
-      <p class="muted body status-ok">{$t('landing.status.allGreen')}</p>
+      <p class="muted body status-ok">
+        {info?.dev_mode
+          ? $t('landing.status.allGreen.dev')
+          : $t('landing.status.allGreen.jwt')}
+      </p>
     {:else if statusChecks.length === 0}
       <p class="muted body">{$t('common.loading')}</p>
     {:else}
@@ -573,10 +577,10 @@
   }
 
   /* Status card */
-  .status-card.ok {
+  .setup-status-card.ok {
     border-color: var(--color-success);
   }
-  .status-card.ok h4 {
+  .setup-status-card.ok h4 {
     color: var(--color-success);
   }
   .status-ok {

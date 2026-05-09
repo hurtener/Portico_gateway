@@ -91,8 +91,9 @@ export default {
   'connect.metric.auth.devHelper': 'No bearer token required',
   'connect.metric.auth.jwtHelper': 'Bearer JWT required',
   'connect.metric.tenant': 'Tenant',
+  'connect.metric.tenant.jwtValue': 'from JWT',
   'connect.metric.tenant.devHelper': 'Hardcoded dev tenant',
-  'connect.metric.tenant.jwtHelper': 'Read from this JWT claim',
+  'connect.metric.tenant.jwtHelper': 'Read from the "{claim}" claim',
   'connect.metric.servers': 'Servers',
   'connect.metric.servers.helper': 'Backends registered for routing',
   'connect.section.quickstart': 'Quick start',
@@ -112,10 +113,10 @@ export default {
   'connect.snippet.inspector.what': 'Inspector command',
   'connect.snippet.inspector.help':
     'Boots the MCP Inspector against this gateway. Useful for inspecting the namespaced tool catalog without writing a client.',
-  'connect.snippet.curl.title': 'curl (tools/list)',
+  'connect.snippet.curl.title': 'curl (initialize handshake)',
   'connect.snippet.curl.what': 'curl command',
   'connect.snippet.curl.help':
-    'A raw JSON-RPC request that returns the namespaced tool catalog. Useful for verifying the gateway responds before wiring a client.',
+    'Performs the MCP initialize handshake. The -i flag prints the response headers — look for Mcp-Session-Id. A 200 + a session id means the gateway is reachable and healthy. Subsequent calls must echo that header back.',
   'connect.auth.devTitle': 'Dev mode active',
   'connect.auth.devBody':
     'No JWT validator is configured. Every request maps to tenant "{tenant}". Safe for local development; bind to a non-localhost address only after switching to JWT mode.',
@@ -172,6 +173,7 @@ export default {
   'landing.system.down': 'down',
   // Phase 10.9 — setup-and-status landing
   'landing.metric.endpoint': 'Endpoint',
+  'landing.metric.servers': 'Servers',
   'landing.metric.servers.helper': 'Backends registered for routing',
   'landing.metric.skills': 'Skills',
   'landing.metric.skills.helper': 'Composable skill packs available',
@@ -181,7 +183,11 @@ export default {
   'landing.metric.auth.dev': 'Dev mode (no JWT)',
   'landing.metric.auth.jwt': 'JWT validation enabled',
   'landing.status.title': 'Configuration status',
-  'landing.status.allGreen': 'Configuration looks good. Servers, tenants, and auth are wired.',
+  'landing.status.allGreen': 'Configuration looks good.',
+  'landing.status.allGreen.dev':
+    'Local-development setup is complete. Switch to JWT auth before exposing the gateway off localhost.',
+  'landing.status.allGreen.jwt':
+    'Configuration is complete. Servers, tenants, and JWT auth are all wired.',
   'landing.status.next': 'Next:',
   'landing.status.check.servers': 'At least one server registered',
   'landing.status.check.servers.hint':

@@ -109,20 +109,48 @@
     return `npx @modelcontextprotocol/inspector --transport http ${u}`;
   }
 
+  /**
+   * MCP Streamable HTTP requires every session to call `initialize`
+   * first; the response includes the `Mcp-Session-Id` header which
+   * subsequent requests must echo. A bare `tools/list` returns
+   * "session not found" — actively misleading for an operator
+   * sanity-checking connectivity.
+   *
+   * The smoke snippet does the initialize handshake (which is
+   * sufficient to prove the gateway reachable + healthy) and
+   * documents the next steps in a trailing comment.
+   *
+   * Comments go BEFORE the curl, not between `\`-continued lines —
+   * bash joins `\<newline>` and a `#` after the join becomes a
+   * separate statement that breaks the command. Both bugs found in
+   * the Phase 10.9 audit pass.
+   */
   function curlSnippet(g: GatewayInfo | null, u: string): string {
     if (!g) return '';
     const lines: string[] = [];
-    lines.push(`curl -X POST '${u}' \\`);
+    if (g.auth.mode === 'dev') {
+      lines.push(`# dev mode: no Authorization header required (tenant=${g.dev_tenant ?? 'default'})`);
+    }
+    lines.push(
+      `# returns server capabilities + Mcp-Session-Id header in -i output`
+    );
+    lines.push(`curl -i -X POST '${u}' \\`);
     lines.push(`  -H 'Content-Type: application/json' \\`);
     lines.push(`  -H 'Accept: application/json, text/event-stream' \\`);
     if (g.auth.mode === 'jwt') {
       lines.push(`  -H 'Authorization: Bearer <YOUR_JWT_HERE>' \\`);
-    } else {
-      lines.push(`  # dev mode: no Authorization header required (tenant=${g.dev_tenant ?? 'default'})`);
     }
-    lines.push(
-      `  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`
-    );
+    const init = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-11-25',
+        capabilities: {},
+        clientInfo: { name: 'curl-smoke', version: '0.1.0' }
+      }
+    });
+    lines.push(`  -d '${init}'`);
     return lines.join('\n');
   }
 
@@ -175,12 +203,19 @@
         {
           id: 'tenant',
           label: $t('connect.metric.tenant'),
+          // In dev mode the value is the actual tenant id (e.g. "dev").
+          // In JWT mode it's the *source* — the operator reads the
+          // claim name from the auth card below if they need it. The
+          // KPI value as a literal claim name ("tenant") was confusing
+          // ("Tenant: tenant" — you what?). Found by audit pass.
           value: info.dev_mode
             ? info.dev_tenant ?? 'default'
-            : info.auth.tenant_claim ?? 'tenant',
+            : $t('connect.metric.tenant.jwtValue'),
           helper: info.dev_mode
             ? $t('connect.metric.tenant.devHelper')
-            : $t('connect.metric.tenant.jwtHelper'),
+            : $t('connect.metric.tenant.jwtHelper', {
+                claim: info.auth.tenant_claim ?? 'tenant'
+              }),
           icon: IconUser as ComponentType<any>
         },
         {
