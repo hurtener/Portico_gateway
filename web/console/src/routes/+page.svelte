@@ -1,5 +1,22 @@
 <script lang="ts">
+  /**
+   * Root landing — Phase 10.8 Step 3 redesign.
+   *
+   * The pre-10.6 landing predated the design vocabulary: a 30%-of-
+   * viewport hero, a bespoke `DashboardTile` grid, and three hand-
+   * rolled `<header class="block-head">` sections. This rewrite
+   * compresses the hero, replaces the tile grid with `MetricStrip`,
+   * and moves the "Recent X" blocks into `.card` sections with the
+   * `<h4>` SECTION-LABEL header that the redesigned list pages use —
+   * so navigating between landing and any list page reads as a
+   * single coherent product.
+   *
+   * `DashboardTile` retires with this PR; nothing else imports it.
+   * `Sparkline` retires from the landing too — the metric values
+   * stand on their own without the visual noise.
+   */
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import {
     api,
     isFeatureUnavailable,
@@ -9,15 +26,21 @@
   } from '$lib/api';
   import {
     Badge,
-    DashboardTile,
+    Button,
     EmptyState,
     IdBadge,
     Logo,
-    Sparkline,
+    MetricStrip,
     Table
   } from '$lib/components';
   import { t } from '$lib/i18n';
   import IconArrowRight from 'lucide-svelte/icons/arrow-right';
+  import IconActivity from 'lucide-svelte/icons/activity';
+  import IconShield from 'lucide-svelte/icons/shield';
+  import IconHeartPulse from 'lucide-svelte/icons/heart-pulse';
+  import IconClock from 'lucide-svelte/icons/clock';
+  import IconAlertTriangle from 'lucide-svelte/icons/alert-triangle';
+  import type { ComponentType } from 'svelte';
 
   type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
 
@@ -33,7 +56,7 @@
   let auditEvents: AuditEvent[] | null = null;
   let auditUnavailable = false;
   let driftCount24h = 0;
-  let sessionsByHour: number[] = [];
+  let sessionsCount24h = 0;
 
   function fmtRelative(iso: string | null | undefined): string {
     if (!iso) return $t('landing.relTime.never');
@@ -57,21 +80,24 @@
     }
   }
 
-  function bucketByHour(events: AuditEvent[]): number[] {
-    const buckets = new Array(24).fill(0);
+  function isPlaygroundSession(sid: string | null | undefined): boolean {
+    return typeof sid === 'string' && sid.startsWith('psn_');
+  }
+
+  function countLast24h(events: AuditEvent[], match: (e: AuditEvent) => boolean): number {
+    let n = 0;
     const now = Date.now();
     for (const e of events) {
-      const t = new Date(e.occurred_at).getTime();
-      if (isNaN(t)) continue;
-      const ageH = (now - t) / 3_600_000;
-      if (ageH < 0 || ageH >= 24) continue;
-      buckets[23 - Math.floor(ageH)]++;
+      if (!match(e)) continue;
+      const ts = new Date(e.occurred_at).getTime();
+      if (isNaN(ts)) continue;
+      const ageH = (now - ts) / 3_600_000;
+      if (ageH >= 0 && ageH < 24) n++;
     }
-    return buckets;
+    return n;
   }
 
   onMount(async () => {
-    // Health & ready run cheap and almost always succeed.
     try {
       healthOk = (await api.health()).status === 'ok';
     } catch {
@@ -102,13 +128,13 @@
     try {
       const res = await api.queryAudit({ limit: 50 });
       auditEvents = res.events ?? [];
-      driftCount24h = auditEvents.filter((e) => {
-        if (e.type !== 'schema.drift') return false;
-        const ageH = (Date.now() - new Date(e.occurred_at).getTime()) / 3_600_000;
-        return ageH >= 0 && ageH < 24;
-      }).length;
-      sessionsByHour = bucketByHour(
-        auditEvents.filter((e) => e.type === 'session.created' || e.type === 'tool_call.complete')
+      driftCount24h = countLast24h(
+        auditEvents,
+        (e) => e.type === 'schema.drift' && !isPlaygroundSession(e.session_id)
+      );
+      sessionsCount24h = countLast24h(
+        auditEvents,
+        (e) => e.type === 'session.created' || e.type === 'tool_call.complete'
       );
     } catch (e) {
       if (isFeatureUnavailable(e)) auditUnavailable = true;
@@ -116,17 +142,12 @@
     }
   });
 
-  $: pendingApprovals = approvals ? approvals.length : null;
+  $: pendingApprovals = approvals ? approvals.length : 0;
   $: lastSnapshotAge =
     snapshots && snapshots.length > 0 ? fmtRelative(snapshots[0].created_at) : null;
+
   // schema.drift events firing against playground sessions (psn_*) are
-  // operator-noise: every interactive playground session pays a snapshot
-  // cost, and the drift detector compares its frozen hash against a
-  // potentially-flickering live tools list. Suppress them here so the
-  // dashboard only surfaces drift the operator can act on.
-  function isPlaygroundSession(sid: string | null | undefined): boolean {
-    return typeof sid === 'string' && sid.startsWith('psn_');
-  }
+  // operator-noise; suppress them in the surfaced audit list.
   $: noticeableAudit = (auditEvents ?? [])
     .filter((e) => {
       if (e.type === 'schema.drift' && isPlaygroundSession(e.session_id)) return false;
@@ -160,18 +181,6 @@
     { key: 'session_id', label: $t('audit.col.session'), mono: true }
   ];
 
-  function statusTone(ok: boolean | null, downTone: Tone = 'danger'): Tone {
-    if (ok === null) return 'neutral';
-    return ok ? 'success' : downTone;
-  }
-  function statusValue(
-    ok: boolean | null,
-    okKey = 'landing.status.ok',
-    downKey = 'landing.status.down'
-  ): string {
-    if (ok === null) return '—';
-    return ok ? $t(okKey) : $t(downKey);
-  }
   function riskTone(rc: string): Tone {
     const v = rc.toLowerCase();
     if (v === 'destructive' || v === 'sensitive_read') return 'danger';
@@ -179,66 +188,91 @@
     if (v === 'idempotent_read') return 'info';
     return 'neutral';
   }
+
+  // === Substrate for KPI strip ========================================
+
+  /**
+   * "System" combines health + ready into a single tone. Health is the
+   * load-bearing signal; ready going false alone reads as "starting up"
+   * (warning) rather than "down" (danger).
+   */
+  function systemValue(): string {
+    if (healthOk === null && readyOk === null) return '—';
+    if (healthOk === false) return $t('landing.system.down');
+    if (readyOk === false) return $t('landing.system.degraded');
+    return $t('landing.system.healthy');
+  }
+  function systemTone(): 'success' | 'warning' | 'danger' | 'default' {
+    if (healthOk === null && readyOk === null) return 'default';
+    if (healthOk === false) return 'danger';
+    if (readyOk === false) return 'warning';
+    return 'success';
+  }
+
+  $: metrics = [
+    {
+      id: 'system',
+      label: $t('landing.metric.system'),
+      value: systemValue(),
+      helper: $t('landing.metric.system.helper'),
+      icon: IconHeartPulse as ComponentType<any>,
+      tone: systemTone(),
+      attention: healthOk === false
+    },
+    {
+      id: 'sessions',
+      label: $t('landing.metric.sessions'),
+      value: sessionsCount24h.toString(),
+      helper: $t('landing.metric.sessions.helper'),
+      icon: IconActivity as ComponentType<any>,
+      tone: 'brand' as const
+    },
+    {
+      id: 'approvals',
+      label: $t('landing.metric.approvals'),
+      value: pendingApprovals.toString(),
+      helper: $t('landing.metric.approvals.helper'),
+      icon: IconShield as ComponentType<any>,
+      attention: pendingApprovals > 0,
+      onClick: () => goto('/approvals')
+    },
+    {
+      id: 'snapshot',
+      label: $t('landing.metric.lastSnapshot'),
+      value: lastSnapshotAge ?? $t('landing.relTime.never'),
+      helper: $t('landing.metric.lastSnapshot.helper'),
+      icon: IconClock as ComponentType<any>,
+      onClick: () => goto('/snapshots')
+    },
+    {
+      id: 'drift',
+      label: $t('landing.metric.drift'),
+      value: driftCount24h.toString(),
+      helper: $t('landing.metric.drift.helper'),
+      icon: IconAlertTriangle as ComponentType<any>,
+      tone: 'danger' as const,
+      attention: driftCount24h > 0,
+      onClick: () => goto('/audit?type=schema.drift')
+    }
+  ];
 </script>
 
 <section class="hero">
-  <div class="hero-mark"><Logo size={56} /></div>
-  <p class="eyebrow">{$t('brand.tagline')}</p>
+  <div class="hero-mark"><Logo size={36} /></div>
   <h1 class="title">{$t('landing.title')}</h1>
   <p class="lede">{$t('landing.lede')}</p>
 </section>
 
-<section class="tiles">
-  <DashboardTile
-    label={$t('landing.tile.health')}
-    value={statusValue(healthOk)}
-    tone={statusTone(healthOk)}
-    dot={statusTone(healthOk)}
-    loading={healthOk === null}
-  />
-  <DashboardTile
-    label={$t('landing.tile.ready')}
-    value={statusValue(readyOk, 'landing.status.ok', 'landing.status.pending')}
-    tone={statusTone(readyOk, 'warning')}
-    dot={statusTone(readyOk, 'warning')}
-    loading={readyOk === null}
-  />
-  <DashboardTile
-    label={$t('landing.tile.sessions')}
-    value={sessionsByHour.length > 0 ? sessionsByHour.reduce((s, n) => s + n, 0) : 0}
-    tone="accent"
-    loading={auditEvents === null}
-  >
-    <span slot="foot"><Sparkline data={sessionsByHour} width={120} height={28} /></span>
-  </DashboardTile>
-  <DashboardTile
-    label={$t('landing.tile.approvals')}
-    value={pendingApprovals ?? 0}
-    tone={pendingApprovals && pendingApprovals > 0 ? 'warning' : 'neutral'}
-    href="/approvals"
-    loading={approvals === null && !approvalsUnavailable}
-  />
-  <DashboardTile
-    label={$t('landing.tile.lastSnapshot')}
-    value={lastSnapshotAge ?? $t('landing.relTime.never')}
-    tone="info"
-    href="/snapshots"
-    loading={snapshots === null && !snapshotsUnavailable}
-  />
-  <DashboardTile
-    label={$t('landing.tile.drift24h')}
-    value={driftCount24h}
-    tone={driftCount24h > 0 ? 'danger' : 'neutral'}
-    href={`/audit?type=schema.drift`}
-    loading={auditEvents === null && !auditUnavailable}
-  />
-</section>
+<MetricStrip {metrics} label={$t('landing.metric.aria')} />
 
 <section class="grid-two">
-  <div class="block">
-    <header class="block-head">
-      <h2>{$t('landing.section.recentApprovals')}</h2>
-      <a class="more" href="/approvals">{$t('common.viewAll')} <IconArrowRight size={12} /></a>
+  <section class="card">
+    <header class="card-head">
+      <h4>{$t('landing.section.recentApprovals')}</h4>
+      <a class="more" href="/approvals">
+        {$t('common.viewAll')}
+        <IconArrowRight size={12} />
+      </a>
     </header>
     {#if approvalRows.length === 0}
       <EmptyState title={$t('landing.empty.approvals')} compact />
@@ -255,12 +289,15 @@
         </svelte:fragment>
       </Table>
     {/if}
-  </div>
+  </section>
 
-  <div class="block">
-    <header class="block-head">
-      <h2>{$t('landing.section.recentSnapshots')}</h2>
-      <a class="more" href="/snapshots">{$t('common.viewAll')} <IconArrowRight size={12} /></a>
+  <section class="card">
+    <header class="card-head">
+      <h4>{$t('landing.section.recentSnapshots')}</h4>
+      <a class="more" href="/snapshots">
+        {$t('common.viewAll')}
+        <IconArrowRight size={12} />
+      </a>
     </header>
     {#if (snapshots ?? []).length === 0}
       <EmptyState title={$t('landing.empty.snapshots')} compact />
@@ -293,13 +330,16 @@
         </svelte:fragment>
       </Table>
     {/if}
-  </div>
+  </section>
 </section>
 
-<section class="block">
-  <header class="block-head">
-    <h2>{$t('landing.section.recentAudit')}</h2>
-    <a class="more" href="/audit">{$t('common.viewAll')} <IconArrowRight size={12} /></a>
+<section class="card">
+  <header class="card-head">
+    <h4>{$t('landing.section.recentAudit')}</h4>
+    <a class="more" href="/audit">
+      {$t('common.viewAll')}
+      <IconArrowRight size={12} />
+    </a>
   </header>
   {#if noticeableAudit.length === 0}
     <EmptyState title={$t('landing.empty.audit')} compact />
@@ -337,24 +377,16 @@
   .hero {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
-    padding: var(--space-6) 0 var(--space-8);
-    border-bottom: 1px solid var(--color-border-soft);
-    margin-bottom: var(--space-8);
+    gap: var(--space-2);
+    padding: var(--space-3) 0 var(--space-5);
+    margin-bottom: var(--space-5);
   }
   .hero-mark {
-    margin-bottom: var(--space-2);
-  }
-  .eyebrow {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: var(--font-size-body-md);
-    color: var(--color-accent-primary);
-    margin: 0;
+    margin-bottom: var(--space-1);
   }
   .title {
-    font-size: var(--font-size-heading-1);
-    line-height: var(--font-line-heading-1);
+    font-size: var(--font-size-heading-2);
+    line-height: var(--font-line-heading-2, 1.25);
     font-weight: var(--font-weight-semibold);
     letter-spacing: -0.02em;
     margin: 0;
@@ -363,43 +395,42 @@
     color: var(--color-text-secondary);
     margin: 0;
     max-width: 64ch;
-    font-size: var(--font-size-body-md);
-  }
-  .tiles {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: var(--space-3);
-    margin-bottom: var(--space-8);
+    font-size: var(--font-size-body-sm);
   }
   .grid-two {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-4);
-    margin-bottom: var(--space-8);
+    margin-bottom: var(--space-4);
   }
   @media (max-width: 880px) {
     .grid-two {
       grid-template-columns: 1fr;
     }
   }
-  .block {
+  .card {
     background: var(--color-bg-elevated);
     border: 1px solid var(--color-border-soft);
     border-radius: var(--radius-md);
     padding: var(--space-4) var(--space-5);
-    margin-bottom: var(--space-6);
+    margin-bottom: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
   }
-  .block-head {
+  .card-head {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    margin-bottom: var(--space-3);
   }
-  .block-head h2 {
+  .card-head h4 {
     margin: 0;
-    font-size: var(--font-size-title);
+    font-family: var(--font-sans);
+    font-size: var(--font-size-label);
     font-weight: var(--font-weight-semibold);
-    color: var(--color-text-primary);
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
   .more {
     color: var(--color-accent-primary);
@@ -415,5 +446,9 @@
   .muted {
     color: var(--color-text-tertiary);
     font-size: var(--font-size-label);
+  }
+  .link-row {
+    text-decoration: none;
+    color: inherit;
   }
 </style>

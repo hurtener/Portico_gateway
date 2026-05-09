@@ -9,7 +9,6 @@ export { default as Button } from './Button.svelte';
 export { default as Checkbox } from './Checkbox.svelte';
 export { default as CodeBlock } from './CodeBlock.svelte';
 export { default as CommandPalette } from './CommandPalette.svelte';
-export { default as DashboardTile } from './DashboardTile.svelte';
 export { default as Drawer } from './Drawer.svelte';
 export { default as Dropdown } from './Dropdown.svelte';
 export { default as EmptyState } from './EmptyState.svelte';
