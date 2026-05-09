@@ -169,6 +169,45 @@ export default {
   'landing.system.healthy': 'sano',
   'landing.system.degraded': 'degradado',
   'landing.system.down': 'caído',
+  // Phase 10.9 — setup-and-status landing
+  'landing.metric.endpoint': 'Endpoint',
+  'landing.metric.servers.helper': 'Backends registrados para enrutar',
+  'landing.metric.skills': 'Skills',
+  'landing.metric.skills.helper': 'Skill packs componibles disponibles',
+  'landing.metric.tenants': 'Tenants',
+  'landing.metric.tenants.helper': 'Scopes de tenant autorizados',
+  'landing.metric.auth': 'Auth',
+  'landing.metric.auth.dev': 'Modo dev (sin JWT)',
+  'landing.metric.auth.jwt': 'Validación JWT activa',
+  'landing.status.title': 'Estado de configuración',
+  'landing.status.allGreen':
+    'La configuración está bien. Servidores, tenants y auth están cableados.',
+  'landing.status.next': 'Siguiente:',
+  'landing.status.check.servers': 'Al menos un servidor registrado',
+  'landing.status.check.servers.hint':
+    'Añade un servidor para que el gateway tenga adónde enrutar las llamadas.',
+  'landing.status.check.tenants': 'Al menos un tenant configurado',
+  'landing.status.check.tenants.hint':
+    'Crea un tenant para que los JWTs tengan scope — requerido antes de exponer el gateway fuera de localhost.',
+  'landing.status.check.auth.dev': 'El modo dev es intencional',
+  'landing.status.check.auth.jwt': 'Issuer JWT configurado',
+  'landing.status.check.auth.hint':
+    'Define auth.jwt.issuer en portico.yaml para que el gateway valide los bearer tokens.',
+  'landing.quick.title': 'Acciones rápidas',
+  'landing.quick.connect': 'Conectar un agente',
+  'landing.quick.connect.help': 'Abre la guía de conexión con snippets listos para pegar.',
+  'landing.quick.addServer': 'Añadir un servidor',
+  'landing.quick.addServer.help':
+    'Registra un servidor MCP downstream como backend enrutable.',
+  'landing.quick.authorSkill': 'Crear un skill',
+  'landing.quick.authorSkill.help':
+    'Compón un Skill Pack desde el editor de manifiesto y publícalo.',
+  'landing.quick.playground': 'Probar en el playground',
+  'landing.quick.playground.help':
+    'Inicia una sesión interactiva para probar una tool call sin escribir un cliente.',
+  'landing.section.recentActivity': 'Actividad reciente',
+  'landing.section.recentActivity.help':
+    'Telemetría en vivo. Drift, denegaciones y aprobaciones pendientes aparecen aquí cuando ocurren.',
   'landing.relTime.never': 'nunca',
   'landing.relTime.justNow': 'ahora',
   'landing.relTime.minutes': 'hace {n} min',
