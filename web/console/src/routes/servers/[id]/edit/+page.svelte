@@ -53,7 +53,7 @@
   onMount(load);
 </script>
 
-<PageHeader title={$t('servers.edit.title')} description={id} compact>
+<PageHeader title={$t('servers.edit.title')} compact>
   <Breadcrumbs
     slot="breadcrumbs"
     items={[

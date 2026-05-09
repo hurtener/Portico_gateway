@@ -199,7 +199,7 @@
   }
 </script>
 
-<PageHeader title={$t('snapshotDiff.title')} description={$t('snapshotDiff.description')}>
+<PageHeader title={$t('snapshotDiff.title')}>
   <Breadcrumbs
     slot="breadcrumbs"
     items={[{ label: $t('nav.snapshots'), href: '/snapshots' }, { label: $t('snapshotDiff.crumb') }]}

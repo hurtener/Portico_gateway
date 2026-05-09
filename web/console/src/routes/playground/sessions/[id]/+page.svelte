@@ -6,7 +6,7 @@
   $: sessionId = $page.params.id;
 </script>
 
-<PageHeader title={$t('playground.title')} description={$t('playground.subtitle')} />
+<PageHeader title={$t('playground.title')} />
 
 <EmptyState
   title={$t('playground.session.id')}

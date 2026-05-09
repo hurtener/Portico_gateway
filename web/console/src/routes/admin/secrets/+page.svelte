@@ -287,7 +287,7 @@
   ];
 </script>
 
-<PageHeader title={$t('secrets.title')} description={$t('secrets.description')} compact>
+<PageHeader title={$t('secrets.title')} compact>
   <div slot="actions">
     {#if state !== 'unavailable'}
       <PageActionGroup actions={pageActions} />

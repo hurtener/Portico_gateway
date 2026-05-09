@@ -184,7 +184,7 @@
     : [];
 </script>
 
-<PageHeader title={detail?.title ?? id} description={detail?.description}>
+<PageHeader title={detail?.title ?? id}>
   <Breadcrumbs
     slot="breadcrumbs"
     items={[

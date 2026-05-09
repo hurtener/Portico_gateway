@@ -260,7 +260,6 @@
 <section class="hero">
   <div class="hero-mark"><Logo size={36} /></div>
   <h1 class="title">{$t('landing.title')}</h1>
-  <p class="lede">{$t('landing.lede')}</p>
 </section>
 
 <MetricStrip {metrics} label={$t('landing.metric.aria')} />
@@ -390,12 +389,6 @@
     font-weight: var(--font-weight-semibold);
     letter-spacing: -0.02em;
     margin: 0;
-  }
-  .lede {
-    color: var(--color-text-secondary);
-    margin: 0;
-    max-width: 64ch;
-    font-size: var(--font-size-body-sm);
   }
   .grid-two {
     display: grid;

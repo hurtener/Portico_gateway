@@ -290,7 +290,7 @@
   $: selected = selectedHeader;
 </script>
 
-<PageHeader title={$t('snapshots.title')} description={$t('snapshots.description')} compact>
+<PageHeader title={$t('snapshots.title')} compact>
   <div slot="actions">
     <PageActionGroup actions={pageActions} />
   </div>

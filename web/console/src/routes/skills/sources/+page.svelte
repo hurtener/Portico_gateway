@@ -360,7 +360,7 @@
   ];
 </script>
 
-<PageHeader title={$t('sources.title')} description={$t('sources.description')} compact>
+<PageHeader title={$t('sources.title')} compact>
   <div slot="actions">
     <PageActionGroup actions={pageActions} />
   </div>

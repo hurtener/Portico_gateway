@@ -426,7 +426,7 @@
   ];
 </script>
 
-<PageHeader title={$t('policy.title')} description={$t('policy.subtitle')} compact>
+<PageHeader title={$t('policy.title')} compact>
   <div slot="actions">
     <PageActionGroup actions={pageActions} />
   </div>

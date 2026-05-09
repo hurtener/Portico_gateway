@@ -442,7 +442,7 @@
     : [];
 </script>
 
-<PageHeader title={$t('servers.title')} description={$t('servers.description')} compact>
+<PageHeader title={$t('servers.title')} compact>
   <div slot="actions">
     <PageActionGroup actions={pageActions} />
   </div>

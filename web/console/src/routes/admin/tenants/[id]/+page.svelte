@@ -178,7 +178,7 @@
   onMount(refresh);
 </script>
 
-<PageHeader title={tenant?.display_name ?? id} description={tenant?.id}>
+<PageHeader title={tenant?.display_name ?? id}>
   <Breadcrumbs
     slot="breadcrumbs"
     items={[{ label: $t('nav.tenants'), href: '/admin/tenants' }, { label: id }]}

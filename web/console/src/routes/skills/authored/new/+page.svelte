@@ -170,7 +170,7 @@ binding:
   ];
 </script>
 
-<PageHeader title={$t('authored.editor.title')} description={$t('authored.editor.description')}>
+<PageHeader title={$t('authored.editor.title')}>
   <Breadcrumbs
     slot="breadcrumbs"
     items={[

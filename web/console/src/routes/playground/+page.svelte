@@ -538,7 +538,7 @@
   });
 </script>
 
-<PageHeader title={$t('playground.title')} description={$t('playground.subtitle')}>
+<PageHeader title={$t('playground.title')}>
   <svelte:fragment slot="actions">
     {#if session}
       <IdBadge value={session.id} label={$t('playground.session.id')} />

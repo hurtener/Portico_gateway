@@ -255,7 +255,7 @@
   ];
 </script>
 
-<PageHeader title={$t('authored.title')} description={$t('authored.description')} compact>
+<PageHeader title={$t('authored.title')} compact>
   <div slot="actions">
     <PageActionGroup actions={pageActions} />
   </div>

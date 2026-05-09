@@ -451,7 +451,7 @@
   ];
 </script>
 
-<PageHeader title={$t('skills.title')} description={$t('skills.description')} compact>
+<PageHeader title={$t('skills.title')} compact>
   <div slot="actions">
     <PageActionGroup actions={pageActions} />
   </div>

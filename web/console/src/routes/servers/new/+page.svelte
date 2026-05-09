@@ -57,7 +57,7 @@
   }
 </script>
 
-<PageHeader title={$t('servers.new.title')} description={$t('servers.new.subtitle')} compact>
+<PageHeader title={$t('servers.new.title')} compact>
   <Breadcrumbs
     slot="breadcrumbs"
     items={[

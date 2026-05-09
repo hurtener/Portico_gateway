@@ -121,7 +121,7 @@
   ];
 </script>
 
-<PageHeader title={$t('tenants.new.title')} description={$t('tenants.new.subtitle')}>
+<PageHeader title={$t('tenants.new.title')}>
   <Breadcrumbs
     slot="breadcrumbs"
     items={[

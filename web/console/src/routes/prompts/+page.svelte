@@ -274,7 +274,7 @@
   ];
 </script>
 
-<PageHeader title={$t('prompts.title')} description={$t('prompts.description')} compact>
+<PageHeader title={$t('prompts.title')} compact>
   <div slot="actions">
     <PageActionGroup actions={pageActions} />
   </div>

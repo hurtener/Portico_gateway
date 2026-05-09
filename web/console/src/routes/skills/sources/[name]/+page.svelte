@@ -168,7 +168,7 @@
   ];
 </script>
 
-<PageHeader title={name} description={source?.driver}>
+<PageHeader title={name}>
   <Breadcrumbs
     slot="breadcrumbs"
     items={[
