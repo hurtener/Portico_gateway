@@ -363,8 +363,11 @@ jobs:
       - name: Build frontend (embedded by the Go binary)
         working-directory: web/console
         run: npm ci && npm run build
-      - name: Build Portico binary
-        run: make build
+      - name: Build Portico binary + mockmcp
+        # playground.spec.ts spawns bin/mockmcp as a stdio MCP backend
+        # during the playground happy-path test. Build both targets so
+        # the test has the dependency it expects.
+        run: make build mockmcp
       - name: Install Playwright browsers
         working-directory: web/console
         run: npx playwright install chromium --with-deps
