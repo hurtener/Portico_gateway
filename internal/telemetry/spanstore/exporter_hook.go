@@ -294,7 +294,9 @@ func anyValue(v attribute.Value) any {
 		return v.AsFloat64Slice()
 	case attribute.BOOLSLICE:
 		return v.AsBoolSlice()
-	case attribute.INVALID:
+	case attribute.EMPTY:
+		// EMPTY and INVALID share the zero value; covers both the
+		// uninitialised attribute slot and the explicit-empty case.
 		return nil
 	default:
 		return v.Emit()

@@ -60,7 +60,10 @@ func initOTel(ctx context.Context, cfg Config, log *slog.Logger) (Shutdown, erro
 	// configured, so the session inspector can render a full waterfall
 	// without relying on the external collector.
 	if cfg.SpanStore != nil {
-		exporter = spanstore.Tee(exporter, cfg.SpanStore, spanstore.HookOptions{Logger: log})
+		// Tee starts a detached drain goroutine; the worker context is
+		// intentionally background (it outlives any request). See
+		// spanstore.exporter_hook.go for the rationale.
+		exporter = spanstore.Tee(exporter, cfg.SpanStore, spanstore.HookOptions{Logger: log}) //nolint:contextcheck // detached drain worker
 	}
 
 	res, err := buildResource(cfg)
