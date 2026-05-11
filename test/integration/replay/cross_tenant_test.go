@@ -276,4 +276,3 @@ func TestE2E_TenantIsolation_ImportedBundles(t *testing.T) {
 		t.Error("tenant-a should not load tenant-b's imported bundle")
 	}
 }
-

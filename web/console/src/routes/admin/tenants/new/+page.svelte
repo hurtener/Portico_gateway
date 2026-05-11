@@ -153,19 +153,9 @@
         label={$t('tenants.field.runtimeMode')}
         options={runtimeOptions}
       />
-      <Input
-        bind:value={maxSessions}
-        type="number"
-        label={$t('tenants.field.maxSessions')}
-        block
-      />
+      <Input bind:value={maxSessions} type="number" label={$t('tenants.field.maxSessions')} block />
       <Input bind:value={maxRpm} type="number" label={$t('tenants.field.maxRpm')} block />
-      <Input
-        bind:value={retention}
-        type="number"
-        label={$t('tenants.field.retention')}
-        block
-      />
+      <Input bind:value={retention} type="number" label={$t('tenants.field.retention')} block />
     </section>
   {:else if step === 'auth'}
     <section class="card">
@@ -192,12 +182,7 @@
     {#if step === 'review'}
       <Button type="submit" variant="primary" loading={saving}>{$t('crud.create')}</Button>
     {:else}
-      <Button
-        type="button"
-        variant="primary"
-        on:click={next}
-        disabled={!canAdvance}
-      >
+      <Button type="button" variant="primary" on:click={next} disabled={!canAdvance}>
         {$t('common.next')}
       </Button>
     {/if}

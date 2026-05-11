@@ -141,7 +141,6 @@
 <svelte:window on:resize={onResize} />
 
 <div class="timeline-shell" bind:this={containerEl}>
-  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
   <svg
     role="button"
     tabindex="0"
@@ -232,10 +231,7 @@
     <!-- Approvals: hollow rectangles -->
     {#each approvals as appr}
       {#if Number.isFinite(toMs(appr.created_at))}
-        {@const w = widthFor(
-          toMs(appr.created_at),
-          toMs(appr.decided_at ?? appr.expires_at)
-        )}
+        {@const w = widthFor(toMs(appr.created_at), toMs(appr.decided_at ?? appr.expires_at))}
         <rect
           x={xFor(toMs(appr.created_at))}
           y={laneTop('approvals') + 4}

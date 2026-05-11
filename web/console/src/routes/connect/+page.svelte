@@ -129,11 +129,11 @@
     if (!g) return '';
     const lines: string[] = [];
     if (g.auth.mode === 'dev') {
-      lines.push(`# dev mode: no Authorization header required (tenant=${g.dev_tenant ?? 'default'})`);
+      lines.push(
+        `# dev mode: no Authorization header required (tenant=${g.dev_tenant ?? 'default'})`
+      );
     }
-    lines.push(
-      `# returns server capabilities + Mcp-Session-Id header in -i output`
-    );
+    lines.push(`# returns server capabilities + Mcp-Session-Id header in -i output`);
     lines.push(`curl -i -X POST '${u}' \\`);
     lines.push(`  -H 'Content-Type: application/json' \\`);
     lines.push(`  -H 'Accept: application/json, text/event-stream' \\`);
@@ -193,9 +193,10 @@
           id: 'auth',
           label: $t('connect.metric.auth'),
           value: info.auth.mode,
-          helper: info.auth.mode === 'dev'
-            ? $t('connect.metric.auth.devHelper')
-            : $t('connect.metric.auth.jwtHelper'),
+          helper:
+            info.auth.mode === 'dev'
+              ? $t('connect.metric.auth.devHelper')
+              : $t('connect.metric.auth.jwtHelper'),
           icon: IconShield as ComponentType<any>,
           tone: info.auth.mode === 'dev' ? ('warning' as const) : ('success' as const),
           attention: info.auth.mode === 'dev'
@@ -209,7 +210,7 @@
           // KPI value as a literal claim name ("tenant") was confusing
           // ("Tenant: tenant" — you what?). Found by audit pass.
           value: info.dev_mode
-            ? info.dev_tenant ?? 'default'
+            ? (info.dev_tenant ?? 'default')
             : $t('connect.metric.tenant.jwtValue'),
           helper: info.dev_mode
             ? $t('connect.metric.tenant.devHelper')
@@ -260,7 +261,11 @@
     <article class="snippet">
       <header class="snippet-head">
         <h5>{$t('connect.snippet.claude.title')}</h5>
-        <Button variant="secondary" size="sm" on:click={() => copy(claudeText, $t('connect.snippet.claude.what'))}>
+        <Button
+          variant="secondary"
+          size="sm"
+          on:click={() => copy(claudeText, $t('connect.snippet.claude.what'))}
+        >
           <IconCopy slot="leading" size={14} />
           {$t('common.copy')}
         </Button>
@@ -272,7 +277,11 @@
     <article class="snippet">
       <header class="snippet-head">
         <h5>{$t('connect.snippet.inspector.title')}</h5>
-        <Button variant="secondary" size="sm" on:click={() => copy(inspectorText, $t('connect.snippet.inspector.what'))}>
+        <Button
+          variant="secondary"
+          size="sm"
+          on:click={() => copy(inspectorText, $t('connect.snippet.inspector.what'))}
+        >
           <IconCopy slot="leading" size={14} />
           {$t('common.copy')}
         </Button>
@@ -284,7 +293,11 @@
     <article class="snippet">
       <header class="snippet-head">
         <h5>{$t('connect.snippet.curl.title')}</h5>
-        <Button variant="secondary" size="sm" on:click={() => copy(curlText, $t('connect.snippet.curl.what'))}>
+        <Button
+          variant="secondary"
+          size="sm"
+          on:click={() => copy(curlText, $t('connect.snippet.curl.what'))}
+        >
           <IconCopy slot="leading" size={14} />
           {$t('common.copy')}
         </Button>

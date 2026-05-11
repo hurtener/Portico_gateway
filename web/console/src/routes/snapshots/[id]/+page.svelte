@@ -227,9 +227,10 @@
             },
             {
               label: $t('snapshotDetail.field.approvalTimeout'),
-              value: snap.policies.approval_timeout != null
-                ? String(snap.policies.approval_timeout)
-                : '—'
+              value:
+                snap.policies.approval_timeout != null
+                  ? String(snap.policies.approval_timeout)
+                  : '—'
             },
             {
               label: $t('snapshotDetail.field.defaultRisk'),
@@ -243,11 +244,7 @@
   {:else if activeTab === 'servers'}
     <section class="card">
       <h4>{$t('snapshotDetail.section.servers', { n: snap.servers.length })}</h4>
-      <Table
-        columns={serverColumns}
-        rows={snap.servers}
-        empty={$t('snapshotDetail.empty.servers')}
-      >
+      <Table columns={serverColumns} rows={snap.servers} empty={$t('snapshotDetail.empty.servers')}>
         <svelte:fragment slot="cell" let:row let:column>
           {#if column.key === 'id'}
             <span class="server-name">
@@ -329,11 +326,7 @@
   {:else if activeTab === 'prompts'}
     <section class="card">
       <h4>{$t('snapshotDetail.section.prompts', { n: snap.prompts.length })}</h4>
-      <Table
-        columns={promptColumns}
-        rows={snap.prompts}
-        empty={$t('snapshotDetail.empty.prompts')}
-      >
+      <Table columns={promptColumns} rows={snap.prompts} empty={$t('snapshotDetail.empty.prompts')}>
         <svelte:fragment slot="cell" let:row let:column>
           {#if column.key === 'arguments'}
             <Badge tone="neutral">{row.arguments?.length ?? 0}</Badge>

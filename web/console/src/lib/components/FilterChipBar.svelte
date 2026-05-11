@@ -260,8 +260,7 @@
     color: var(--color-text-secondary);
     font-family: var(--font-sans);
     font-size: var(--font-size-label);
-    transition:
-      border-color var(--motion-fast) var(--ease-default);
+    transition: border-color var(--motion-fast) var(--ease-default);
     cursor: pointer;
   }
   .dropdown:hover {
@@ -291,11 +290,8 @@
   }
   /* Custom chevron via gradient */
   .dropdown {
-    background-image: linear-gradient(
-        45deg,
-        transparent 50%,
-        var(--color-icon-subtle) 50%
-      ),
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--color-icon-subtle) 50%),
       linear-gradient(135deg, var(--color-icon-subtle) 50%, transparent 50%);
     background-position:
       calc(100% - 12px) center,

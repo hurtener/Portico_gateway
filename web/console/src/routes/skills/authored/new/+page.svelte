@@ -189,12 +189,7 @@ binding:
     <section class="card">
       <Tabs tabs={editorTabs} bind:active={activeTab} />
       {#if activeTab === 'manifest'}
-        <Textarea
-          bind:value={manifestBody}
-          rows={20}
-          mono
-          label={$t('authored.editor.manifest')}
-        />
+        <Textarea bind:value={manifestBody} rows={20} mono label={$t('authored.editor.manifest')} />
       {:else if activeTab === 'skillmd'}
         <Textarea bind:value={skillBody} rows={20} mono label={$t('authored.editor.skillMd')} />
       {:else if activeTab === 'prompts'}

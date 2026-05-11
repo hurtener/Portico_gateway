@@ -79,10 +79,7 @@
   }
 </script>
 
-<Breadcrumbs items={[
-  { label: $t('nav.sessions'), href: '/sessions' },
-  { label: sid }
-]} />
+<Breadcrumbs items={[{ label: $t('nav.sessions'), href: '/sessions' }, { label: sid }]} />
 
 <PageHeader title={sid} description="">
   <div slot="meta">
@@ -142,9 +139,7 @@
         { label: 'started', value: new Date(bundle.session.started_at).toLocaleString() },
         {
           label: 'ended',
-          value: bundle.session.ended_at
-            ? new Date(bundle.session.ended_at).toLocaleString()
-            : '—'
+          value: bundle.session.ended_at ? new Date(bundle.session.ended_at).toLocaleString() : '—'
         },
         {
           label: 'duration',

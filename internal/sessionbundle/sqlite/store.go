@@ -7,7 +7,6 @@
 // session without re-parsing the tar.gz on every page view.
 //
 // Phase 11.
-
 package sqlite
 
 import (

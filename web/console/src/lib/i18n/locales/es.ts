@@ -123,10 +123,8 @@ export default {
   'connect.auth.jwksUrl': 'JWKS URL',
   'connect.auth.tenantClaim': 'Claim de tenant',
   'connect.auth.scopeClaim': 'Claim de scope',
-  'connect.auth.tenantsHint':
-    'La configuración por tenant (nombres, planes, retención) vive en',
-  'connect.headers.description':
-    'Requeridas o respetadas por el transporte MCP northbound.',
+  'connect.auth.tenantsHint': 'La configuración por tenant (nombres, planes, retención) vive en',
+  'connect.headers.description': 'Requeridas o respetadas por el transporte MCP northbound.',
   'connect.headers.origin': 'Solo navegador. Debe coincidir con la lista permitida o "*".',
   'connect.headers.auth': 'Bearer JWT en modo JWT; ausente en modo dev.',
   'connect.headers.session':
@@ -202,8 +200,7 @@ export default {
   'landing.quick.connect': 'Conectar un agente',
   'landing.quick.connect.help': 'Abre la guía de conexión con snippets listos para pegar.',
   'landing.quick.addServer': 'Añadir un servidor',
-  'landing.quick.addServer.help':
-    'Registra un servidor MCP downstream como backend enrutable.',
+  'landing.quick.addServer.help': 'Registra un servidor MCP downstream como backend enrutable.',
   'landing.quick.authorSkill': 'Crear un skill',
   'landing.quick.authorSkill.help':
     'Compón un Skill Pack desde el editor de manifiesto y publícalo.',
@@ -245,8 +242,7 @@ export default {
   'servers.metric.runtime': 'Procesos',
   'servers.metric.runtime.helper': 'Agregado entre todos los servidores',
   'servers.metric.capabilities': 'Capacidades',
-  'servers.metric.capabilities.helper':
-    '{tools} tools · {resources} recursos · {prompts} prompts',
+  'servers.metric.capabilities.helper': '{tools} tools · {resources} recursos · {prompts} prompts',
   'servers.metric.policies': 'Políticas',
   'servers.metric.policies.helper': '{approval} con aprobación',
   'servers.metric.drift': 'Cambios catálogo',
@@ -461,8 +457,7 @@ export default {
   'resources.filter.server': 'Servidor',
   'resources.filter.any': 'Cualquiera',
   'resources.filter.empty.title': 'Ningún recurso coincide con estos filtros.',
-  'resources.filter.empty.description':
-    'Limpia los filtros o busca por URI, nombre o tipo MIME.',
+  'resources.filter.empty.description': 'Limpia los filtros o busca por URI, nombre o tipo MIME.',
   'resources.filter.empty.action': 'Limpiar filtros',
   'resources.category.app': 'App',
   'resources.category.text': 'Texto',
@@ -614,8 +609,7 @@ export default {
   'skills.filter.server': 'Servidor',
   'skills.filter.any': 'Cualquiera',
   'skills.filter.empty.title': 'Ninguna skill coincide con estos filtros.',
-  'skills.filter.empty.description':
-    'Limpia los filtros o busca por id, servidor o estado.',
+  'skills.filter.empty.description': 'Limpia los filtros o busca por id, servidor o estado.',
   'skills.filter.empty.action': 'Limpiar filtros',
   'skills.assets.format': '{prompts} prompts · {resources} recursos',
   'skills.assets.app': '{n} app',
@@ -641,8 +635,7 @@ export default {
   'skills.inspector.action.viewDetails': 'Ver detalle',
   'skills.inspector.action.toggle.enable': 'Habilitar para tenant',
   'skills.inspector.action.toggle.disable': 'Deshabilitar para tenant',
-  'skills.pagination.showing':
-    'Mostrando {from} a {to} de {total} skills',
+  'skills.pagination.showing': 'Mostrando {from} a {to} de {total} skills',
   'skills.pagination.prev': 'Anterior',
   'skills.pagination.next': 'Siguiente',
   'skills.pagination.perPage': 'Por página',
@@ -701,8 +694,7 @@ export default {
   'sessions.inspector.section.identity': 'Identidad',
   'sessions.inspector.section.activity': 'Actividad',
   'sessions.inspector.section.snapshots': 'Snapshots',
-  'sessions.inspector.section.noSnapshots':
-    'No hay snapshots registrados para esta sesión.',
+  'sessions.inspector.section.noSnapshots': 'No hay snapshots registrados para esta sesión.',
   'sessions.action.openAudit': 'Abrir en auditoría',
 
   // Approvals
@@ -842,8 +834,7 @@ export default {
   'snapshots.filter.mcp': 'MCP',
   'snapshots.filter.search': 'Buscar por id o sesión…',
   'snapshots.filter.empty.title': 'Ningún snapshot coincide con estos filtros.',
-  'snapshots.filter.empty.description':
-    'Limpia los filtros o busca por id de snapshot o sesión.',
+  'snapshots.filter.empty.description': 'Limpia los filtros o busca por id de snapshot o sesión.',
   'snapshots.filter.empty.action': 'Limpiar filtros',
   'snapshots.source.playground': 'playground',
   'snapshots.source.mcp': 'mcp',
@@ -1294,8 +1285,7 @@ export default {
   'tenants.filter.plan': 'Plan',
   'tenants.filter.any': 'Cualquiera',
   'tenants.filter.empty.title': 'Ningún tenant coincide con estos filtros.',
-  'tenants.filter.empty.description':
-    'Limpia los filtros o busca por id o nombre.',
+  'tenants.filter.empty.description': 'Limpia los filtros o busca por id o nombre.',
   'tenants.filter.empty.action': 'Limpiar filtros',
   'tenants.inspector.empty.title': 'Sin tenant seleccionado',
   'tenants.inspector.empty.description':

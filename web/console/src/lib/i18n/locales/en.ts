@@ -126,14 +126,14 @@ export default {
   'connect.auth.jwksUrl': 'JWKS URL',
   'connect.auth.tenantClaim': 'Tenant claim',
   'connect.auth.scopeClaim': 'Scope claim',
-  'connect.auth.tenantsHint':
-    'Per-tenant configuration (display names, plans, retention) lives in',
-  'connect.headers.description':
-    'Required or honored by the northbound MCP transport.',
+  'connect.auth.tenantsHint': 'Per-tenant configuration (display names, plans, retention) lives in',
+  'connect.headers.description': 'Required or honored by the northbound MCP transport.',
   'connect.headers.origin': 'Browser-only. Must match the configured allowlist or "*".',
   'connect.headers.auth': 'Bearer JWT in JWT mode; absent in dev mode.',
-  'connect.headers.session': 'Returned on initialize; echoed on subsequent requests for SSE resumption.',
-  'connect.headers.accept': 'Set to "application/json, text/event-stream" for the streamable HTTP transport.',
+  'connect.headers.session':
+    'Returned on initialize; echoed on subsequent requests for SSE resumption.',
+  'connect.headers.accept':
+    'Set to "application/json, text/event-stream" for the streamable HTTP transport.',
 
   // Landing page
   'landing.title': 'Portico Console',
@@ -244,8 +244,7 @@ export default {
   'servers.metric.runtime': 'Runtime processes',
   'servers.metric.runtime.helper': 'Aggregated across all servers',
   'servers.metric.capabilities': 'Capabilities',
-  'servers.metric.capabilities.helper':
-    '{tools} tools · {resources} resources · {prompts} prompts',
+  'servers.metric.capabilities.helper': '{tools} tools · {resources} resources · {prompts} prompts',
   'servers.metric.policies': 'Policies',
   'servers.metric.policies.helper': '{approval} approval-gated',
   'servers.metric.drift': 'Catalog drift',
@@ -639,8 +638,7 @@ export default {
   'skills.inspector.action.viewDetails': 'View details',
   'skills.inspector.action.toggle.enable': 'Enable for tenant',
   'skills.inspector.action.toggle.disable': 'Disable for tenant',
-  'skills.pagination.showing':
-    'Showing {from} to {to} of {total} skills',
+  'skills.pagination.showing': 'Showing {from} to {to} of {total} skills',
   'skills.pagination.prev': 'Previous',
   'skills.pagination.next': 'Next',
   'skills.pagination.perPage': 'Per page',
@@ -835,8 +833,7 @@ export default {
   'snapshots.filter.mcp': 'MCP',
   'snapshots.filter.search': 'Search by id or session…',
   'snapshots.filter.empty.title': 'No snapshots match these filters.',
-  'snapshots.filter.empty.description':
-    'Try clearing filters or search by snapshot id or session.',
+  'snapshots.filter.empty.description': 'Try clearing filters or search by snapshot id or session.',
   'snapshots.filter.empty.action': 'Clear filters',
   'snapshots.source.playground': 'playground',
   'snapshots.source.mcp': 'mcp',
@@ -1024,8 +1021,7 @@ export default {
   'sources.confirm.delete': 'Delete source {name}?',
   'sources.action.openDetail': 'Open detail',
   'sources.inspector.empty.title': 'Pick a source',
-  'sources.inspector.empty.description':
-    'Select a row to inspect, refresh, or remove a source.',
+  'sources.inspector.empty.description': 'Select a row to inspect, refresh, or remove a source.',
   'sources.inspector.tab.overview': 'Overview',
   'sources.inspector.tab.config': 'Config',
   'sources.inspector.section.identity': 'Identity',
@@ -1066,8 +1062,7 @@ export default {
     'Use the action above the editor to show validation again.',
   'authoredNew.inspector.tab.schema': 'Schema',
   'authoredNew.inspector.section.schema': 'Manifest schema',
-  'authoredNew.inspector.section.schemaHelp':
-    'Top-level fields the manifest must declare.',
+  'authoredNew.inspector.section.schemaHelp': 'Top-level fields the manifest must declare.',
   'authoredNew.schema.id': 'unique skill id (lowercase, dotted)',
   'authoredNew.schema.title': 'human-readable title',
   'authoredNew.schema.version': 'semver string',
@@ -1103,8 +1098,7 @@ export default {
   'authored.filter.empty.action': 'Clear filters',
   'authored.action.openEditor': 'Open in editor',
   'authored.inspector.empty.title': 'Pick a skill',
-  'authored.inspector.empty.description':
-    'Select a row to see version history and metadata.',
+  'authored.inspector.empty.description': 'Select a row to see version history and metadata.',
   'authored.inspector.tab.overview': 'Overview',
   'authored.inspector.tab.versions': 'Versions',
   'authored.inspector.section.identity': 'Identity',

@@ -384,18 +384,17 @@
   >
     <svelte:fragment slot="header">
       {#if selected}
-        <IdentityCell
-          primary={selected.id}
-          secondary={fmt(selected.created_at)}
-          mono
-          size="lg"
-        />
+        <IdentityCell primary={selected.id} secondary={fmt(selected.created_at)} mono size="lg" />
       {/if}
     </svelte:fragment>
 
     <svelte:fragment slot="actions">
       {#if selected}
-        <Button variant="secondary" size="sm" href={`/snapshots/${encodeURIComponent(selected.id)}`}>
+        <Button
+          variant="secondary"
+          size="sm"
+          href={`/snapshots/${encodeURIComponent(selected.id)}`}
+        >
           {$t('snapshots.inspector.action.viewDetails')}
         </Button>
       {/if}
@@ -454,7 +453,10 @@
         {#if detailLoading}
           <p class="muted">…</p>
         {:else if detail}
-          <p class="muted">{detail.tools.length} tools · {detail.resources.length} resources · {detail.prompts.length} prompts</p>
+          <p class="muted">
+            {detail.tools.length} tools · {detail.resources.length} resources · {detail.prompts
+              .length} prompts
+          </p>
           {#if detail.warnings && detail.warnings.length > 0}
             <section class="card">
               <h4>{$t('snapshots.inspector.section.warnings')}</h4>

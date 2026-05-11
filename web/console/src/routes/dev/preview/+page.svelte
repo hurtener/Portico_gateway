@@ -165,9 +165,9 @@
     }}
   />
   <p class="state">
-    chip: <code>{chip}</code> · transport: <code>{transport || '—'}</code> · runtime: <code
-      >{runtime || '—'}</code
-    > · search: <code>{search || '—'}</code>
+    chip: <code>{chip}</code> · transport: <code>{transport || '—'}</code> · runtime:
+    <code>{runtime || '—'}</code>
+    · search: <code>{search || '—'}</code>
   </p>
 </section>
 
@@ -201,12 +201,7 @@
         Toggle inspector
       </Button>
     </div>
-    <Inspector
-      bind:open={inspectorOpen}
-      {tabs}
-      bind:activeTab={inspectorTab}
-      title="filesystem"
-    >
+    <Inspector bind:open={inspectorOpen} {tabs} bind:activeTab={inspectorTab} title="filesystem">
       <svelte:fragment slot="header">
         <IdentityCell primary="filesystem" secondary="Local filesystem access" size="lg" />
       </svelte:fragment>

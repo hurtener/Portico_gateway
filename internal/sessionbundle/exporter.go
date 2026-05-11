@@ -325,7 +325,3 @@ func newBundleID() string {
 	}
 	return "bdl_" + hex.EncodeToString(b[:])
 }
-
-// asTarReader converts the concatenated bytes of an export into a
-// reader the importer can use. Helper for tests.
-func asTarReader(data []byte) io.Reader { return bytes.NewReader(data) }

@@ -11,7 +11,6 @@
 // Phase 11 ships the JSON-shape Bundle plus tar.gz export/import.
 // Optional age encryption is reserved for a follow-up; the on-the-wire
 // shape carries a `manifest.encrypted` flag for forward compatibility.
-
 package sessionbundle
 
 import (
@@ -40,12 +39,12 @@ const SchemaV1 = "portico-bundle/v1"
 // `sessions` table; we re-declare it here so this package doesn't
 // pull the storage SQL driver into its surface area.
 type SessionRow struct {
-	ID         string    `json:"id"`
-	TenantID   string    `json:"tenant_id"`
-	UserID     string    `json:"user_id,omitempty"`
-	SnapshotID string    `json:"snapshot_id,omitempty"`
-	StartedAt  time.Time `json:"started_at"`
-	EndedAt    time.Time `json:"ended_at,omitempty"`
+	ID         string          `json:"id"`
+	TenantID   string          `json:"tenant_id"`
+	UserID     string          `json:"user_id,omitempty"`
+	SnapshotID string          `json:"snapshot_id,omitempty"`
+	StartedAt  time.Time       `json:"started_at"`
+	EndedAt    time.Time       `json:"ended_at,omitempty"`
 	Metadata   json.RawMessage `json:"metadata,omitempty"`
 }
 
@@ -181,6 +180,8 @@ var ErrSessionNotFound = errors.New("sessionbundle: session not found")
 // Load assembles a Bundle for (tenant, session). Tenant scoping is
 // enforced at every read — the loader never falls back to "all
 // tenants" even when one of the underlying stores would let it.
+//
+//nolint:gocyclo // structural fanout across optional store dependencies.
 func (l *Loader) Load(ctx context.Context, tenantID, sessionID string) (*Bundle, error) {
 	if tenantID == "" || sessionID == "" {
 		return nil, errors.New("sessionbundle: tenant + session required")

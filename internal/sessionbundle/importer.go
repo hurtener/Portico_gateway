@@ -74,6 +74,8 @@ type Importer struct {
 // rewrites the synthetic session id, and registers it via the sink.
 // The reader must NOT exceed MaxBundleSize bytes; the caller can
 // enforce this with an http.MaxBytesReader wrapper.
+//
+//nolint:gocyclo // step-by-step verification + per-lane rewrite loops.
 func (im *Importer) Import(ctx context.Context, tenantID string, r io.Reader) (*ImportResult, error) {
 	if im == nil || im.Sink == nil {
 		return nil, errors.New("sessionbundle: importer missing sink")
@@ -105,7 +107,7 @@ func (im *Importer) Import(ctx context.Context, tenantID string, r io.Reader) (*
 
 	var manifest Manifest
 	if err := json.Unmarshal(bytes.TrimRight(manifestBytes, "\n"), &manifest); err != nil {
-		return nil, fmt.Errorf("%w: manifest json: %v", ErrBundleCorrupt, err)
+		return nil, fmt.Errorf("%w: manifest json: %w", ErrBundleCorrupt, err)
 	}
 	if manifest.Schema != SchemaV1 {
 		return nil, fmt.Errorf("%w: have %q want %q", ErrBundleSchema, manifest.Schema, SchemaV1)
@@ -195,7 +197,7 @@ func LoadFromReader(_ context.Context, r io.Reader) (*Bundle, error) {
 	}
 	var manifest Manifest
 	if err := json.Unmarshal(bytes.TrimRight(manifestBytes, "\n"), &manifest); err != nil {
-		return nil, fmt.Errorf("%w: manifest json: %v", ErrBundleCorrupt, err)
+		return nil, fmt.Errorf("%w: manifest json: %w", ErrBundleCorrupt, err)
 	}
 	if manifest.Schema != SchemaV1 {
 		return nil, fmt.Errorf("%w: have %q want %q", ErrBundleSchema, manifest.Schema, SchemaV1)
@@ -279,12 +281,14 @@ func computeChecksumFromMap(files []bundleFile) string {
 // decodeBundle materialises the full Bundle from the verified file
 // map. Snapshot is optional; everything else is expected (an empty
 // stream is a zero-row stream, not a missing one).
+//
+//nolint:gocyclo // one branch per JSONL stream; flattening would obscure intent.
 func decodeBundle(files map[string][]byte, manifest Manifest) (*Bundle, error) {
 	b := &Bundle{Manifest: manifest}
 
 	if body, ok := files["session.json"]; ok {
 		if err := json.Unmarshal(bytes.TrimRight(body, "\n"), &b.Session); err != nil {
-			return nil, fmt.Errorf("%w: session: %v", ErrBundleCorrupt, err)
+			return nil, fmt.Errorf("%w: session: %w", ErrBundleCorrupt, err)
 		}
 	}
 	if body, ok := files["snapshot.json"]; ok {
@@ -293,35 +297,35 @@ func decodeBundle(files map[string][]byte, manifest Manifest) (*Bundle, error) {
 	if body, ok := files["spans.jsonl"]; ok {
 		spans, err := decodeJSONLSpans(body)
 		if err != nil {
-			return nil, fmt.Errorf("%w: spans: %v", ErrBundleCorrupt, err)
+			return nil, fmt.Errorf("%w: spans: %w", ErrBundleCorrupt, err)
 		}
 		b.Spans = spans
 	}
 	if body, ok := files["audit.jsonl"]; ok {
 		ev, err := decodeJSONLEvents(body)
 		if err != nil {
-			return nil, fmt.Errorf("%w: audit: %v", ErrBundleCorrupt, err)
+			return nil, fmt.Errorf("%w: audit: %w", ErrBundleCorrupt, err)
 		}
 		b.Audit = ev
 	}
 	if body, ok := files["drift.jsonl"]; ok {
 		ev, err := decodeJSONLEvents(body)
 		if err != nil {
-			return nil, fmt.Errorf("%w: drift: %v", ErrBundleCorrupt, err)
+			return nil, fmt.Errorf("%w: drift: %w", ErrBundleCorrupt, err)
 		}
 		b.Drift = ev
 	}
 	if body, ok := files["policy.jsonl"]; ok {
 		ev, err := decodeJSONLEvents(body)
 		if err != nil {
-			return nil, fmt.Errorf("%w: policy: %v", ErrBundleCorrupt, err)
+			return nil, fmt.Errorf("%w: policy: %w", ErrBundleCorrupt, err)
 		}
 		b.Policy = ev
 	}
 	if body, ok := files["approvals.jsonl"]; ok {
 		rows, err := decodeJSONLApprovals(body)
 		if err != nil {
-			return nil, fmt.Errorf("%w: approvals: %v", ErrBundleCorrupt, err)
+			return nil, fmt.Errorf("%w: approvals: %w", ErrBundleCorrupt, err)
 		}
 		b.Approvals = rows
 	}

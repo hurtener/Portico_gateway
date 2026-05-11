@@ -343,12 +343,7 @@
   >
     <svelte:fragment slot="header">
       {#if selected}
-        <IdentityCell
-          primary={selected.skill_id}
-          secondary={selected.version}
-          mono
-          size="lg"
-        />
+        <IdentityCell primary={selected.skill_id} secondary={selected.version} mono size="lg" />
       {/if}
     </svelte:fragment>
 

@@ -18,6 +18,7 @@
 
 <span class="logo-row" data-variant={variant} role="img" aria-label={alt}>
   <span class="mark" style:--logo-size={dim}>
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
     {@html logoSvg}
   </span>
   {#if withWordmark}

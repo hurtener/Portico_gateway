@@ -13,7 +13,6 @@ package sessionbundle
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"sort"
 )
 
@@ -98,13 +97,4 @@ func sortMaps(v any) any {
 	default:
 		return t
 	}
-}
-
-// rawJSON is a tiny helper for callers that already hold pre-marshalled
-// canonical bytes and want to embed them in another canonical doc.
-func rawJSON(b []byte) (json.RawMessage, error) {
-	if !json.Valid(b) {
-		return nil, fmt.Errorf("sessionbundle: invalid embedded json")
-	}
-	return json.RawMessage(b), nil
 }

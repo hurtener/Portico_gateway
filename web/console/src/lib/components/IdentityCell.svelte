@@ -17,7 +17,7 @@
   function initial(s: string): string {
     if (!s) return '?';
     // Strip a namespace prefix so "github.code-review" → "C", not "G".
-    const trimmed = s.includes('.') ? s.split('.').pop() ?? s : s;
+    const trimmed = s.includes('.') ? (s.split('.').pop() ?? s) : s;
     return trimmed.charAt(0).toUpperCase();
   }
 

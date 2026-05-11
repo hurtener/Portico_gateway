@@ -28,8 +28,28 @@ MD026:
   punctuation: ".,;:!?"
 
 # Allow ordered list non-1 numbering for grouped sequences.
-MD029:
-  style: ordered
+# Phase plans deliberately number deliverables continuously across
+# subsections (1-4 under heading A, 5-8 under heading B, etc.) so the
+# "deliverable #N" references in acceptance criteria stay stable. The
+# stricter "ordered" style requires per-list resets, which would defeat
+# that. Disable entirely.
+MD029: false
+
+# Headings inside deeply-nested step lists occasionally land flush
+# against the preceding paragraph. Code-blocks-as-list-content already
+# make spacing irregular; relaxing the strict before/after blanks rule
+# keeps plan docs readable.
+MD022: false
+
+# Blank lines inside blockquotes are a stylistic choice in our long
+# RFC-style preambles; the quote-then-detail-then-quote shape conveys
+# meaning the strict rule would force us to break apart.
+MD028: false
+
+# Markdownlint's table-column-count rule miscounts columns when a cell
+# carries an inline code block with `|` pipes — appears in our V2
+# phase plans where we render comparison matrices. Disable.
+MD056: false
 
 # Fenced code blocks need not declare a language — RFC and plan docs include
 # many freeform / shell-output snippets where forcing a tag is noise.

@@ -66,8 +66,12 @@
     error = '';
     try {
       const [snapsRes, auditRes] = await Promise.all([
-        api.listSnapshots({ limit: 100 }).catch(() => ({ snapshots: [] as Snapshot[], next_cursor: '' })),
-        api.queryAudit({ limit: 100 }).catch(() => ({ events: [] as AuditEvent[], next_cursor: '' }))
+        api
+          .listSnapshots({ limit: 100 })
+          .catch(() => ({ snapshots: [] as Snapshot[], next_cursor: '' })),
+        api
+          .queryAudit({ limit: 100 })
+          .catch(() => ({ events: [] as AuditEvent[], next_cursor: '' }))
       ]);
       snapshots = snapsRes.snapshots ?? [];
       events = auditRes.events ?? [];
@@ -484,9 +488,12 @@
           <KeyValueGrid
             items={[
               { label: $t('sessions.col.tenant'), value: selected.tenant_id || '—' },
-              { label: $t('sessions.col.source'), value: selected.isPlayground
-                ? $t('sessions.source.playground')
-                : $t('sessions.source.mcp') }
+              {
+                label: $t('sessions.col.source'),
+                value: selected.isPlayground
+                  ? $t('sessions.source.playground')
+                  : $t('sessions.source.mcp')
+              }
             ]}
             columns={1}
           />

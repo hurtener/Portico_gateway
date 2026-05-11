@@ -18,15 +18,9 @@ test.describe('/connect (phase 10.9)', () => {
     await expect(page.locator('[data-region="kpi"]')).toBeVisible();
 
     // Three snippet cards.
-    await expect(
-      page.getByRole('heading', { name: /claude desktop/i, level: 5 })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('heading', { name: /mcp inspector/i, level: 5 })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('heading', { name: /curl/i, level: 5 })
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: /claude desktop/i, level: 5 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /mcp inspector/i, level: 5 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /curl/i, level: 5 })).toBeVisible();
 
     // Authentication card.
     await expect(page.getByRole('heading', { name: /authentication/i })).toBeVisible();
@@ -45,10 +39,7 @@ test.describe('/connect (phase 10.9)', () => {
    * This spec ensures the snippet keeps doing the initialize handshake
    * (which alone is enough to prove the gateway reachable + healthy).
    */
-  test('curl snippet hits the live gateway and returns a session id', async ({
-    page,
-    request
-  }) => {
+  test('curl snippet hits the live gateway and returns a session id', async ({ page, request }) => {
     await page.goto('/connect');
     await page.waitForLoadState('networkidle');
 

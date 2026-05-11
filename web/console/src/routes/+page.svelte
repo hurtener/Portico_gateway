@@ -35,15 +35,7 @@
     type Snapshot,
     type Tenant
   } from '$lib/api';
-  import {
-    Badge,
-    Button,
-    EmptyState,
-    IdBadge,
-    Logo,
-    MetricStrip,
-    Table
-  } from '$lib/components';
+  import { Badge, Button, EmptyState, IdBadge, Logo, MetricStrip, Table } from '$lib/components';
   import { t } from '$lib/i18n';
   import IconArrowRight from 'lucide-svelte/icons/arrow-right';
   import IconPlug from 'lucide-svelte/icons/plug';
@@ -190,9 +182,10 @@
           id: 'auth',
           label: $t('landing.metric.auth'),
           value: info.auth.mode,
-          helper: info.auth.mode === 'dev'
-            ? $t('landing.metric.auth.dev')
-            : $t('landing.metric.auth.jwt'),
+          helper:
+            info.auth.mode === 'dev'
+              ? $t('landing.metric.auth.dev')
+              : $t('landing.metric.auth.jwt'),
           icon: IconShield as ComponentType<any>,
           tone: info.auth.mode === 'dev' ? ('warning' as const) : ('success' as const),
           attention: info.auth.mode === 'dev',
@@ -332,9 +325,7 @@
     </header>
     {#if allGreen}
       <p class="muted body status-ok">
-        {info?.dev_mode
-          ? $t('landing.status.allGreen.dev')
-          : $t('landing.status.allGreen.jwt')}
+        {info?.dev_mode ? $t('landing.status.allGreen.dev') : $t('landing.status.allGreen.jwt')}
       </p>
     {:else if statusChecks.length === 0}
       <p class="muted body">{$t('common.loading')}</p>

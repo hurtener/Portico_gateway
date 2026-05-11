@@ -268,9 +268,7 @@
     { key: 'prompt', label: $t('prompts.col.prompt'), width: '260px' },
     { key: 'description', label: $t('prompts.col.description') },
     { key: 'args', label: $t('prompts.col.args'), width: '170px' },
-    ...(selected
-      ? []
-      : [{ key: 'server', label: $t('prompts.col.server'), width: '140px' }])
+    ...(selected ? [] : [{ key: 'server', label: $t('prompts.col.server'), width: '140px' }])
   ];
 </script>
 

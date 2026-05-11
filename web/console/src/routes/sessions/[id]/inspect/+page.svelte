@@ -159,11 +159,13 @@
   }
 </script>
 
-<Breadcrumbs items={[
-  { label: $t('nav.sessions'), href: '/sessions' },
-  { label: sid, href: `/sessions/${encodeURIComponent(sid)}` },
-  { label: 'inspect' }
-]} />
+<Breadcrumbs
+  items={[
+    { label: $t('nav.sessions'), href: '/sessions' },
+    { label: sid, href: `/sessions/${encodeURIComponent(sid)}` },
+    { label: 'inspect' }
+  ]}
+/>
 
 <PageHeader title="Session inspector" description="">
   <div slot="meta">
@@ -332,12 +334,7 @@
       {/if}
     </div>
 
-    <StateAtTime
-      {bundle}
-      {pinnedAt}
-      canReplay={!imported}
-      on:replay={handleReplay}
-    />
+    <StateAtTime {bundle} {pinnedAt} canReplay={!imported} on:replay={handleReplay} />
   </div>
 {/if}
 

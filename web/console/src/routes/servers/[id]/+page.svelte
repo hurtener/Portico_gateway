@@ -288,7 +288,10 @@
         { label: $t('servers.field.transport'), value: server.transport, mono: true },
         { label: $t('servers.field.runtimeMode'), value: server.runtime_mode, mono: true },
         { label: $t('servers.field.status'), value: server.status },
-        { label: $t('servers.field.enabled'), value: server.enabled ? $t('common.yes') : $t('common.no') },
+        {
+          label: $t('servers.field.enabled'),
+          value: server.enabled ? $t('common.yes') : $t('common.no')
+        },
         ...(server.stdio?.command
           ? [
               {
@@ -385,9 +388,10 @@
           label: $t('serverDetail.metric.healthy'),
           value: healthyInstances.toString(),
           icon: IconActivity as ComponentType<any>,
-          tone: healthyInstances === instances.length && instances.length > 0
-            ? ('success' as const)
-            : ('default' as const),
+          tone:
+            healthyInstances === instances.length && instances.length > 0
+              ? ('success' as const)
+              : ('default' as const),
           attention: instances.length > 0 && healthyInstances === 0
         },
         {

@@ -17,12 +17,7 @@
   import { onMount, tick } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import {
-    api,
-    type ServerSummary,
-    type ServerPolicyState,
-    type ServerAuthState
-  } from '$lib/api';
+  import { api, type ServerSummary, type ServerPolicyState, type ServerAuthState } from '$lib/api';
   import {
     Badge,
     Button,
@@ -355,9 +350,7 @@
       label: $t('servers.metric.drift'),
       value: counts.drift > 0 ? counts.drift.toString() : '0',
       helper:
-        counts.drift > 0
-          ? $t('servers.metric.drift.helper')
-          : $t('servers.metric.drift.none'),
+        counts.drift > 0 ? $t('servers.metric.drift.helper') : $t('servers.metric.drift.none'),
       icon: IconShieldAlert as ComponentType<any>,
       attention: counts.drift > 0
     }
@@ -470,12 +463,11 @@
       on:searchChange={onSearchChange}
     />
     {#if !loading && servers.length === 0}
-      <EmptyState
-        title={$t('servers.empty.title')}
-        description={$t('servers.empty.description')}
-      >
+      <EmptyState title={$t('servers.empty.title')} description={$t('servers.empty.description')}>
         <svelte:fragment slot="actions">
-          <Button href="/servers/new"><IconPlus slot="leading" size={14} />{$t('servers.action.add')}</Button>
+          <Button href="/servers/new"
+            ><IconPlus slot="leading" size={14} />{$t('servers.action.add')}</Button
+          >
         </svelte:fragment>
       </EmptyState>
     {:else}
@@ -504,10 +496,18 @@
           {:else if column.key === 'capabilities'}
             {#if r.capabilities && (r.capabilities.tools || r.capabilities.resources || r.capabilities.prompts || r.capabilities.apps)}
               <span class="caps">
-                {#if r.capabilities.tools}<span class="cap" title="tools">{r.capabilities.tools}<span class="cap-unit">t</span></span>{/if}
-                {#if r.capabilities.resources}<span class="cap" title="resources">{r.capabilities.resources}<span class="cap-unit">r</span></span>{/if}
-                {#if r.capabilities.prompts}<span class="cap" title="prompts">{r.capabilities.prompts}<span class="cap-unit">p</span></span>{/if}
-                {#if r.capabilities.apps}<span class="cap" title="apps">{r.capabilities.apps}<span class="cap-unit">a</span></span>{/if}
+                {#if r.capabilities.tools}<span class="cap" title="tools"
+                    >{r.capabilities.tools}<span class="cap-unit">t</span></span
+                  >{/if}
+                {#if r.capabilities.resources}<span class="cap" title="resources"
+                    >{r.capabilities.resources}<span class="cap-unit">r</span></span
+                  >{/if}
+                {#if r.capabilities.prompts}<span class="cap" title="prompts"
+                    >{r.capabilities.prompts}<span class="cap-unit">p</span></span
+                  >{/if}
+                {#if r.capabilities.apps}<span class="cap" title="apps"
+                    >{r.capabilities.apps}<span class="cap-unit">a</span></span
+                  >{/if}
               </span>
             {:else}
               <span class="muted">—</span>
@@ -623,7 +623,8 @@
       {:else if inspectorTab === 'skills'}
         {#if (selected.skills_count ?? 0) > 0}
           <p class="empty-line">
-            {selected.skills_count} {$t('servers.col.skills')}.
+            {selected.skills_count}
+            {$t('servers.col.skills')}.
           </p>
         {:else}
           <p class="empty-line">{$t('servers.inspector.section.snapshotMissing')}</p>

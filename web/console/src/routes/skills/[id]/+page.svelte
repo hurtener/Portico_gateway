@@ -96,9 +96,7 @@
   }
 
   $: requiredTools = detail
-    ? extractStrings(detail.manifest?.required_tools).concat(
-        extractStrings(detail.manifest?.tools)
-      )
+    ? extractStrings(detail.manifest?.required_tools).concat(extractStrings(detail.manifest?.tools))
     : [];
   $: requiredServers = detail
     ? extractStrings(detail.manifest?.required_servers).concat(

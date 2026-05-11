@@ -274,7 +274,7 @@ func buildLoaderWithFixture(t *testing.T) (*sessionbundle.Loader, fixture) {
 	}
 
 	return loader, fixture{
-		now:       now,
+		now:        now,
 		auditStore: auditStore,
 	}
 }

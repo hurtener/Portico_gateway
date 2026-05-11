@@ -125,7 +125,11 @@
     if (m === 'application/json' || m.endsWith('+json')) return 'json';
     if (m.startsWith('text/')) return 'text';
     if (m.startsWith('image/')) return 'image';
-    if (m.startsWith('application/octet-stream') || m.startsWith('audio/') || m.startsWith('video/'))
+    if (
+      m.startsWith('application/octet-stream') ||
+      m.startsWith('audio/') ||
+      m.startsWith('video/')
+    )
       return 'binary';
     return 'unknown';
   }
@@ -315,9 +319,7 @@
     { key: 'uri', label: $t('resources.col.resource'), width: '300px' },
     { key: 'category', label: $t('resources.col.category'), width: '110px' },
     { key: 'mime', label: $t('resources.col.mime'), width: '180px', mono: true },
-    ...(selected
-      ? []
-      : [{ key: 'server', label: $t('resources.col.server'), width: '140px' }])
+    ...(selected ? [] : [{ key: 'server', label: $t('resources.col.server'), width: '140px' }])
   ];
 </script>
 

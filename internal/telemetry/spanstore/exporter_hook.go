@@ -152,7 +152,10 @@ func (t *teeExporter) drain() {
 		if len(batch) == 0 {
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// Detached background ctx: the drain goroutine lives for the
+		// process lifetime, not any request. We bound writes to 5s so a
+		// stuck SQLite doesn't pile up the queue.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) //nolint:contextcheck // intentional: drain is detached
 		if err := t.store.Put(ctx, batch); err != nil {
 			t.opt.Logger.Warn("spanstore: flush failed", "err", err, "spans", len(batch))
 		}
@@ -291,6 +294,8 @@ func anyValue(v attribute.Value) any {
 		return v.AsFloat64Slice()
 	case attribute.BOOLSLICE:
 		return v.AsBoolSlice()
+	case attribute.INVALID:
+		return nil
 	default:
 		return v.Emit()
 	}

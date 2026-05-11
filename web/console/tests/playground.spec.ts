@@ -78,9 +78,7 @@ test.describe('playground', () => {
     // The server group toggle button now uses the display_name (Phase
     // 10.5 UX pass) with the server id available via title attribute.
     // Anchor on the display name + count badge.
-    await expect(
-      rail.getByRole('button', { name: /^E2E playground mock \d+$/ })
-    ).toBeVisible();
+    await expect(rail.getByRole('button', { name: /^E2E playground mock \d+$/ })).toBeVisible();
 
     // 2. Capture the session id chip's title attribute before reload —
     //    that's the full id IdBadge stores (the visible text is a

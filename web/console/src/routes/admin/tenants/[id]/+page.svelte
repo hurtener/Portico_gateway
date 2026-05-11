@@ -160,9 +160,10 @@
         {
           id: 'retention',
           label: $t('tenantDetail.metric.retention'),
-          value: tenant.audit_retention_days != null
-            ? $t('tenantDetail.metric.retention.value', { n: tenant.audit_retention_days })
-            : '—',
+          value:
+            tenant.audit_retention_days != null
+              ? $t('tenantDetail.metric.retention.value', { n: tenant.audit_retention_days })
+              : '—',
           icon: IconClock as ComponentType<any>
         }
       ]

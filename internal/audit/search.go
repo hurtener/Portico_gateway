@@ -149,7 +149,7 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) (SearchResult, error)
 		// id. Here we stash it from the scan loop using a side var.
 		// Tighten: include the id in the slice via a parallel array.
 		// Done below in a follow-up scan pass.
-		res.Next = encodeCursor(lastIDOf(s, q.TenantID, res.Events))
+		res.Next = encodeCursor(lastIDOf(ctx, s, q.TenantID, res.Events))
 	}
 	return res, nil
 }
@@ -157,7 +157,7 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) (SearchResult, error)
 // lastIDOf returns the audit_events.id for the last event in the page.
 // We need it for the cursor; the scan loop above intentionally didn't
 // keep it on the Event type to preserve the Phase 5 public DTO shape.
-func lastIDOf(s *Store, tenantID string, page []Event) string {
+func lastIDOf(ctx context.Context, s *Store, tenantID string, page []Event) string {
 	if len(page) == 0 {
 		return ""
 	}
@@ -167,7 +167,7 @@ func lastIDOf(s *Store, tenantID string, page []Event) string {
 	// last row deterministically because audit_events.id is an opaque
 	// UUID; picking by occurred_at + type is the closest "give me this
 	// row's id" we can do without exposing id.
-	row := s.db.QueryRowContext(context.Background(), `
+	row := s.db.QueryRowContext(ctx, `
 		SELECT id FROM audit_events
 		 WHERE tenant_id = ? AND occurred_at = ? AND type = ?
 		 ORDER BY id DESC LIMIT 1

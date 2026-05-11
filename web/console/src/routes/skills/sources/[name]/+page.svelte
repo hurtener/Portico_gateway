@@ -148,7 +148,9 @@
         {
           id: 'lastRefresh',
           label: $t('sourceDetail.metric.lastRefresh'),
-          value: source.last_refresh_at ? relativeFromNow(source.last_refresh_at) : $t('common.dash'),
+          value: source.last_refresh_at
+            ? relativeFromNow(source.last_refresh_at)
+            : $t('common.dash'),
           icon: IconClock as ComponentType<any>
         },
         {

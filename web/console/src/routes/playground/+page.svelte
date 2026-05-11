@@ -523,10 +523,10 @@
 
   $: hasCatalogContent = Boolean(
     filteredCatalog &&
-      ((filteredCatalog.servers?.length ?? 0) > 0 ||
-        (filteredCatalog.tools?.length ?? 0) > 0 ||
-        (filteredCatalog.resources?.length ?? 0) > 0 ||
-        (filteredCatalog.prompts?.length ?? 0) > 0)
+    ((filteredCatalog.servers?.length ?? 0) > 0 ||
+      (filteredCatalog.tools?.length ?? 0) > 0 ||
+      (filteredCatalog.resources?.length ?? 0) > 0 ||
+      (filteredCatalog.prompts?.length ?? 0) > 0)
   );
 
   onMount(() => {
@@ -589,7 +589,8 @@
                 <button
                   type="button"
                   class="row toggle server-toggle"
-                  on:click={() => (serverOpen = { ...serverOpen, [server.id]: !serverOpen[server.id] })}
+                  on:click={() =>
+                    (serverOpen = { ...serverOpen, [server.id]: !serverOpen[server.id] })}
                   title={server.id}
                 >
                   {#if serverOpen[server.id]}

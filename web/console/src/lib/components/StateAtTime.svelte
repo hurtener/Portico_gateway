@@ -13,12 +13,7 @@
    * Phase 10 playback is available.
    */
   import { createEventDispatcher } from 'svelte';
-  import type {
-    AuditEvent,
-    BundleApproval,
-    BundleSession,
-    SessionBundle
-  } from '$lib/api';
+  import type { AuditEvent, BundleApproval, BundleSession, SessionBundle } from '$lib/api';
   import IconClock from 'lucide-svelte/icons/clock';
   import IconShield from 'lucide-svelte/icons/shield';
   import IconKey from 'lucide-svelte/icons/key';

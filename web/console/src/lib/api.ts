@@ -664,8 +664,7 @@ export const api = {
   /**
    * Lists every imported bundle for the current tenant, newest first.
    */
-  listImportedSessions: () =>
-    request<{ imported: ImportedSessionRow[] }>('/api/sessions/imported'),
+  listImportedSessions: () => request<{ imported: ImportedSessionRow[] }>('/api/sessions/imported'),
 
   /**
    * Streams a tar.gz export of the session. Returns the raw Blob so
