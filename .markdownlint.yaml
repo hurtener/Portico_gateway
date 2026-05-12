@@ -51,6 +51,12 @@ MD028: false
 # phase plans where we render comparison matrices. Disable.
 MD056: false
 
+# Table-column-style (added in markdownlint v0.40.0) demands that pipe
+# alignment match a single style across the document. Our phase plans mix
+# compact and aligned tables intentionally (compact for short matrices,
+# aligned for wide multi-column comparison). Disable.
+MD060: false
+
 # Fenced code blocks need not declare a language — RFC and plan docs include
 # many freeform / shell-output snippets where forcing a tag is noise.
 MD040: false
