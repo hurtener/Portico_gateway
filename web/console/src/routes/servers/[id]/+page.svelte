@@ -22,6 +22,7 @@
   import {
     api,
     isFeatureUnavailable,
+    type GatewayInfo,
     type ServerSpec,
     type InstanceRecord,
     type EntityActivityRow
@@ -49,10 +50,13 @@
   import IconBox from 'lucide-svelte/icons/box';
   import IconActivity from 'lucide-svelte/icons/activity';
   import IconScroll from 'lucide-svelte/icons/scroll-text';
+  import IconCopy from 'lucide-svelte/icons/copy';
+  import IconExternalLink from 'lucide-svelte/icons/external-link';
   import type { ComponentType } from 'svelte';
 
   let server: ServerSpec | null = null;
   let instances: InstanceRecord[] = [];
+  let gatewayInfo: GatewayInfo | null = null;
   let loading = true;
   let error = '';
   let activeTab = 'overview';
@@ -84,6 +88,79 @@
       error = (e as Error).message;
     } finally {
       loading = false;
+    }
+    // Best-effort: gateway info populates the Connect tab. The other
+    // tabs work fine if this fails, so we never surface an error.
+    try {
+      gatewayInfo = await api.gatewayInfo();
+    } catch {
+      gatewayInfo = null;
+    }
+  }
+
+  /**
+   * Build the gateway endpoint URL from the live bind. Same logic as
+   * /connect — substitute the operator's hostname when bind is wildcard.
+   */
+  function endpointURL(g: GatewayInfo | null): string {
+    if (!g) return '';
+    let host = g.bind || '';
+    if (host.startsWith('0.0.0.0:')) {
+      const port = host.slice('0.0.0.0:'.length);
+      const base = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+      host = `${base}:${port}`;
+    }
+    return `http://${host}${g.mcp_path}`;
+  }
+
+  $: gatewayURL = endpointURL(gatewayInfo);
+
+  /**
+   * The first tool name suggested in the sample tools/call payload.
+   * Defaults to "<tool>" when we don't know — the operator overrides
+   * with the real name from `tools/list`.
+   */
+  $: connectItems = [
+    { label: $t('serverDetail.connect.serverId'), value: id, mono: true },
+    { label: $t('serverDetail.connect.toolPrefix'), value: `${id}.*`, mono: true },
+    {
+      label: $t('serverDetail.connect.endpoint'),
+      value: gatewayURL || '—',
+      mono: true,
+      full: true as const
+    },
+    {
+      label: $t('serverDetail.connect.auth'),
+      value: gatewayInfo
+        ? gatewayInfo.auth.mode === 'dev'
+          ? $t('serverDetail.connect.auth.dev')
+          : $t('serverDetail.connect.auth.jwt')
+        : '—'
+    }
+  ];
+
+  $: sampleToolName = `${id}.<tool>`;
+  $: sampleCallPayload = JSON.stringify(
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: sampleToolName,
+        arguments: { '...': '...' }
+      }
+    },
+    null,
+    2
+  );
+
+  async function copyText(text: string, what: string) {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success($t('connect.toast.copied', { what }));
+    } catch {
+      toast.danger($t('connect.toast.copyFailed'), '');
     }
   }
 
@@ -211,7 +288,10 @@
         { label: $t('servers.field.transport'), value: server.transport, mono: true },
         { label: $t('servers.field.runtimeMode'), value: server.runtime_mode, mono: true },
         { label: $t('servers.field.status'), value: server.status },
-        { label: $t('servers.field.enabled'), value: server.enabled ? $t('common.yes') : $t('common.no') },
+        {
+          label: $t('servers.field.enabled'),
+          value: server.enabled ? $t('common.yes') : $t('common.no')
+        },
         ...(server.stdio?.command
           ? [
               {
@@ -247,6 +327,7 @@
 
   $: tabs = [
     { id: 'overview', label: $t('serverDetail.tabs.overview') },
+    { id: 'connect', label: $t('serverDetail.tabs.connect') },
     { id: 'logs', label: $t('serverDetail.tabs.logs') },
     { id: 'activity', label: $t('serverDetail.tabs.activity') }
   ];
@@ -307,9 +388,10 @@
           label: $t('serverDetail.metric.healthy'),
           value: healthyInstances.toString(),
           icon: IconActivity as ComponentType<any>,
-          tone: healthyInstances === instances.length && instances.length > 0
-            ? ('success' as const)
-            : ('default' as const),
+          tone:
+            healthyInstances === instances.length && instances.length > 0
+              ? ('success' as const)
+              : ('default' as const),
           attention: instances.length > 0 && healthyInstances === 0
         },
         {
@@ -371,6 +453,37 @@
         {/if}
       </section>
     </div>
+  {:else if activeTab === 'connect'}
+    <section class="card">
+      <h4>{$t('serverDetail.connect.routing')}</h4>
+      <KeyValueGrid items={connectItems} columns={1} />
+      <div class="actions-row">
+        <Button variant="secondary" href="/connect">
+          <IconExternalLink slot="leading" size={14} />
+          {$t('serverDetail.connect.openGuide')}
+        </Button>
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h4>{$t('serverDetail.connect.sample')}</h4>
+        <Button
+          variant="secondary"
+          size="sm"
+          on:click={() => copyText(sampleCallPayload, $t('serverDetail.connect.payloadWhat'))}
+        >
+          <IconCopy slot="leading" size={14} />
+          {$t('common.copy')}
+        </Button>
+      </header>
+      <p class="muted body">{$t('serverDetail.connect.sampleHelp')}</p>
+      <pre class="raw"><code>{sampleCallPayload}</code></pre>
+      <p class="muted body">
+        {$t('serverDetail.connect.listHint')}
+        <a href="/playground">{$t('nav.playground')}</a>.
+      </p>
+    </section>
   {:else if activeTab === 'logs'}
     <section class="card">
       <header class="card-head">
@@ -517,5 +630,28 @@
     font-family: var(--font-mono);
     font-size: var(--font-size-mono-sm);
     color: var(--color-text-tertiary);
+  }
+  .body {
+    line-height: 1.5;
+    font-size: var(--font-size-body-sm);
+  }
+  .actions-row {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+  .raw {
+    margin: 0;
+    max-height: 360px;
+    overflow: auto;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-mono-sm);
+    background: var(--color-bg-subtle);
+    border: 1px solid var(--color-border-soft);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3);
+    color: var(--color-text-primary);
+    white-space: pre;
+    word-break: break-all;
   }
 </style>

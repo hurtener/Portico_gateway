@@ -34,6 +34,7 @@ export default {
 
   // Navigation groups + items
   'nav.overview': 'Inicio',
+  'nav.connect': 'Conectar',
   'nav.section.catalog': 'Catálogo',
   'nav.section.operations': 'Operaciones',
   'nav.section.admin': 'Administración',
@@ -74,6 +75,63 @@ export default {
   'sidebar.partialHealth': 'Parcial — preparación pendiente',
   'sidebar.unknown': 'Conectando…',
 
+  // Phase 10.9 — Connect page
+  'connect.title': 'Conectar',
+  'connect.error.title': 'No se pudo cargar la información del gateway',
+  'connect.error.description':
+    'El endpoint de info no respondió. Verifica que el binario esté corriendo y la dirección de bind sea alcanzable.',
+  'connect.toast.copied': '{what} copiado',
+  'connect.toast.copyFailed': 'Error al copiar',
+  'connect.metric.aria': 'Datos de conexión del gateway',
+  'connect.metric.endpoint': 'Endpoint',
+  'connect.metric.auth': 'Auth',
+  'connect.metric.auth.devHelper': 'No se requiere bearer',
+  'connect.metric.auth.jwtHelper': 'Se requiere JWT bearer',
+  'connect.metric.tenant': 'Tenant',
+  'connect.metric.tenant.jwtValue': 'del JWT',
+  'connect.metric.tenant.devHelper': 'Tenant de dev fijo',
+  'connect.metric.tenant.jwtHelper': 'Leído del claim "{claim}"',
+  'connect.metric.servers': 'Servidores',
+  'connect.metric.servers.helper': 'Backends registrados para enrutar',
+  'connect.section.quickstart': 'Inicio rápido',
+  'connect.section.quickstartHelp':
+    'Tres maneras de apuntar un cliente MCP a este gateway. La URL de bind se completa con la config en vivo.',
+  'connect.section.auth': 'Autenticación',
+  'connect.section.headers': 'Cabeceras estándar',
+  'connect.section.firstServer': 'Aún no hay servidores registrados',
+  'connect.firstServer.body':
+    'Conectar un agente funciona, pero sin backends solo recibirás un tools/list vacío. Añade un servidor para empezar a enrutar llamadas reales.',
+  'connect.firstServer.action': 'Añadir un servidor',
+  'connect.snippet.claude.title': 'Claude Desktop / cliente MCP genérico',
+  'connect.snippet.claude.what': 'Config del cliente',
+  'connect.snippet.claude.help':
+    'Pega este bloque bajo "mcpServers" en la config de tu cliente. Reemplaza el placeholder de bearer con un JWT scope-tenant cuando auth.mode sea "jwt".',
+  'connect.snippet.inspector.title': 'MCP Inspector',
+  'connect.snippet.inspector.what': 'Comando del inspector',
+  'connect.snippet.inspector.help':
+    'Lanza el MCP Inspector contra este gateway. Útil para inspeccionar el catálogo de tools con namespace sin escribir un cliente.',
+  'connect.snippet.curl.title': 'curl (handshake initialize)',
+  'connect.snippet.curl.what': 'Comando curl',
+  'connect.snippet.curl.help':
+    'Ejecuta el handshake initialize de MCP. El flag -i imprime las cabeceras de respuesta — busca Mcp-Session-Id. Un 200 + session id significa que el gateway responde y está sano. Las llamadas siguientes deben repetir esa cabecera.',
+  'connect.auth.devTitle': 'Modo dev activo',
+  'connect.auth.devBody':
+    'No hay validador JWT configurado. Cada request mapea al tenant "{tenant}". Seguro para desarrollo local; cambia a JWT antes de hacer bind a una dirección no localhost.',
+  'connect.auth.mode': 'Modo',
+  'connect.auth.issuer': 'Issuer',
+  'connect.auth.audiences': 'Audiences',
+  'connect.auth.jwksUrl': 'JWKS URL',
+  'connect.auth.tenantClaim': 'Claim de tenant',
+  'connect.auth.scopeClaim': 'Claim de scope',
+  'connect.auth.tenantsHint': 'La configuración por tenant (nombres, planes, retención) vive en',
+  'connect.headers.description': 'Requeridas o respetadas por el transporte MCP northbound.',
+  'connect.headers.origin': 'Solo navegador. Debe coincidir con la lista permitida o "*".',
+  'connect.headers.auth': 'Bearer JWT en modo JWT; ausente en modo dev.',
+  'connect.headers.session':
+    'Devuelta en initialize; reenviada en requests subsiguientes para reanudar SSE.',
+  'connect.headers.accept':
+    'Establece "application/json, text/event-stream" para el transporte streamable HTTP.',
+
   // Landing page
   'landing.title': 'Consola de Portico',
   'landing.lede':
@@ -110,6 +168,48 @@ export default {
   'landing.system.healthy': 'sano',
   'landing.system.degraded': 'degradado',
   'landing.system.down': 'caído',
+  // Phase 10.9 — setup-and-status landing
+  'landing.metric.endpoint': 'Endpoint',
+  'landing.metric.servers': 'Servidores',
+  'landing.metric.servers.helper': 'Backends registrados para enrutar',
+  'landing.metric.skills': 'Skills',
+  'landing.metric.skills.helper': 'Skill packs componibles disponibles',
+  'landing.metric.tenants': 'Tenants',
+  'landing.metric.tenants.helper': 'Scopes de tenant autorizados',
+  'landing.metric.auth': 'Auth',
+  'landing.metric.auth.dev': 'Modo dev (sin JWT)',
+  'landing.metric.auth.jwt': 'Validación JWT activa',
+  'landing.status.title': 'Estado de configuración',
+  'landing.status.allGreen': 'La configuración está bien.',
+  'landing.status.allGreen.dev':
+    'La configuración para desarrollo local está completa. Cambia a auth JWT antes de exponer el gateway fuera de localhost.',
+  'landing.status.allGreen.jwt':
+    'La configuración está completa. Servidores, tenants y auth JWT están cableados.',
+  'landing.status.next': 'Siguiente:',
+  'landing.status.check.servers': 'Al menos un servidor registrado',
+  'landing.status.check.servers.hint':
+    'Añade un servidor para que el gateway tenga adónde enrutar las llamadas.',
+  'landing.status.check.tenants': 'Al menos un tenant configurado',
+  'landing.status.check.tenants.hint':
+    'Crea un tenant para que los JWTs tengan scope — requerido antes de exponer el gateway fuera de localhost.',
+  'landing.status.check.auth.dev': 'El modo dev es intencional',
+  'landing.status.check.auth.jwt': 'Issuer JWT configurado',
+  'landing.status.check.auth.hint':
+    'Define auth.jwt.issuer en portico.yaml para que el gateway valide los bearer tokens.',
+  'landing.quick.title': 'Acciones rápidas',
+  'landing.quick.connect': 'Conectar un agente',
+  'landing.quick.connect.help': 'Abre la guía de conexión con snippets listos para pegar.',
+  'landing.quick.addServer': 'Añadir un servidor',
+  'landing.quick.addServer.help': 'Registra un servidor MCP downstream como backend enrutable.',
+  'landing.quick.authorSkill': 'Crear un skill',
+  'landing.quick.authorSkill.help':
+    'Compón un Skill Pack desde el editor de manifiesto y publícalo.',
+  'landing.quick.playground': 'Probar en el playground',
+  'landing.quick.playground.help':
+    'Inicia una sesión interactiva para probar una tool call sin escribir un cliente.',
+  'landing.section.recentActivity': 'Actividad reciente',
+  'landing.section.recentActivity.help':
+    'Telemetría en vivo. Drift, denegaciones y aprobaciones pendientes aparecen aquí cuando ocurren.',
   'landing.relTime.never': 'nunca',
   'landing.relTime.justNow': 'ahora',
   'landing.relTime.minutes': 'hace {n} min',
@@ -142,8 +242,7 @@ export default {
   'servers.metric.runtime': 'Procesos',
   'servers.metric.runtime.helper': 'Agregado entre todos los servidores',
   'servers.metric.capabilities': 'Capacidades',
-  'servers.metric.capabilities.helper':
-    '{tools} tools · {resources} recursos · {prompts} prompts',
+  'servers.metric.capabilities.helper': '{tools} tools · {resources} recursos · {prompts} prompts',
   'servers.metric.policies': 'Políticas',
   'servers.metric.policies.helper': '{approval} con aprobación',
   'servers.metric.drift': 'Cambios catálogo',
@@ -358,8 +457,7 @@ export default {
   'resources.filter.server': 'Servidor',
   'resources.filter.any': 'Cualquiera',
   'resources.filter.empty.title': 'Ningún recurso coincide con estos filtros.',
-  'resources.filter.empty.description':
-    'Limpia los filtros o busca por URI, nombre o tipo MIME.',
+  'resources.filter.empty.description': 'Limpia los filtros o busca por URI, nombre o tipo MIME.',
   'resources.filter.empty.action': 'Limpiar filtros',
   'resources.category.app': 'App',
   'resources.category.text': 'Texto',
@@ -511,8 +609,7 @@ export default {
   'skills.filter.server': 'Servidor',
   'skills.filter.any': 'Cualquiera',
   'skills.filter.empty.title': 'Ninguna skill coincide con estos filtros.',
-  'skills.filter.empty.description':
-    'Limpia los filtros o busca por id, servidor o estado.',
+  'skills.filter.empty.description': 'Limpia los filtros o busca por id, servidor o estado.',
   'skills.filter.empty.action': 'Limpiar filtros',
   'skills.assets.format': '{prompts} prompts · {resources} recursos',
   'skills.assets.app': '{n} app',
@@ -538,8 +635,7 @@ export default {
   'skills.inspector.action.viewDetails': 'Ver detalle',
   'skills.inspector.action.toggle.enable': 'Habilitar para tenant',
   'skills.inspector.action.toggle.disable': 'Deshabilitar para tenant',
-  'skills.pagination.showing':
-    'Mostrando {from} a {to} de {total} skills',
+  'skills.pagination.showing': 'Mostrando {from} a {to} de {total} skills',
   'skills.pagination.prev': 'Anterior',
   'skills.pagination.next': 'Siguiente',
   'skills.pagination.perPage': 'Por página',
@@ -598,8 +694,7 @@ export default {
   'sessions.inspector.section.identity': 'Identidad',
   'sessions.inspector.section.activity': 'Actividad',
   'sessions.inspector.section.snapshots': 'Snapshots',
-  'sessions.inspector.section.noSnapshots':
-    'No hay snapshots registrados para esta sesión.',
+  'sessions.inspector.section.noSnapshots': 'No hay snapshots registrados para esta sesión.',
   'sessions.action.openAudit': 'Abrir en auditoría',
 
   // Approvals
@@ -739,8 +834,7 @@ export default {
   'snapshots.filter.mcp': 'MCP',
   'snapshots.filter.search': 'Buscar por id o sesión…',
   'snapshots.filter.empty.title': 'Ningún snapshot coincide con estos filtros.',
-  'snapshots.filter.empty.description':
-    'Limpia los filtros o busca por id de snapshot o sesión.',
+  'snapshots.filter.empty.description': 'Limpia los filtros o busca por id de snapshot o sesión.',
   'snapshots.filter.empty.action': 'Limpiar filtros',
   'snapshots.source.playground': 'playground',
   'snapshots.source.mcp': 'mcp',
@@ -1101,8 +1195,24 @@ export default {
 
   // Detalle del servidor (Phase 10.5)
   'serverDetail.tabs.overview': 'Resumen',
+  'serverDetail.tabs.connect': 'Conectar',
   'serverDetail.tabs.logs': 'Registros',
   'serverDetail.tabs.activity': 'Actividad',
+  // Phase 10.9 — Connect tab
+  'serverDetail.connect.routing': 'Datos de enrutamiento',
+  'serverDetail.connect.serverId': 'ID del servidor',
+  'serverDetail.connect.toolPrefix': 'Prefijo de tool',
+  'serverDetail.connect.endpoint': 'Endpoint del gateway',
+  'serverDetail.connect.auth': 'Auth',
+  'serverDetail.connect.auth.dev': 'Modo dev (sin JWT)',
+  'serverDetail.connect.auth.jwt': 'JWT (Bearer requerido)',
+  'serverDetail.connect.openGuide': 'Abrir la guía de conexión',
+  'serverDetail.connect.sample': 'Payload tools/call de ejemplo',
+  'serverDetail.connect.sampleHelp':
+    'Las tools de este servidor llevan el id del servidor como namespace. Reemplaza <tool> con un nombre de tools/list y aporta los arguments adecuados.',
+  'serverDetail.connect.payloadWhat': 'Payload de ejemplo',
+  'serverDetail.connect.listHint':
+    'Para ver el catálogo real de tools, abre una sesión interactiva en el',
   'serverDetail.confirmRestart': '¿Reiniciar el servidor "{id}"?',
   'serverDetail.confirmDelete':
     '¿Eliminar el servidor "{id}"? Las sesiones que lo usen recibirán un error tipado server_unavailable.',
@@ -1175,8 +1285,7 @@ export default {
   'tenants.filter.plan': 'Plan',
   'tenants.filter.any': 'Cualquiera',
   'tenants.filter.empty.title': 'Ningún tenant coincide con estos filtros.',
-  'tenants.filter.empty.description':
-    'Limpia los filtros o busca por id o nombre.',
+  'tenants.filter.empty.description': 'Limpia los filtros o busca por id o nombre.',
   'tenants.filter.empty.action': 'Limpiar filtros',
   'tenants.inspector.empty.title': 'Sin tenant seleccionado',
   'tenants.inspector.empty.description':

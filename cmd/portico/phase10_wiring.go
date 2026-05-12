@@ -331,7 +331,7 @@ func (a *playgroundAdapter) runDispatch(ctx context.Context, sess *playground.Se
 
 	chunkData, _ := json.Marshal(map[string]any{
 		"call_id": cid,
-		"result":  json.RawMessage(body),
+		"result":  body,
 	})
 	select {
 	case out <- api.PlaygroundStreamFrame{Type: "chunk", Data: chunkData}:

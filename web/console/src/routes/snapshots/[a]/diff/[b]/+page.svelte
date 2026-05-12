@@ -202,7 +202,10 @@
 <PageHeader title={$t('snapshotDiff.title')}>
   <Breadcrumbs
     slot="breadcrumbs"
-    items={[{ label: $t('nav.snapshots'), href: '/snapshots' }, { label: $t('snapshotDiff.crumb') }]}
+    items={[
+      { label: $t('nav.snapshots'), href: '/snapshots' },
+      { label: $t('snapshotDiff.crumb') }
+    ]}
   />
   <div slot="meta">
     <IdBadge value={a} chars={8} label={$t('snapshotDiff.label.from')} />
@@ -219,12 +222,7 @@
 {#if diff}
   <MetricStrip {metrics} compact label={$t('snapshotDiff.metric.aria')} />
 
-  <FilterChipBar
-    showSearch={false}
-    {chips}
-    activeChip={chip}
-    on:chipChange={onChipChange}
-  />
+  <FilterChipBar showSearch={false} {chips} activeChip={chip} on:chipChange={onChipChange} />
 
   {#if counts.total === 0}
     <section class="card">

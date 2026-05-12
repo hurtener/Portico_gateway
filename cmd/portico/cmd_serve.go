@@ -39,9 +39,14 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/storage"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 
+	"github.com/hurtener/Portico_gateway/internal/sessionbundle"
+	bundlesqlite "github.com/hurtener/Portico_gateway/internal/sessionbundle/sqlite"
+
 	// Side-effect: register the sqlite driver. Future drivers register here.
-	_ "github.com/hurtener/Portico_gateway/internal/storage/sqlite"
+	sqlitestorage "github.com/hurtener/Portico_gateway/internal/storage/sqlite"
 	"github.com/hurtener/Portico_gateway/internal/telemetry"
+	spanstoreapi "github.com/hurtener/Portico_gateway/internal/telemetry/spanstore"
+	spanstoresqlite "github.com/hurtener/Portico_gateway/internal/telemetry/spanstore/sqlite"
 )
 
 func runServe(ctx context.Context, args []string) error {
@@ -320,6 +325,30 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		cfg.Telemetry.DriftInterval.Duration())
 	driftDetector.Start(ctx)
 
+	// Phase 11: self-contained span store. Mirrors every span the OTel
+	// exporter produces so the inspector works without an external
+	// trace backend. Driver-specific — type-assert the SQLite backend
+	// to get raw *sql.DB access; future backends would need their own
+	// spanstore driver.
+	var spanStore spanstoreapi.Store
+	var bundleLoader *sessionbundle.Loader
+	var bundleImporter *sessionbundle.Importer
+	var bundleStore sessionbundle.ImportedStore
+	if sqliteBackend, ok := backend.(*sqlitestorage.DB); ok {
+		rawDB := sqliteBackend.SQL()
+		spanStore = spanstoresqlite.New(rawDB)
+		bundleLoader = &sessionbundle.Loader{
+			Sessions:  bundlesqlite.NewSessionReader(rawDB),
+			Snapshots: backend.Snapshots(),
+			Audit:     auditStore,
+			Approvals: backend.Approvals(),
+			Spans:     spanStore,
+		}
+		bs := bundlesqlite.New(rawDB)
+		bundleStore = bs
+		bundleImporter = &sessionbundle.Importer{Sink: bs}
+	}
+
 	otelShutdown, err := telemetry.Init(ctx, telemetry.Config{
 		Enabled:       cfg.Telemetry.Enabled,
 		ServiceName:   cfg.Telemetry.ServiceName,
@@ -328,10 +357,40 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		OTLPHeaders:   cfg.Telemetry.OTLPHeaders,
 		SampleRate:    cfg.Telemetry.SampleRate,
 		ResourceAttrs: cfg.Telemetry.ResourceAttrs,
+		SpanStore:     spanStore,
 	}, logger.With("component", "telemetry"))
 	if err != nil {
 		logger.Warn("telemetry init failed; tracing disabled", "err", err)
 		otelShutdown = telemetry.NopShutdown
+	}
+
+	// Phase 11: span retention sweeper. Runs hourly; trims rows whose
+	// ended_at predates the configured window (default 7 days). The
+	// retention bound is shared per-tenant for now — finer-grained
+	// per-tenant overrides can plumb through later via tenants.* fields.
+	if spanStore != nil {
+		const spanRetention = 7 * 24 * time.Hour
+		spanLog := logger.With("component", "spanstore.retention")
+		go func() {
+			t := time.NewTicker(time.Hour)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					cutoff := time.Now().UTC().Add(-spanRetention)
+					n, err := spanStore.Purge(context.Background(), cutoff)
+					if err != nil {
+						spanLog.Warn("span purge failed", "err", err)
+						continue
+					}
+					if n > 0 {
+						spanLog.Info("span purge ran", "removed", n, "before", cutoff.Format(time.RFC3339))
+					}
+				}
+			}
+		}()
 	}
 
 	// Sweep expired approvals every minute. The flow keeps the in-memory
@@ -415,6 +474,28 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		skillsDep = skillsMgr
 	}
 
+	gatewayInfo := api.GatewayInfo{
+		Bind:    cfg.Server.Bind,
+		MCPPath: "/mcp",
+	}
+	if cfg.Auth != nil {
+		gatewayInfo.JWTIssuer = cfg.Auth.JWT.Issuer
+		gatewayInfo.JWTAudiences = cfg.Auth.JWT.Audiences
+		gatewayInfo.JWTJWKSURL = cfg.Auth.JWT.JWKSURL
+		// Defaults applied in the validator: surface them so /connect
+		// can show what the gateway *actually* checks for.
+		tenantClaim := cfg.Auth.JWT.TenantClaim
+		if tenantClaim == "" {
+			tenantClaim = "tenant"
+		}
+		scopeClaim := cfg.Auth.JWT.ScopeClaim
+		if scopeClaim == "" {
+			scopeClaim = "scope"
+		}
+		gatewayInfo.JWTTenantClaim = tenantClaim
+		gatewayInfo.JWTScopeClaim = scopeClaim
+	}
+
 	deps := api.Deps{
 		Logger:         logger,
 		Validator:      validator,
@@ -424,6 +505,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		Audit:          audit,
 		Version:        version,
 		BuildCommit:    buildCommit,
+		Gateway:        gatewayInfo,
 		Sessions:       sessions,
 		Dispatcher:     dispatcher,
 		Manager:        manager,
@@ -453,6 +535,13 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		Playground:       playgroundCtl,
 		PlaygroundStore:  backend.Playground(),
 		ApprovalStoreRaw: backend.Approvals(),
+
+		// Phase 11 wiring.
+		BundleLoader:   bundleLoader,
+		BundleImporter: bundleImporter,
+		BundleStore:    bundleStore,
+		SpanReader:     spanStore,
+		AuditSearch:    auditStore,
 	}
 
 	handler := api.NewRouter(deps)

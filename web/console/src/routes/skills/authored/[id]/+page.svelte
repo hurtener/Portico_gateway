@@ -155,8 +155,7 @@
   ];
 
   $: publishedCount = history.filter((h) => h.status === 'published').length;
-  $: latestPublished =
-    history.find((h) => h.status === 'published')?.published_at;
+  $: latestPublished = history.find((h) => h.status === 'published')?.published_at;
 
   $: metrics = detail
     ? [

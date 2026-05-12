@@ -16,6 +16,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+
+	"github.com/hurtener/Portico_gateway/internal/telemetry/spanstore"
 )
 
 // defaultServiceName is used when cfg.ServiceName is empty.
@@ -52,6 +54,16 @@ func initOTel(ctx context.Context, cfg Config, log *slog.Logger) (Shutdown, erro
 	exporter, err := buildExporter(ctx, cfg)
 	if err != nil {
 		return NopShutdown, err
+	}
+
+	// Phase 11: tee the exporter into the local span store when
+	// configured, so the session inspector can render a full waterfall
+	// without relying on the external collector.
+	if cfg.SpanStore != nil {
+		// Tee starts a detached drain goroutine; the worker context is
+		// intentionally background (it outlives any request). See
+		// spanstore.exporter_hook.go for the rationale.
+		exporter = spanstore.Tee(exporter, cfg.SpanStore, spanstore.HookOptions{Logger: log}) //nolint:contextcheck // detached drain worker
 	}
 
 	res, err := buildResource(cfg)

@@ -2,6 +2,8 @@ module github.com/hurtener/Portico_gateway
 
 go 1.25.0
 
+toolchain go1.25.10
+
 require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-chi/chi/v5 v5.2.5

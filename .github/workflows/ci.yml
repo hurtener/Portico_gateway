@@ -15,7 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.25"
+  # Pinned to 1.25.10 to clear GO-2026-* vulns in the stdlib (html/template,
+  # net, net/http). Bumping requires no source change because the toolchain
+  # directive in go.mod already requests 1.25.10.
+  GO_VERSION: "1.25.10"
   CGO_ENABLED: "0"
 
 jobs:
@@ -360,8 +363,11 @@ jobs:
       - name: Build frontend (embedded by the Go binary)
         working-directory: web/console
         run: npm ci && npm run build
-      - name: Build Portico binary
-        run: make build
+      - name: Build Portico binary + mockmcp
+        # playground.spec.ts spawns bin/mockmcp as a stdio MCP backend
+        # during the playground happy-path test. Build both targets so
+        # the test has the dependency it expects.
+        run: make build mockmcp
       - name: Install Playwright browsers
         working-directory: web/console
         run: npx playwright install chromium --with-deps

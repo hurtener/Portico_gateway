@@ -60,10 +60,7 @@
 <PageHeader title={$t('servers.new.title')} compact>
   <Breadcrumbs
     slot="breadcrumbs"
-    items={[
-      { label: $t('nav.servers'), href: '/servers' },
-      { label: $t('servers.new.title') }
-    ]}
+    items={[{ label: $t('nav.servers'), href: '/servers' }, { label: $t('servers.new.title') }]}
   />
 </PageHeader>
 

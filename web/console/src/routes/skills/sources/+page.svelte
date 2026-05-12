@@ -226,8 +226,7 @@
     if (driverFilter && s.driver !== driverFilter) return false;
     if (search_q) {
       const needle = search_q.toLowerCase();
-      const hay =
-        `${s.name} ${s.driver} ${JSON.stringify(s.config ?? {})}`.toLowerCase();
+      const hay = `${s.name} ${s.driver} ${JSON.stringify(s.config ?? {})}`.toLowerCase();
       if (!hay.includes(needle)) return false;
     }
     return true;
@@ -557,10 +556,7 @@
                 <IconRefreshCw slot="leading" size={14} />
                 {$t('sources.action.refresh')}
               </Button>
-              <Button
-                variant="secondary"
-                on:click={() => gotoSourceDetail(selected.name)}
-              >
+              <Button variant="secondary" on:click={() => gotoSourceDetail(selected.name)}>
                 <IconExternalLink slot="leading" size={14} />
                 {$t('sources.action.openDetail')}
               </Button>

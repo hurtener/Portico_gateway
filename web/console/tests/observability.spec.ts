@@ -32,9 +32,17 @@ for (const { path, heading, expectKpi } of PAGES) {
         // Either the KPI strip OR the unavailable empty state must be present.
         const kpi = page.locator('[data-region="kpi"]');
         const unavailable = page.getByText(/vault not configured/i);
-        await expect.poll(async () => {
-          return (await kpi.isVisible().catch(() => false)) || (await unavailable.isVisible().catch(() => false));
-        }, { timeout: 5_000 }).toBeTruthy();
+        await expect
+          .poll(
+            async () => {
+              return (
+                (await kpi.isVisible().catch(() => false)) ||
+                (await unavailable.isVisible().catch(() => false))
+              );
+            },
+            { timeout: 5_000 }
+          )
+          .toBeTruthy();
       }
     });
   });

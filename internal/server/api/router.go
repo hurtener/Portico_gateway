@@ -25,8 +25,24 @@ import (
 	apimw "github.com/hurtener/Portico_gateway/internal/server/api/middleware"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
 	"github.com/hurtener/Portico_gateway/internal/server/ui"
+	"github.com/hurtener/Portico_gateway/internal/sessionbundle"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
+
+// GatewayInfo carries the connection facts the Console / external
+// operators need to actually use the gateway. Populated at startup
+// from cfg.Server + cfg.Auth so handlers can serve the public
+// /api/gateway/info read-only endpoint without re-reading the file.
+type GatewayInfo struct {
+	Bind    string
+	MCPPath string
+	// JWT — empty when DevMode is true.
+	JWTIssuer      string
+	JWTAudiences   []string
+	JWTJWKSURL     string
+	JWTTenantClaim string
+	JWTScopeClaim  string
+}
 
 // Deps bundles the runtime objects every route handler needs.
 type Deps struct {
@@ -38,6 +54,7 @@ type Deps struct {
 	Audit       ifaces.AuditStore
 	Version     string
 	BuildCommit string
+	Gateway     GatewayInfo
 
 	// Phase 1 additions: MCP gateway. Optional in tests (nil = no /mcp).
 	Sessions   *mcpgw.SessionRegistry
@@ -94,6 +111,15 @@ type Deps struct {
 	Playground       PlaygroundController
 	PlaygroundStore  ifaces.PlaygroundStore
 	ApprovalStoreRaw ifaces.ApprovalStore
+
+	// Phase 11: session inspector + bundle export/import + spanstore
+	// + audit FTS. All optional; handlers return 503 when nil so a
+	// partially-wired build still serves the surfaces it has.
+	BundleLoader   *sessionbundle.Loader
+	BundleImporter *sessionbundle.Importer
+	BundleStore    sessionbundle.ImportedStore
+	SpanReader     SpanReader
+	AuditSearch    AuditSearcher
 }
 
 // approvalFlow is the slice of internal/policy/approval.Flow the API
@@ -145,6 +171,11 @@ func NewRouter(d Deps) http.Handler {
 	// most defensible posture).
 	r.Get("/healthz", healthzHandler)
 	r.Get("/readyz", readyzHandler(d))
+
+	// Phase 10.9: gateway connection info. Public read-only — exposes
+	// only what an operator can already observe by probing the
+	// listener. See handlers_gateway.go for the rationale.
+	r.Get("/api/gateway/info", gatewayInfoHandler(d))
 
 	// Auth applies to everything below.
 	r.Group(func(r chi.Router) {
@@ -356,6 +387,29 @@ func NewRouter(d Deps) http.Handler {
 			r.Put("/api/playground/cases/{id}", updatePlaygroundCaseHandler(d))
 			r.Delete("/api/playground/cases/{id}", deletePlaygroundCaseHandler(d))
 			r.Get("/api/playground/cases/{id}/runs", caseRunsHandler(d))
+		}
+
+		// Phase 11: session inspector + bundle export/import.
+		// Specific paths first (sessions/imported, sessions/import) so
+		// chi prefers them over the {sid} catchall.
+		if d.BundleLoader != nil || d.BundleStore != nil {
+			r.Get("/api/sessions/imported", listImportedHandler(d))
+		}
+		if d.BundleImporter != nil {
+			r.Post("/api/sessions/import", importBundleHandler(d))
+		}
+		if d.BundleLoader != nil || d.BundleStore != nil {
+			r.Get("/api/sessions/{sid}/bundle", getSessionBundleHandler(d))
+			r.Post("/api/sessions/{sid}/export", exportSessionHandler(d))
+		}
+		if d.SpanReader != nil {
+			r.Get("/api/spans", listSpansHandler(d))
+		}
+		if d.AuditSearch != nil {
+			r.Get("/api/audit/search", auditSearchHandler(d))
+		}
+		if d.Playground != nil && d.PlaygroundStore != nil {
+			r.Post("/api/sessions/{sid}/calls/{cid}/replay", replayCallHandler(d))
 		}
 
 		// Phase 9: Policy editor endpoints. Mounted under the auth group;

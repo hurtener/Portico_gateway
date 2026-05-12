@@ -29,7 +29,21 @@ module.exports = {
       }
     }
   ],
+  globals: {
+    // Vite injects this at build time via define() in vite.config.ts;
+    // it's intentionally untyped at the source level. Declaring it
+    // here so `no-undef` doesn't fire across the components that
+    // reference it (e.g. Sidebar.svelte).
+    __APP_VERSION__: 'readonly'
+  },
   rules: {
-    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
+    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+    // The Console SPA uses `any` deliberately as the view-model glue
+    // type — REST responses arrive untyped, payload maps carry
+    // arbitrary JSON, audit events surface unknown nested fields.
+    // Forcing a stricter type policy here would mean per-page guards
+    // with no operational benefit. Keep as warning so reviewers
+    // still notice unintended growth.
+    '@typescript-eslint/no-explicit-any': 'warn'
   }
 };

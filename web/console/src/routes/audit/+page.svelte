@@ -49,11 +49,24 @@
     loading = true;
     error = '';
     try {
-      const res = await api.queryAudit({
-        type: typeFilter || undefined,
-        cursor: append ? cursor : undefined,
-        limit: 50
-      });
+      // Phase 11: when the user has typed a query OR pivoted to a
+      // specific session, route through the FTS-backed search
+      // endpoint. Otherwise fall back to the V1 typed lister so
+      // pagination is the same shape it always was.
+      const useFTS = !!search_q || !!sessionFilter;
+      const res = useFTS
+        ? await api.auditSearch({
+            q: search_q || undefined,
+            session_id: sessionFilter || undefined,
+            type: typeFilter || undefined,
+            cursor: append ? cursor : undefined,
+            limit: 50
+          })
+        : await api.queryAudit({
+            type: typeFilter || undefined,
+            cursor: append ? cursor : undefined,
+            limit: 50
+          });
       cursor = res.next_cursor || '';
       events = append ? [...events, ...res.events] : res.events;
     } catch (e) {
@@ -70,6 +83,7 @@
   let chip = '';
   let typeFilter = '';
   let search_q = '';
+  let sessionFilter = '';
   let selectedId: string | null = null;
   let inspectorTab = 'overview';
 
@@ -78,6 +92,7 @@
     chip = u.get('severity') || 'all';
     typeFilter = u.get('type') || '';
     search_q = u.get('q') || '';
+    sessionFilter = u.get('session_id') || '';
     selectedId = u.get('selected');
   }
 
@@ -106,7 +121,11 @@
   }
   function onSearchChange(e: CustomEvent<string>) {
     search_q = e.detail;
+    cursor = '';
     pushUrl({ q: search_q });
+    // Re-run server-side when q changes — FTS is the source of truth
+    // for matched rows, not the client-side filter that follows.
+    search(false);
   }
   function selectRow(row: AuditRow) {
     selectedId = row.rowKey;
@@ -120,8 +139,9 @@
     chip = 'all';
     typeFilter = '';
     search_q = '';
+    sessionFilter = '';
     cursor = '';
-    pushUrl({ severity: null, type: null, q: null });
+    pushUrl({ severity: null, type: null, q: null, session_id: null });
     search(false);
   }
 
@@ -312,6 +332,24 @@
 <div class="layout" class:has-selection={selected !== null}>
   <div class="main-col">
     <MetricStrip {metrics} label={$t('audit.title')} />
+    {#if sessionFilter}
+      <div class="session-pivot" role="status">
+        Filtered to session
+        <code>{sessionFilter}</code>
+        <button
+          type="button"
+          class="pivot-clear"
+          on:click={() => {
+            sessionFilter = '';
+            cursor = '';
+            pushUrl({ session_id: null });
+            search(false);
+          }}
+        >
+          clear
+        </button>
+      </div>
+    {/if}
     <FilterChipBar
       searchValue={search_q}
       searchPlaceholder={$t('audit.filter.search')}
@@ -455,6 +493,34 @@
     color: var(--color-danger);
     margin: 0 0 var(--space-4) 0;
     font-size: var(--font-size-body-sm);
+  }
+  .session-pivot {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface-subtle);
+    border: 1px solid var(--color-border-subtle);
+    border-left: 3px solid var(--color-accent-fg);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-2);
+    font-size: var(--font-size-sm);
+  }
+  .session-pivot code {
+    font-family: var(--font-mono);
+  }
+  .pivot-clear {
+    margin-left: auto;
+    background: none;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .pivot-clear:hover {
+    background: var(--color-surface);
   }
   .layout {
     display: grid;

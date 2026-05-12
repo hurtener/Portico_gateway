@@ -427,10 +427,7 @@
         {#if selected.boundSkill}
           <section class="card">
             <h4>{$t('apps.inspector.section.boundSkill')}</h4>
-            <a
-              class="server-link"
-              href={`/skills/${encodeURIComponent(selected.boundSkill.id)}`}
-            >
+            <a class="server-link" href={`/skills/${encodeURIComponent(selected.boundSkill.id)}`}>
               <Badge tone="success" mono>{selected.boundSkill.id}</Badge>
             </a>
             {#if selected.boundSkill.title}

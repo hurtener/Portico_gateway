@@ -10,6 +10,8 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+
+	"github.com/hurtener/Portico_gateway/internal/telemetry/spanstore"
 )
 
 // Config drives Init. The zero value disables tracing entirely (no-op
@@ -22,6 +24,12 @@ type Config struct {
 	OTLPHeaders   map[string]string
 	SampleRate    float64 // 0..1; default 1.0
 	ResourceAttrs map[string]string
+
+	// Phase 11: optional self-contained span store. When non-nil, the
+	// configured upstream exporter is wrapped so every finished span
+	// is also persisted locally for the session inspector. Best-effort
+	// — failures here never block the OTel hot path.
+	SpanStore spanstore.Store
 }
 
 // Init wires the global TracerProvider per cfg. Returns a shutdown

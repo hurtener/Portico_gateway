@@ -23,11 +23,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import {
-    api,
-    type SkillIndexEntry,
-    type SkillStatus
-  } from '$lib/api';
+  import { api, type SkillIndexEntry, type SkillStatus } from '$lib/api';
   import {
     Badge,
     Button,
@@ -102,7 +98,12 @@
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams($page.url.searchParams);
     for (const [k, v] of Object.entries(updates)) {
-      if (v === null || v === '' || v === 'all' || (typeof v === 'number' && v <= 1 && k === 'page')) {
+      if (
+        v === null ||
+        v === '' ||
+        v === 'all' ||
+        (typeof v === 'number' && v <= 1 && k === 'page')
+      ) {
         params.delete(k);
       } else {
         params.set(k, String(v));
@@ -283,7 +284,11 @@
     const parts: string[] = [];
     parts.push($t('skills.assets.format', { prompts: a.prompts, resources: a.resources }));
     if (a.apps > 0) {
-      parts.push(a.apps === 1 ? $t('skills.assets.app', { n: a.apps }) : $t('skills.assets.apps', { n: a.apps }));
+      parts.push(
+        a.apps === 1
+          ? $t('skills.assets.app', { n: a.apps })
+          : $t('skills.assets.apps', { n: a.apps })
+      );
     }
     return parts.join(' · ');
   }
@@ -316,8 +321,7 @@
     }
     bulkSelected = next;
   }
-  $: allOnPageSelected =
-    pageRows.length > 0 && pageRows.every((r) => bulkSelected.has(r.id));
+  $: allOnPageSelected = pageRows.length > 0 && pageRows.every((r) => bulkSelected.has(r.id));
 
   async function bulkApply(enable: boolean) {
     const ids = Array.from(bulkSelected);
@@ -411,9 +415,7 @@
       label: $t('skills.metric.missing'),
       value: counts.missing.toString(),
       helper:
-        counts.missing > 0
-          ? $t('skills.metric.missing.helper')
-          : $t('skills.metric.missing.none'),
+        counts.missing > 0 ? $t('skills.metric.missing.helper') : $t('skills.metric.missing.none'),
       icon: IconShieldAlert as ComponentType<any>,
       attention: counts.missing > 0
     }
@@ -571,21 +573,11 @@
           })}
         </span>
         <span class="page-controls">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={pageNum <= 1}
-            on:click={prevPage}
-          >
+          <Button variant="ghost" size="sm" disabled={pageNum <= 1} on:click={prevPage}>
             {$t('skills.pagination.prev')}
           </Button>
           <span class="page-num">{pageNum}</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={pageEnd >= pageTotal}
-            on:click={nextPage}
-          >
+          <Button variant="ghost" size="sm" disabled={pageEnd >= pageTotal} on:click={nextPage}>
             {$t('skills.pagination.next')}
           </Button>
         </span>
@@ -609,11 +601,7 @@
 
     <svelte:fragment slot="actions">
       {#if selected}
-        <Button
-          variant="secondary"
-          size="sm"
-          href={`/skills/${encodeURIComponent(selected.id)}`}
-        >
+        <Button variant="secondary" size="sm" href={`/skills/${encodeURIComponent(selected.id)}`}>
           {$t('skills.inspector.action.viewDetails')}
         </Button>
         <Button variant="ghost" size="sm" on:click={() => toggle(selected)}>
@@ -663,10 +651,7 @@
             <ul class="tool-list">
               {#each selected.required_tools as tool (tool)}
                 <li>
-                  <Badge
-                    tone={selected.missing_tools?.includes(tool) ? 'danger' : 'neutral'}
-                    mono
-                  >
+                  <Badge tone={selected.missing_tools?.includes(tool) ? 'danger' : 'neutral'} mono>
                     {tool}
                   </Badge>
                 </li>

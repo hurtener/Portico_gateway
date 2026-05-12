@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -331,8 +333,8 @@ func (s *Store) insertBatch(ctx context.Context, evs []Event) error {
 	defer func() { _ = tx.Rollback() }()
 	stmt, err := tx.PrepareContext(ctx,
 		`INSERT INTO audit_events
-			(id, tenant_id, type, session_id, user_id, occurred_at, trace_id, span_id, payload_json)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			(id, tenant_id, type, session_id, user_id, occurred_at, trace_id, span_id, payload_json, summary)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -348,6 +350,7 @@ func (s *Store) insertBatch(ctx context.Context, evs []Event) error {
 			nullString(e.TraceID),
 			nullString(e.SpanID),
 			marshalPayload(e.Payload),
+			summarizeEvent(e),
 		); err != nil {
 			return err
 		}
@@ -358,8 +361,8 @@ func (s *Store) insertBatch(ctx context.Context, evs []Event) error {
 func (s *Store) insertOne(ctx context.Context, e Event) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO audit_events
-			(id, tenant_id, type, session_id, user_id, occurred_at, trace_id, span_id, payload_json)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			(id, tenant_id, type, session_id, user_id, occurred_at, trace_id, span_id, payload_json, summary)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		newAuditID(e.OccurredAt),
 		e.TenantID,
 		e.Type,
@@ -369,8 +372,59 @@ func (s *Store) insertOne(ctx context.Context, e Event) error {
 		nullString(e.TraceID),
 		nullString(e.SpanID),
 		marshalPayload(e.Payload),
+		summarizeEvent(e),
 	)
 	return err
+}
+
+// summarizeEvent builds the one-line denormalised summary that
+// audit_events.summary holds for FTS5. Phase 11 — the FTS index
+// includes summary as a column so operators can search by tool /
+// rule / server name without paying the cost of scanning the full
+// JSON payload at query time.
+//
+// We pick scalar string/bool/numeric values from the (already
+// redacted) payload map, sorted by key for deterministic output,
+// and cap the result so a pathological payload doesn't blow up the
+// index. The redactor has run by the time we get here, so any
+// credential-shaped values arrive as `[REDACTED:*]` markers.
+func summarizeEvent(e Event) string {
+	if len(e.Payload) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(e.Payload))
+	for k := range e.Payload {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		switch v := e.Payload[k].(type) {
+		case string:
+			if v == "" {
+				continue
+			}
+			if b.Len() > 0 {
+				b.WriteByte(' ')
+			}
+			b.WriteString(k)
+			b.WriteByte('=')
+			b.WriteString(v)
+		case bool, int, int32, int64, float32, float64:
+			if b.Len() > 0 {
+				b.WriteByte(' ')
+			}
+			fmt.Fprintf(&b, "%s=%v", k, v)
+		}
+		if b.Len() > 256 {
+			break
+		}
+	}
+	out := b.String()
+	if len(out) > 256 {
+		out = out[:256]
+	}
+	return out
 }
 
 // newAuditID returns a sortable id keyed on event time. Using ULID gives us

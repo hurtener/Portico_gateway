@@ -45,6 +45,29 @@ export function isFeatureUnavailable(e: unknown): boolean {
 }
 
 /**
+ * Phase 10.9 — public gateway connection facts. Mirrors the JSON
+ * shape returned by GET /api/gateway/info. Auth.mode is "dev" when
+ * no JWT validator is configured, "jwt" otherwise; in dev mode the
+ * issuer / audiences / jwks_url fields are empty.
+ */
+export interface GatewayInfo {
+  bind: string;
+  mcp_path: string;
+  version: string;
+  build_commit?: string;
+  dev_mode: boolean;
+  dev_tenant?: string;
+  auth: {
+    mode: 'dev' | 'jwt' | string;
+    issuer?: string;
+    audiences?: string[];
+    jwks_url?: string;
+    tenant_claim?: string;
+    scope_claim?: string;
+  };
+}
+
+/**
  * Capability counts derived from the latest catalog snapshot for the
  * tenant. Zero across the board means no snapshot has been generated
  * yet — the UI renders an em-dash placeholder rather than "0 tools".
@@ -269,6 +292,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<{ status: string }>('/healthz'),
   ready: () => request<{ status: string }>('/readyz'),
+
+  /**
+   * Phase 10.9 — public read-only gateway connection facts. Returns
+   * the bind address, MCP path, version, and auth requirements so the
+   * Console can build copy-paste client configs without re-reading
+   * portico.yaml. The endpoint exposes only what an external client
+   * could already observe by probing the listener.
+   */
+  gatewayInfo: () => request<GatewayInfo>('/api/gateway/info'),
 
   listServers: () => request<ServerSummary[]>('/v1/servers'),
   getServer: (id: string) => request<ServerSpec>(`/v1/servers/${encodeURIComponent(id)}`),
@@ -617,7 +649,100 @@ export const api = {
       method: 'POST'
     }),
   getPlaygroundRun: (id: string) =>
-    request<PlaygroundRun>(`/api/playground/runs/${encodeURIComponent(id)}`)
+    request<PlaygroundRun>(`/api/playground/runs/${encodeURIComponent(id)}`),
+
+  // ── Phase 11: telemetry replay ───────────────────────────────────
+  /**
+   * Returns the full Bundle (session row + snapshot + spans + audit
+   * + drift + policy + approvals) for inspector rendering. Synthetic
+   * ids (`imported:…`) load from the bundle store; live ids load from
+   * the assembler.
+   */
+  getSessionBundle: (sid: string) =>
+    request<SessionBundle>(`/api/sessions/${encodeURIComponent(sid)}/bundle`),
+
+  /**
+   * Lists every imported bundle for the current tenant, newest first.
+   */
+  listImportedSessions: () => request<{ imported: ImportedSessionRow[] }>('/api/sessions/imported'),
+
+  /**
+   * Streams a tar.gz export of the session. Returns the raw Blob so
+   * the caller can trigger a browser download.
+   */
+  exportSessionBundle: async (sid: string): Promise<Blob> => {
+    const url = `/api/sessions/${encodeURIComponent(sid)}/export`;
+    const res = await fetch(baseURL() + url, { method: 'POST', credentials: 'same-origin' });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new HTTPError(res.status, body, undefined, body);
+    }
+    return res.blob();
+  },
+
+  /**
+   * Uploads a previously exported bundle. Accepts the raw tar.gz as a
+   * Blob/File. Server registers it under `imported:<bundle_id>` and
+   * returns the synthetic session id.
+   */
+  importSessionBundle: async (bundle: Blob): Promise<ImportSessionResult> => {
+    const res = await fetch(baseURL() + '/api/sessions/import', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/gzip' },
+      body: bundle
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      let code: string | undefined;
+      try {
+        code = JSON.parse(text).error;
+      } catch {
+        // ignore — surface the raw text below.
+      }
+      throw new HTTPError(res.status, text, code, text);
+    }
+    return JSON.parse(text) as ImportSessionResult;
+  },
+
+  /**
+   * Phase 11 audit FTS search. Empty `q` falls through to a typed
+   * lister, matching the inspector's "show me everything" path.
+   */
+  auditSearch: (params: AuditSearchParams = {}) => {
+    const qs = new URLSearchParams();
+    if (params.q) qs.set('q', params.q);
+    if (params.session_id) qs.set('session_id', params.session_id);
+    if (params.type) qs.set('type', params.type);
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    if (params.limit) qs.set('limit', String(params.limit));
+    if (params.cursor) qs.set('cursor', params.cursor);
+    return request<{ events: AuditEvent[]; next_cursor: string }>(
+      `/api/audit/search${qs.toString() ? `?${qs.toString()}` : ''}`
+    );
+  },
+
+  /**
+   * Phase 11 spanstore query. Pass either session_id or trace_id.
+   */
+  listSpans: (params: { session_id?: string; trace_id?: string }) => {
+    const qs = new URLSearchParams();
+    if (params.session_id) qs.set('session_id', params.session_id);
+    if (params.trace_id) qs.set('trace_id', params.trace_id);
+    return request<{ spans: BundleSpan[] }>(`/api/spans?${qs.toString()}`);
+  },
+
+  /**
+   * Phase 11 replay-from-inspector. Materialises a Phase 10 saved
+   * case from the audit row and immediately runs it. Returns the run
+   * + case id so the caller can navigate to the playground.
+   */
+  replaySessionCall: (sid: string, cid: string, body: ReplayCallRequest) =>
+    request<ReplayCallResult>(
+      `/api/sessions/${encodeURIComponent(sid)}/calls/${encodeURIComponent(cid)}/replay`,
+      { method: 'POST', body: JSON.stringify(body) }
+    )
 };
 
 // ── Phase 10: Playground types ──────────────────────────────────────
@@ -833,6 +958,133 @@ export interface AuditQueryParams {
 export interface SecretRef {
   tenant_id: string;
   name: string;
+}
+
+// ── Phase 11: telemetry replay types ──────────────────────────────
+
+/** Counts mirrored from the bundle manifest. */
+export interface BundleCounts {
+  spans: number;
+  audit: number;
+  drift: number;
+  policy: number;
+  approvals: number;
+}
+
+/** Time range carried by the bundle manifest. */
+export interface BundleRange {
+  from: string;
+  to: string;
+}
+
+export interface BundleManifest {
+  schema: string;
+  bundle_id: string;
+  session_id: string;
+  tenant_id: string;
+  generated_at: string;
+  range: BundleRange;
+  counts: BundleCounts;
+  checksum: string;
+  encrypted: boolean;
+}
+
+export interface BundleSession {
+  id: string;
+  tenant_id: string;
+  user_id?: string;
+  snapshot_id?: string;
+  started_at: string;
+  ended_at?: string;
+  metadata?: unknown;
+}
+
+export interface BundleSpan {
+  tenant_id: string;
+  session_id?: string;
+  trace_id: string;
+  span_id: string;
+  parent_id?: string;
+  name: string;
+  kind: string;
+  started_at: string;
+  ended_at: string;
+  status: string;
+  status_msg?: string;
+  attrs?: Record<string, unknown>;
+  events?: Array<{ name: string; timestamp: string; attrs?: Record<string, unknown> }>;
+}
+
+export interface BundleApproval {
+  id: string;
+  tenant_id: string;
+  session_id: string;
+  user_id?: string;
+  tool: string;
+  args_summary?: string;
+  risk_class?: string;
+  status: string;
+  created_at: string;
+  decided_at?: string;
+  expires_at: string;
+  metadata_json?: string;
+}
+
+/** The full Bundle returned by GET /api/sessions/{sid}/bundle. */
+export interface SessionBundle {
+  manifest: BundleManifest;
+  session: BundleSession;
+  snapshot?: unknown;
+  spans: BundleSpan[];
+  audit: AuditEvent[];
+  drift: AuditEvent[];
+  policy: AuditEvent[];
+  approvals: BundleApproval[];
+}
+
+export interface ImportedSessionRow {
+  bundle_id: string;
+  tenant_id: string;
+  source_tenant_id: string;
+  synthetic_session_id: string;
+  source_session_id: string;
+  imported_at: string;
+  range: BundleRange;
+  counts: BundleCounts;
+  checksum: string;
+}
+
+export interface ImportSessionResult {
+  synthetic_session_id: string;
+  bundle_id: string;
+  range: BundleRange;
+  counts: BundleCounts;
+  originated_tenant_id: string;
+}
+
+export interface AuditSearchParams {
+  q?: string;
+  session_id?: string;
+  type?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface ReplayCallRequest {
+  kind: 'tool_call' | 'resource_read' | 'prompt_get';
+  target: string;
+  payload: Record<string, unknown>;
+  snapshot_id?: string;
+  name?: string;
+}
+
+export interface ReplayCallResult {
+  case_id: string;
+  run: PlaygroundRun;
+  replay_of_session_id: string;
+  replay_of_call_id: string;
 }
 
 // Phase 8: skill sources + authored.

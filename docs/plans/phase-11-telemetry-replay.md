@@ -499,3 +499,15 @@ Phase 12 (Onboarding & Distribution → V1 ship) inherits:
 - A polished `/sessions/[id]/inspect` page that doubles as the demo when first-run users want to see what Portico does.
 
 Phase 12's first task: ship a first-run wizard that walks an operator from `portico dev` to "I have a tenant, a server, and an authored skill". The inspector and bundle export are the closing flourish — Phase 12 runs the wizard against fixture data and the inspector renders it cleanly, sealing the V1 demo loop.
+
+### Deferred to Phase 12 (binding)
+
+Phase 11 closed as MVP-complete with five items explicitly deferred to Phase 12. They are tracked there as Deliverables 13–17 + Acceptance criteria 13–17 + a dedicated "Phase 11 carry-overs" section. Reproduced here so a reader staying in this plan still sees the trail:
+
+1. **Bundle encryption (age).** `ExportOptions.Encrypt` currently returns a typed error; Phase 12 lands `internal/sessionbundle/crypto.go` and CLI `--encrypt --recipient` / `--identity` flags.
+2. **`inspect-session` CLI rewrite.** Adds `--base-url + --token` (live mode) and `--bundle <path>` (archive mode) alongside the existing `--dsn` offline path. Parity test enforces byte-identical output across the three transports.
+3. **Vault root-key rotation** (Phase 9 → 11 → 12). `POST /api/admin/secrets/rotate-root` replaces the 501 stub with a transactional rotation + `vault_keys_archive` grace window. Defined in the Phase 11 plan §"Phase 9 carry-overs" and now owned by Phase 12.
+4. **`entity_activity` retention sweep** (Phase 9 → 11 → 12). Per-tenant retention worker unified with the existing audit-event + Phase 11 span-store retention. Defined in the Phase 11 plan §"Phase 9 carry-overs" and now owned by Phase 12.
+5. **Phase 11 perf gates** — bundle latency ≤ 200 ms, inspector first-paint ≤ 1.5 s, audit FTS ≤ 500 ms on 100k events. Phase 11 acceptance criteria 2/3/8 could not be measured without a populated corpus; Phase 12's fixture pack provides one and runs the benchmarks in CI.
+
+Phase 12 cannot ship V1 without these. They are not "polish" — they are the missing ~10% that makes the V1 promise real.

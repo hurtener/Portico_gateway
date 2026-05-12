@@ -478,11 +478,7 @@
       </svelte:fragment>
       <svelte:fragment slot="empty">
         {#if rules.length === 0}
-          <EmptyState
-            title={$t('policy.title')}
-            description={$t('policy.empty')}
-            compact
-          >
+          <EmptyState title={$t('policy.title')} description={$t('policy.empty')} compact>
             <span slot="illustration"><IconShieldCheck size={48} aria-hidden="true" /></span>
             <svelte:fragment slot="actions">
               <Button variant="primary" on:click={newRule}>

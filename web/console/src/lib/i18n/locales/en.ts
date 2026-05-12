@@ -37,6 +37,7 @@ export default {
 
   // Navigation groups + items
   'nav.overview': 'Overview',
+  'nav.connect': 'Connect',
   'nav.section.catalog': 'Catalog',
   'nav.section.operations': 'Operations',
   'nav.section.admin': 'Admin',
@@ -77,6 +78,63 @@ export default {
   'sidebar.partialHealth': 'Partial — readiness pending',
   'sidebar.unknown': 'Connecting…',
 
+  // Phase 10.9 — Connect page
+  'connect.title': 'Connect',
+  'connect.error.title': 'Could not load gateway info',
+  'connect.error.description':
+    'The gateway info endpoint did not respond. Confirm the binary is running and the bind address is reachable.',
+  'connect.toast.copied': '{what} copied',
+  'connect.toast.copyFailed': 'Copy failed',
+  'connect.metric.aria': 'Gateway connection facts',
+  'connect.metric.endpoint': 'Endpoint',
+  'connect.metric.auth': 'Auth',
+  'connect.metric.auth.devHelper': 'No bearer token required',
+  'connect.metric.auth.jwtHelper': 'Bearer JWT required',
+  'connect.metric.tenant': 'Tenant',
+  'connect.metric.tenant.jwtValue': 'from JWT',
+  'connect.metric.tenant.devHelper': 'Hardcoded dev tenant',
+  'connect.metric.tenant.jwtHelper': 'Read from the "{claim}" claim',
+  'connect.metric.servers': 'Servers',
+  'connect.metric.servers.helper': 'Backends registered for routing',
+  'connect.section.quickstart': 'Quick start',
+  'connect.section.quickstartHelp':
+    'Three ways to point an MCP client at this gateway. The bind URL is filled in from the live config.',
+  'connect.section.auth': 'Authentication',
+  'connect.section.headers': 'Standard headers',
+  'connect.section.firstServer': 'No servers registered yet',
+  'connect.firstServer.body':
+    'Connecting an agent works, but with no backends the only response will be an empty tools/list. Add a server to start routing real tool calls.',
+  'connect.firstServer.action': 'Add a server',
+  'connect.snippet.claude.title': 'Claude Desktop / generic MCP client',
+  'connect.snippet.claude.what': 'Client config',
+  'connect.snippet.claude.help':
+    'Drop this block under "mcpServers" in your client config. Replace the bearer placeholder with a tenant-scoped JWT when auth.mode is "jwt".',
+  'connect.snippet.inspector.title': 'MCP Inspector',
+  'connect.snippet.inspector.what': 'Inspector command',
+  'connect.snippet.inspector.help':
+    'Boots the MCP Inspector against this gateway. Useful for inspecting the namespaced tool catalog without writing a client.',
+  'connect.snippet.curl.title': 'curl (initialize handshake)',
+  'connect.snippet.curl.what': 'curl command',
+  'connect.snippet.curl.help':
+    'Performs the MCP initialize handshake. The -i flag prints the response headers — look for Mcp-Session-Id. A 200 + a session id means the gateway is reachable and healthy. Subsequent calls must echo that header back.',
+  'connect.auth.devTitle': 'Dev mode active',
+  'connect.auth.devBody':
+    'No JWT validator is configured. Every request maps to tenant "{tenant}". Safe for local development; bind to a non-localhost address only after switching to JWT mode.',
+  'connect.auth.mode': 'Mode',
+  'connect.auth.issuer': 'Issuer',
+  'connect.auth.audiences': 'Audiences',
+  'connect.auth.jwksUrl': 'JWKS URL',
+  'connect.auth.tenantClaim': 'Tenant claim',
+  'connect.auth.scopeClaim': 'Scope claim',
+  'connect.auth.tenantsHint': 'Per-tenant configuration (display names, plans, retention) lives in',
+  'connect.headers.description': 'Required or honored by the northbound MCP transport.',
+  'connect.headers.origin': 'Browser-only. Must match the configured allowlist or "*".',
+  'connect.headers.auth': 'Bearer JWT in JWT mode; absent in dev mode.',
+  'connect.headers.session':
+    'Returned on initialize; echoed on subsequent requests for SSE resumption.',
+  'connect.headers.accept':
+    'Set to "application/json, text/event-stream" for the streamable HTTP transport.',
+
   // Landing page
   'landing.title': 'Portico Console',
   'landing.lede':
@@ -113,6 +171,47 @@ export default {
   'landing.system.healthy': 'healthy',
   'landing.system.degraded': 'degraded',
   'landing.system.down': 'down',
+  // Phase 10.9 — setup-and-status landing
+  'landing.metric.endpoint': 'Endpoint',
+  'landing.metric.servers': 'Servers',
+  'landing.metric.servers.helper': 'Backends registered for routing',
+  'landing.metric.skills': 'Skills',
+  'landing.metric.skills.helper': 'Composable skill packs available',
+  'landing.metric.tenants': 'Tenants',
+  'landing.metric.tenants.helper': 'Authorized tenant scopes',
+  'landing.metric.auth': 'Auth',
+  'landing.metric.auth.dev': 'Dev mode (no JWT)',
+  'landing.metric.auth.jwt': 'JWT validation enabled',
+  'landing.status.title': 'Configuration status',
+  'landing.status.allGreen': 'Configuration looks good.',
+  'landing.status.allGreen.dev':
+    'Local-development setup is complete. Switch to JWT auth before exposing the gateway off localhost.',
+  'landing.status.allGreen.jwt':
+    'Configuration is complete. Servers, tenants, and JWT auth are all wired.',
+  'landing.status.next': 'Next:',
+  'landing.status.check.servers': 'At least one server registered',
+  'landing.status.check.servers.hint':
+    'Add a server so the gateway has something to route tool calls to.',
+  'landing.status.check.tenants': 'At least one tenant configured',
+  'landing.status.check.tenants.hint':
+    'Create a tenant so JWTs can be scoped — required before exposing the gateway off localhost.',
+  'landing.status.check.auth.dev': 'Dev mode is intentional',
+  'landing.status.check.auth.jwt': 'JWT issuer configured',
+  'landing.status.check.auth.hint':
+    'Set auth.jwt.issuer in portico.yaml so the gateway validates bearer tokens.',
+  'landing.quick.title': 'Quick actions',
+  'landing.quick.connect': 'Connect an agent',
+  'landing.quick.connect.help': 'Open the connection guide with copy-paste client snippets.',
+  'landing.quick.addServer': 'Add a server',
+  'landing.quick.addServer.help': 'Register a downstream MCP server as a routable backend.',
+  'landing.quick.authorSkill': 'Author a skill',
+  'landing.quick.authorSkill.help': 'Compose a Skill Pack from the manifest editor and publish it.',
+  'landing.quick.playground': 'Test in the playground',
+  'landing.quick.playground.help':
+    'Spin up an interactive session to try a tool call without writing a client.',
+  'landing.section.recentActivity': 'Recent activity',
+  'landing.section.recentActivity.help':
+    'Live runtime telemetry. Drift, denials, and pending approvals show up here as they happen.',
   'landing.relTime.never': 'never',
   'landing.relTime.justNow': 'just now',
   'landing.relTime.minutes': '{n}m ago',
@@ -145,8 +244,7 @@ export default {
   'servers.metric.runtime': 'Runtime processes',
   'servers.metric.runtime.helper': 'Aggregated across all servers',
   'servers.metric.capabilities': 'Capabilities',
-  'servers.metric.capabilities.helper':
-    '{tools} tools · {resources} resources · {prompts} prompts',
+  'servers.metric.capabilities.helper': '{tools} tools · {resources} resources · {prompts} prompts',
   'servers.metric.policies': 'Policies',
   'servers.metric.policies.helper': '{approval} approval-gated',
   'servers.metric.drift': 'Catalog drift',
@@ -540,8 +638,7 @@ export default {
   'skills.inspector.action.viewDetails': 'View details',
   'skills.inspector.action.toggle.enable': 'Enable for tenant',
   'skills.inspector.action.toggle.disable': 'Disable for tenant',
-  'skills.pagination.showing':
-    'Showing {from} to {to} of {total} skills',
+  'skills.pagination.showing': 'Showing {from} to {to} of {total} skills',
   'skills.pagination.prev': 'Previous',
   'skills.pagination.next': 'Next',
   'skills.pagination.perPage': 'Per page',
@@ -736,8 +833,7 @@ export default {
   'snapshots.filter.mcp': 'MCP',
   'snapshots.filter.search': 'Search by id or session…',
   'snapshots.filter.empty.title': 'No snapshots match these filters.',
-  'snapshots.filter.empty.description':
-    'Try clearing filters or search by snapshot id or session.',
+  'snapshots.filter.empty.description': 'Try clearing filters or search by snapshot id or session.',
   'snapshots.filter.empty.action': 'Clear filters',
   'snapshots.source.playground': 'playground',
   'snapshots.source.mcp': 'mcp',
@@ -925,8 +1021,7 @@ export default {
   'sources.confirm.delete': 'Delete source {name}?',
   'sources.action.openDetail': 'Open detail',
   'sources.inspector.empty.title': 'Pick a source',
-  'sources.inspector.empty.description':
-    'Select a row to inspect, refresh, or remove a source.',
+  'sources.inspector.empty.description': 'Select a row to inspect, refresh, or remove a source.',
   'sources.inspector.tab.overview': 'Overview',
   'sources.inspector.tab.config': 'Config',
   'sources.inspector.section.identity': 'Identity',
@@ -967,8 +1062,7 @@ export default {
     'Use the action above the editor to show validation again.',
   'authoredNew.inspector.tab.schema': 'Schema',
   'authoredNew.inspector.section.schema': 'Manifest schema',
-  'authoredNew.inspector.section.schemaHelp':
-    'Top-level fields the manifest must declare.',
+  'authoredNew.inspector.section.schemaHelp': 'Top-level fields the manifest must declare.',
   'authoredNew.schema.id': 'unique skill id (lowercase, dotted)',
   'authoredNew.schema.title': 'human-readable title',
   'authoredNew.schema.version': 'semver string',
@@ -1004,8 +1098,7 @@ export default {
   'authored.filter.empty.action': 'Clear filters',
   'authored.action.openEditor': 'Open in editor',
   'authored.inspector.empty.title': 'Pick a skill',
-  'authored.inspector.empty.description':
-    'Select a row to see version history and metadata.',
+  'authored.inspector.empty.description': 'Select a row to see version history and metadata.',
   'authored.inspector.tab.overview': 'Overview',
   'authored.inspector.tab.versions': 'Versions',
   'authored.inspector.section.identity': 'Identity',
@@ -1101,8 +1194,24 @@ export default {
 
   // Server detail (Phase 10.5)
   'serverDetail.tabs.overview': 'Overview',
+  'serverDetail.tabs.connect': 'Connect',
   'serverDetail.tabs.logs': 'Logs',
   'serverDetail.tabs.activity': 'Activity',
+  // Phase 10.9 — Connect tab
+  'serverDetail.connect.routing': 'Routing facts',
+  'serverDetail.connect.serverId': 'Server ID',
+  'serverDetail.connect.toolPrefix': 'Tool prefix',
+  'serverDetail.connect.endpoint': 'Gateway endpoint',
+  'serverDetail.connect.auth': 'Auth',
+  'serverDetail.connect.auth.dev': 'Dev mode (no JWT required)',
+  'serverDetail.connect.auth.jwt': 'JWT (Bearer required)',
+  'serverDetail.connect.openGuide': 'Open the connection guide',
+  'serverDetail.connect.sample': 'Sample tools/call payload',
+  'serverDetail.connect.sampleHelp':
+    'Tools from this server are namespaced with the server id. Replace <tool> with a name from tools/list and supply the matching arguments.',
+  'serverDetail.connect.payloadWhat': 'Sample payload',
+  'serverDetail.connect.listHint':
+    'To see the actual tool catalog, open an interactive session in the',
   'serverDetail.confirmRestart': 'Restart server "{id}"?',
   'serverDetail.confirmDelete':
     'Delete server "{id}"? Sessions using it will receive a typed server_unavailable error.',

@@ -20,6 +20,7 @@
   import IconUsers from 'lucide-svelte/icons/users';
   import IconScale from 'lucide-svelte/icons/scale';
   import IconPlay from 'lucide-svelte/icons/play';
+  import IconPlug from 'lucide-svelte/icons/plug';
   import IconChevronLeft from 'lucide-svelte/icons/chevron-left';
   import IconChevronRight from 'lucide-svelte/icons/chevron-right';
 
@@ -32,7 +33,13 @@
   // taxonomy stays flat.
   const groups: Group[] = [
     {
-      items: [{ labelKey: 'nav.overview', href: '/', Icon: IconHome }]
+      items: [
+        { labelKey: 'nav.overview', href: '/', Icon: IconHome },
+        // Phase 10.9: connection facts + copy-paste client snippets.
+        // Pinned just below Overview because "how do I connect?" is
+        // the first question a new operator asks.
+        { labelKey: 'nav.connect', href: '/connect', Icon: IconPlug }
+      ]
     },
     {
       labelKey: 'nav.section.catalog',

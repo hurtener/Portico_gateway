@@ -17,9 +17,7 @@ import { test, expect } from '@playwright/test';
 test.describe('phase 10.6 primitives', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/dev/preview');
-    await expect(
-      page.getByRole('heading', { name: /design vocabulary preview/i })
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: /design vocabulary preview/i })).toBeVisible();
   });
 
   test('MetricStrip renders five cards with the warning tint on the drift card', async ({
@@ -57,10 +55,7 @@ test.describe('phase 10.6 primitives', () => {
     await expect(state).toContainText('chip: online');
 
     // Pick stdio from the Transport dropdown.
-    await bar
-      .locator('select')
-      .first()
-      .selectOption({ value: 'stdio' });
+    await bar.locator('select').first().selectOption({ value: 'stdio' });
     await expect(state).toContainText('transport: stdio');
   });
 
@@ -78,9 +73,7 @@ test.describe('phase 10.6 primitives', () => {
     await expect(skill.locator('xpath=ancestor::*[contains(@class, "mono")][1]')).toBeVisible();
   });
 
-  test('PageActionGroup renders the primary split-button with both halves', async ({
-    page
-  }) => {
+  test('PageActionGroup renders the primary split-button with both halves', async ({ page }) => {
     const toolbar = page.getByRole('toolbar', { name: /page actions/i });
     await expect(toolbar).toBeVisible();
     // Exact match avoids the "Add server options" chevron half also matching.

@@ -47,14 +47,14 @@ func TestDerivePolicyState_RuleMatching(t *testing.T) {
 		{ID: "r2", Enabled: true, Conditions: policy.Conditions{Match: policy.Match{Servers: []string{"beta"}}}, Actions: policy.Actions{RequireApproval: true}},
 		{ID: "r3", Enabled: true, Conditions: policy.Conditions{Match: policy.Match{Servers: []string{"gamma"}}}, Actions: policy.Actions{Deny: true}},
 		{ID: "r4", Enabled: false, Conditions: policy.Conditions{Match: policy.Match{Servers: []string{"alpha"}}}, Actions: policy.Actions{Deny: true}}, // disabled rules ignored
-		{ID: "r5", Enabled: true, Conditions: policy.Conditions{Match: policy.Match{}}, Actions: policy.Actions{Allow: true}},                          // empty match = applies to all
+		{ID: "r5", Enabled: true, Conditions: policy.Conditions{Match: policy.Match{}}, Actions: policy.Actions{Allow: true}},                           // empty match = applies to all
 	}
 	cases := map[string]string{
-		"alpha":   "enforced", // allow rule + tenant-wide allow rule (r5)
-		"beta":    "approval", // approval rule wins over the tenant-wide allow
-		"gamma":   "disabled", // deny wins over the tenant-wide allow
-		"delta":   "enforced", // only the tenant-wide r5 applies
-		"":       "none",     // empty server id falls through
+		"alpha": "enforced", // allow rule + tenant-wide allow rule (r5)
+		"beta":  "approval", // approval rule wins over the tenant-wide allow
+		"gamma": "disabled", // deny wins over the tenant-wide allow
+		"delta": "enforced", // only the tenant-wide r5 applies
+		"":      "none",     // empty server id falls through
 	}
 	for srv, want := range cases {
 		t.Run(srv, func(t *testing.T) {

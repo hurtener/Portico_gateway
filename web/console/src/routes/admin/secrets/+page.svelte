@@ -281,9 +281,7 @@
   $: columns = [
     { key: 'secret', label: $t('secrets.col.secret'), width: '280px' },
     { key: 'tenant', label: $t('secrets.col.tenant'), width: '140px' },
-    ...(selected
-      ? []
-      : [{ key: 'actions', label: '', align: 'right' as const, width: '140px' }])
+    ...(selected ? [] : [{ key: 'actions', label: '', align: 'right' as const, width: '140px' }])
   ];
 </script>
 
@@ -357,7 +355,7 @@
         rows={filtered}
         empty={$t('secrets.filter.empty.title')}
         onRowClick={selectRow}
-        selectedKey={selectedKey}
+        {selectedKey}
         rowKeyField="key"
       >
         <svelte:fragment slot="cell" let:row let:column>

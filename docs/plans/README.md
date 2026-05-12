@@ -1,6 +1,6 @@
 # Portico Implementation Plans — Index
 
-This directory contains the self-contained implementation plans that take Portico from an empty repo to V1, plus a V1.5 extension. Phases 0–6 build the engine; Phase 7 lands the design system; Phases 8–11 build the operator surface (skill sources, Console CRUD, playground, telemetry replay); Phase 12 ships V1; Phase 13 (V1.5) adds the LLM gateway.
+This directory contains the self-contained implementation plans that take Portico from an empty repo to V2. Phases 0–6 build the engine; Phase 7 lands the design system; Phases 8–11 build the operator surface (skill sources, Console CRUD, playground, telemetry replay); Phase 12 ships V1; Phase 13 (V1.5) adds the LLM gateway. **Phases 14–19 (V2)** grow Portico into an `agentgateway`-class multi-protocol agentic gateway while keeping the Skill Pack runtime as the moat — the [V2 roadmap](./v2-roadmap-agentgateway-parity.md) is the umbrella document.
 
 ## How to use these plans
 
@@ -33,6 +33,19 @@ This directory contains the self-contained implementation plans that take Portic
 | # | Plan                                                          | Phase summary                                                       |
 |---|---------------------------------------------------------------|---------------------------------------------------------------------|
 | 13 | [phase-13-llm-gateway.md](./phase-13-llm-gateway.md) | LLM gateway via `kreuzberg-dev/liter-llm`: OpenAI-compatible northbound, per-tenant provider + model registry, vault-backed keys, tool-use bridging into the MCP gateway, quotas + cost telemetry, OpenAI conformance suite. |
+
+## Phase order (V2 — agentgateway-class roadmap)
+
+The V2 line is described end-to-end in [v2-roadmap-agentgateway-parity.md](./v2-roadmap-agentgateway-parity.md). It positions Portico as a peer to `agentgateway`: a multi-tenant, agentic-native data plane that handles REST, gRPC, MCP, A2A, and LLM traffic through one binary with shared policy, security, audit, and observability — keeping the Skill Pack runtime and the V1 tenancy model as the moat.
+
+| #  | Plan                                                          | Phase summary                                                                                  |
+|----|---------------------------------------------------------------|------------------------------------------------------------------------------------------------|
+| 14 | [phase-14-listener-route-backend-substrate.md](./phase-14-listener-route-backend-substrate.md) | Foundational refactor: explicit `Bind / Listener / Route / Backend`. Migrate every existing surface onto the new substrate. Zero new tenant-visible features. |
+| 15 | [phase-15-http-grpc-proxy.md](./phase-15-http-grpc-proxy.md)  | `http_proxy` and `grpc_proxy` backend drivers; per-route policy / auth-egress / transform; upstream TLS / health / retry / circuit-breaker; smuggling and header-injection defence. |
+| 16 | [phase-16-a2a-protocol.md](./phase-16-a2a-protocol.md)        | A2A (Agent-to-Agent) northbound + southbound; agent-card discovery in the catalog; opt-in MCP↔A2A bridges. |
+| 17 | [phase-17-tool-poisoning-defense.md](./phase-17-tool-poisoning-defense.md) | Schema attestation, drift gates that block (not just detect), description + result prompt-injection scanning, supply-chain digest pinning. |
+| 18 | [phase-18-dynamic-config-api.md](./phase-18-dynamic-config-api.md) | Structured CRUD over data-plane state with watch semantics; optional Envoy ADS adapter; YAML × API merge rules. |
+| 19 | [phase-19-production-scale-out.md](./phase-19-production-scale-out.md) | Postgres-default, Redis coordination, Kubernetes operator + Helm chart, federation across instances, container/microVM isolation modes. **V2 ships at the end of this phase.** |
 
 ## Cross-cutting conventions all plans assume
 
@@ -132,10 +145,12 @@ Cross-reference against the RFC §15 boundary. Note that several items in the or
 
 These have placeholder hooks in V1 (interfaces ready, factories registered) so they're additive when picked up.
 
-## V1 vs. V1.5 boundary
+## V1 vs. V1.5 vs. V2 boundary
 
 V1 is feature-complete with Phase 12. The binary that ships at the end of Phase 12 is the artifact a public V1 announcement points at: full MCP gateway, multi-tenant operator surface, observability stack, polished Console + docs + conformance suite + signed multi-arch release.
 
 V1.5 (Phase 13) is the LLM gateway extension. It is additive — V1 deployments continue working untouched; operators who want LLM gateway capabilities upgrade to V1.5 and start configuring providers + models. The same single-binary, single-listener, single-DB story holds.
 
-Phases beyond V1.5 are not pre-planned. They are negotiated when the work is queued, drawing on the patterns these plans establish.
+V2 (Phases 14–19) is the agentgateway-class line. It is also additive: a V1 / V1.5 deployment continues to work against a V2 binary if the operator does not enable any new listeners, backends, or scale-out modes. Phase 14 preserves backward compatibility by construction; subsequent V2 phases default new features off. The umbrella document is [`v2-roadmap-agentgateway-parity.md`](./v2-roadmap-agentgateway-parity.md); it is binding for the V2 line in the same way each phase plan is binding for its phase, with the standard precedence (RFC > phase plan > roadmap > AGENTS.md).
+
+Phases beyond V2 are not pre-planned. They are negotiated when the work is queued, drawing on the patterns these plans establish.
