@@ -1,6 +1,8 @@
 # Phase 19 — Production Scale-Out
 
 > Self-contained implementation plan. Builds on Phase 14–18. Lands the post-V1 production-readiness items the RFC §15 boundary deferred: Postgres-default storage, Redis-backed multi-instance coordination, Kubernetes operator + Helm chart, federation across instances, and container/microVM isolation modes for stdio MCP servers. Closes the V2 line.
+>
+> **2026-05-12 update.** This plan originally enumerated CRDs `Listener`, `Route`, `Backend`, `Bridge` based on the retired Envoy-shaped substrate. Those types do not exist (substrate dropped 2026-05-12 — see [v2-roadmap-agentgateway-parity.md](./v2-roadmap-agentgateway-parity.md) §0). The CRD set is now the Portico resource set Phase 18 ships: `AgentProfile`, `VirtualKey`, `Team`, `Customer`, `Budget`, `Server`, `Skill`, `SkillSource`, `Policy`, `A2APeer`, `SecurityPolicy`, `AttestationConfig`, `DriftGate`, `PinnedSource`, `CacheConfig`, `Tenant`. References below to "Phase 14 substrate," "dataplane state," "Route CRD," etc. should be read as "Phase 14 + 15.5 + 16 + 17 resources" / "Phase 18 API state" / "AgentProfile CRD" respectively. The plan is otherwise unchanged.
 
 ## Goal
 
@@ -9,7 +11,7 @@ After Phase 19, an operator can deploy Portico in any of:
 - **Single binary, SQLite** (V1 default) — unchanged, still supported.
 - **Single binary, Postgres** — Postgres-backed storage with the same code paths and zero feature loss.
 - **Multi-instance, Postgres + Redis** — N stateless Portico instances behind a load balancer, sharing Postgres for durable state and Redis for coordination (process-supervisor leasing, hot-reload notification, watch fan-out).
-- **Kubernetes** — Helm chart + Operator that reconciles `Listener`, `Route`, `Backend`, `Tenant`, `SkillSource` CRDs onto a Portico fleet via the Phase 18 dynamic-config API.
+- **Kubernetes** — Helm chart + Operator that reconciles `AgentProfile`, `VirtualKey`, `Team`, `Customer`, `Budget`, `Server`, `Skill`, `SkillSource`, `Policy`, `A2APeer`, `SecurityPolicy`, `Tenant` CRDs onto a Portico fleet via the Phase 18 dynamic-config API. **No Listener / Route / Backend CRDs** — the substrate that those would have projected onto was dropped 2026-05-12.
 - **Federated** — multiple Portico clusters in different regions / VPCs / trust boundaries, with controlled state replication for shared resources (e.g. a globally-published skill source) and strict isolation for tenant-scoped state.
 - **Hardened isolation** — stdio MCP servers run in container or microVM sandboxes (`per_request` and `sidecar` runtime modes from RFC §6.3) with seccomp + landlock + cgroup limits.
 
@@ -65,7 +67,7 @@ Each of these has a placeholder in earlier phases: the storage interface (Phase 
 9. **`deploy/helm/portico/`** — Helm chart for the Portico binary (Deployment, Service, ConfigMap, Secret, optional Ingress).
 10. **`deploy/helm/portico-operator/`** — Helm chart for the operator binary.
 11. **`cmd/portico-operator/`** — operator binary (separate from `cmd/portico` to keep it optional). Watches CRDs, reconciles to Portico instances via the Phase 18 dynamic-config API.
-12. **CRDs**: `Listener`, `Route`, `Backend`, `Bridge`, `Tenant`, `SkillSource`, `SecurityPolicy`. Schemas mirror the Phase 18 API resource shapes.
+12. **CRDs** (one per Phase 18 registered resource kind): `AgentProfile`, `VirtualKey`, `Team`, `Customer`, `Budget`, `Server`, `Skill`, `SkillSource`, `Policy`, `A2APeer`, `SecurityPolicy`, `AttestationConfig`, `DriftGate`, `PinnedSource`, `CacheConfig`, `Tenant`. Schemas mirror the Phase 18 API resource shapes. **No** `Listener`/`Route`/`Backend`/`Bridge` CRDs.
 13. **Operator features**: idempotent reconcile, drift detection (CRD vs. Portico state), status-subresource updates with health, owner-reference cleanup on CRD delete, finalisers for graceful tenant deletion.
 14. **kustomize overlays** — `deploy/kustomize/{base,dev,prod}` for non-Helm operators.
 

@@ -1,6 +1,18 @@
 # Phase 15 — HTTP and gRPC Reverse Proxy
 
-> Self-contained implementation plan. Builds on Phase 14. Adds `http_proxy` and `grpc_proxy` backend drivers so Portico can put REST microservice traffic and gRPC service traffic behind the same gateway as MCP/A2A/LLM, sharing the same tenancy, policy, audit, vault, and observability envelopes.
+> **STATUS: DEFERRED / POST-V2 (2026-05-12).** This plan describes general-purpose HTTP and gRPC reverse-proxy capability for arbitrary REST/gRPC microservice traffic. It was authored under the original agentgateway-parity framing for V2 and depends on the Envoy-shaped Bind/Listener/Route/Backend substrate that the original Phase 14 plan would have built.
+>
+> Both that substrate and this proxy phase were **dropped from the V2 line on 2026-05-12** after enterprise-deployment review. The core finding: customers do not replace their existing HTTP gateway (Kong/Envoy/Istio/ALB) with an agentic gateway. They consolidate *agentic* traffic. The "one gateway for all inbound traffic" pitch is not where adoption ROI lives. See [v2-roadmap-agentgateway-parity.md](./v2-roadmap-agentgateway-parity.md) §0 and §1 for the full rationale.
+>
+> The plan below is retained verbatim for reference. If a future customer engagement re-opens the case for general-purpose HTTP/gRPC proxying *inside* Portico, this plan is the starting point — but note that its prerequisites (the original Envoy substrate) no longer exist; reviving it would require resurrecting the substrate work first, and the implementor should treat this file as historical context rather than a binding spec.
+>
+> **All `Phase 14 substrate` references below should be read as "the substrate work that was dropped 2026-05-12."** The actual Phase 14 plan today is [phase-14-agent-profiles.md](./phase-14-agent-profiles.md), which builds an entirely different primitive (Agent Profiles, consumer-side gating) and provides none of the substrate surface this phase assumes.
+
+---
+
+> *(Original Phase 15 content follows.)*
+
+Self-contained implementation plan. Builds on Phase 14. Adds `http_proxy` and `grpc_proxy` backend drivers so Portico can put REST microservice traffic and gRPC service traffic behind the same gateway as MCP/A2A/LLM, sharing the same tenancy, policy, audit, vault, and observability envelopes.
 
 ## Goal
 

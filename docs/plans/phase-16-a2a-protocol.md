@@ -1,6 +1,8 @@
 # Phase 16 — A2A Protocol Support
 
-> Self-contained implementation plan. Builds on Phase 14 substrate and Phase 15 reverse-proxy machinery. Adds Agent-to-Agent (A2A) as a peer protocol to MCP: northbound listener for inbound A2A traffic, `a2a_peer` backend driver for outbound A2A calls, agent-card discovery surfaced through Portico's existing catalog model, and bridges between A2A skills/tasks and MCP tools where useful.
+> Self-contained implementation plan. Builds on Phases 0–15.5. Adds Agent-to-Agent (A2A) as a peer protocol to MCP, mounted under the same single listener (path prefix `/a2a/...`). The same V1 envelope (tenant → JWT/VK → Profile → policy → audit → tracing) applies; A2A peers are first-class Portico resources gated by Agent Profile `allowed_a2a_peers` and `allowed_a2a_tasks` allowlist columns added in this phase.
+>
+> **2026-05-12 update.** This plan originally assumed the Phase 14 "Bind/Listener/Route/Backend" substrate and a Phase 15 reverse-proxy backend driver chassis. Both were dropped 2026-05-12 (see [v2-roadmap-agentgateway-parity.md](./v2-roadmap-agentgateway-parity.md) §0). A2A is now wired into the existing single-listener path-prefix routing the same way `/mcp/`, `/v1/`, `/api/`, and `/` are — no separate "a2a listener kind" or "a2a_peer backend driver" lives under `internal/dataplane/...`. A2A peers are stored as a Portico resource (`internal/a2a/peers/`) and dispatched via the southbound A2A client manager. The plan below should be read with this in mind; sections that mentioned `internal/dataplane/listeners/a2a/` or `internal/dataplane/backends/a2a_peer/` are now `internal/a2a/northbound/http/` and `internal/a2a/peers/` respectively. Bridges (MCP↔A2A) are configured *on the Agent Profile*, not as a separate substrate resource.
 
 ## Goal
 
@@ -17,13 +19,13 @@ The phase pins to a published A2A spec version (the same way `internal/mcp/proto
 
 `agentgateway` lists A2A as a first-class protocol. A buyer comparing Portico against agentgateway after Phases 14–15 will ask: "what about A2A?" The answer cannot be "soon" if the agentic gateway story is to land. Phase 16 makes A2A a peer to MCP in Portico's protocol stack.
 
-A2A and MCP are intentionally similar in spirit (long-lived, JSON-RPC-shaped, capability-based) but different in primitives (A2A speaks of `tasks` and `agent cards`; MCP speaks of `tools`, `resources`, `prompts`). Adding A2A is therefore both a substrate exercise (does Phase 14 hold up under a second JSON-RPC wire shape?) and a model-design exercise (how do A2A primitives map onto Portico's existing catalog?).
+A2A and MCP are intentionally similar in spirit (long-lived, JSON-RPC-shaped, capability-based) but different in primitives (A2A speaks of `tasks` and `agent cards`; MCP speaks of `tools`, `resources`, `prompts`). Adding A2A is therefore both a wire-protocol exercise (does our northbound transport pattern hold up under a second JSON-RPC wire shape?) and a model-design exercise (how do A2A primitives map onto Portico's existing catalog and Agent Profile allowlists?).
 
 The bridge work is what makes A2A worth shipping in the same gateway as MCP. Without it, A2A and MCP are just two unrelated traffic classes that happen to share auth and audit. With it, an operator can expose a single namespaced catalog where some tools resolve over MCP and others over A2A, and the calling agent does not need to know — exactly the vendor-lock-in argument Portico is built to defeat.
 
 ## Prerequisites
 
-- Phase 14 substrate (`Bind / Listener / Route / Backend`) landed.
+- Phase 14 Agent Profiles landed — A2A peer + task allowlists become additive columns (`allowed_a2a_peers`, `allowed_a2a_tasks`) on the Profile schema, surfaced in the same Console wizard.
 - Phase 15 `http_proxy` + `grpc_proxy` (templates for `a2a_peer`).
 - Phase 5 vault and OAuth machinery (A2A peer auth reuses them).
 - Phase 6 telemetry (A2A spans use the same exporter).

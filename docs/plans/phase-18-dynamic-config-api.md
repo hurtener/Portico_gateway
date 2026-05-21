@@ -1,285 +1,374 @@
-# Phase 18 — Dynamic Data-Plane Configuration API
+# Phase 18 — Dynamic Configuration API (GitOps + Watch over existing CRUD)
 
-> Self-contained implementation plan. Builds on Phase 14–17. Adds a structured, watchable, auditable CRUD API over the data-plane state (binds, listeners, routes, backends, security configuration). Optional Envoy ADS adapter so external orchestration tools can manage Portico without re-implementing the protocol.
+> Self-contained implementation plan. Builds on Phases 14 (Agent Profiles), 15.5 (Virtual Keys + Budgets + Cache), 16 (A2A), and 17 (security policies). **Reshaped 2026-05-12** when the V2 line dropped the Envoy-shaped substrate. This phase no longer ships a Listener/Route/Backend CRUD or an Envoy ADS adapter; it ships a structured, watchable, auditable CRUD over the **Portico resource model** (Profiles, VKs, Teams, Customers, Budgets, Servers, Skills, Policies, A2A peers, Security configs).
 
 ## Goal
 
-After Phase 18, the data-plane state has two equally first-class producers:
+After Phase 18, every operator-visible resource Portico exposes has two equally first-class producers:
 
 1. **`portico.yaml`** (static) — the existing source of truth for cold-start and human-edited deployments.
 2. **The dynamic configuration API** — a structured CRUD surface plus a watch channel; operator tooling, GitOps controllers, and Phase 19's Kubernetes operator push state through it.
 
-Both producers write to the same in-memory data-plane state object. Both go through the same validation, policy, audit, and security gating (Phase 17). The Console becomes a third client of the same API; nothing privileged.
+Both producers write to the same in-memory state. Both go through the same validation, policy, audit, and security gating (Phase 17). The Console becomes a third client of the same API; nothing privileged.
 
-The API is intentionally Envoy-adjacent in shape (resource types, named references, watch semantics) so the optional ADS adapter is small. Portico does *not* implement the full Envoy gRPC protocol set; it implements its own JSON CRUD + SSE watch surface and exposes an ADS-compatible projection for the subset that matters.
+Crucially, the **resources** the API targets are Portico's own (Agent Profile, Virtual Key, Team, Customer, Budget, MCP Server, Skill, Skill Source, Policy Rule, A2A Peer, Security Config). There is no Listener / Route / Backend resource type — those don't exist (see [v2-roadmap-agentgateway-parity.md](./v2-roadmap-agentgateway-parity.md) §0 for the substrate pivot). There is **no Envoy ADS adapter**.
+
+The API is intentionally Kubernetes-adjacent in shape (resource types, named references, watch semantics, optimistic concurrency, bulk apply) so Phase 19's K8s operator is a thin translator, not a full reimplementation.
 
 ## Why this phase exists
 
-Phase 14 introduced the data-plane state object. Phase 15–17 mutated it via YAML reload only. That works for human operators editing one box; it does not scale to:
+Phase 14 introduced Agent Profiles. Phase 15.5 introduced VKs + budgets + cache. Phase 16 added A2A peers. Phase 17 added security configs. All of these are operator-facing resources today reachable via `portico.yaml` reload + Console + REST CRUD endpoints scattered across `/api/*`. That works for human operators editing one box. It does not scale to:
 
-- A GitOps workflow where a controller in a CI pipeline rolls out routes by template, with zero-downtime apply across a fleet.
-- A Kubernetes operator (Phase 19) reconciling `Listener` and `Route` CRDs onto Portico instances.
-- A federation deployment (Phase 19) where the leader pushes route changes to followers.
-- An external automation suite (e.g. an internal developer portal) registering/deregistering backends as services come and go.
+- A GitOps workflow where a controller in a CI pipeline rolls out Profile/VK/Budget templates, with zero-downtime apply across a fleet.
+- A Kubernetes operator (Phase 19) reconciling `AgentProfile` / `VirtualKey` / `Budget` / `Server` / `Skill` / `Policy` CRDs onto Portico instances.
+- A federation deployment (Phase 19) where a leader pushes resource changes to followers.
+- An external automation suite (e.g. an internal developer portal) registering/deregistering resources as the org chart changes.
 
-Any of these can today script `portico` invocations or YAML edits. None of them get a *transactional*, *validated*, *audited*, *watch-driven* surface. Phase 18 builds that surface once, so every later integration consumes it.
+Any of these can today script `portico` invocations or YAML edits. None gets a *transactional*, *validated*, *audited*, *watch-driven* surface. Phase 18 builds that surface once, so every later integration consumes it.
 
-The phase also pays down a debt Phase 14 deliberately left: the read-only `/api/dataplane/*` endpoints from Phase 14 imply a write counterpart. Phase 18 ships it, behind the same validation and audit envelope as the rest of the control plane.
+This phase also unifies the per-resource CRUD endpoints introduced piecemeal in Phases 0–17 into a coherent `/api/v1/{resource}/...` shape, plus a shared watch channel.
 
 ## Prerequisites
 
-- Phase 14 substrate (binds/listeners/routes/backends as in-memory data-plane state).
-- Phase 15 + 16 backend drivers (the API mutates routes that target them).
-- Phase 17 security gating (config-change writes go through the same policy/scanner/drift surface as other state changes).
+- Phase 14 (Agent Profile resource + repo).
+- Phase 15.5 (VK, Team, Customer, Budget, Cache config resources + repos).
+- Phase 16 (A2A Peer resource + repo).
+- Phase 17 (Security policies, attestation configs, drift gates + repos).
 - Phase 5 audit + redactor (every write produces an audit event with the diff).
+- Phase 5 policy engine (write authorisation goes through policy).
 
 ## Out of scope (explicit)
 
-- **No full Envoy xDS implementation.** The optional ADS adapter projects a subset; full LDS/RDS/CDS/EDS parity is post-V2.
-- **No CRD-style schema evolution machinery.** Resource schemas live in Go structs; non-additive changes require a versioned API path. We do not build an Open API CRD versioning layer.
-- **No multi-version API.** The Phase 18 API ships at `v1`. A future v2 (post-V2) lives at `/api/dataplane/v2/...`; v1 stays.
-- **No GraphQL.** REST + SSE only. GraphQL has been considered and explicitly rejected.
-- **No webhook outputs.** Watch is consumed via SSE on a long-lived HTTP connection. Outbound webhooks (Portico calling external systems on changes) are post-V2.
+- **No Listener / Route / Backend resource types.** They don't exist in Portico (substrate dropped 2026-05-12). This phase does not introduce them via the API either.
+- **No Envoy ADS / xDS adapter.** Originally part of this phase; dropped 2026-05-12. Portico does not project state via xDS.
+- **No full CRD-style schema evolution machinery.** Resource schemas live in Go structs; non-additive changes require a versioned API path. We do not build an OpenAPI CRD versioning layer; we use one versioned API path (`/api/v1/...`) and additive evolution only within it.
+- **No multi-version API.** The Phase 18 API ships at `v1`. A future `v2` (post-V2) would live at `/api/dataplane/v2/...`; `v1` stays.
+- **No GraphQL.** REST + SSE only. Explicitly rejected.
+- **No webhook outputs.** Watch is consumed via SSE on a long-lived HTTP connection. Outbound webhooks (Portico calling external systems on changes) are post-V2 (though Phase 15.5 has a narrow webhook for budget-critical events; that's different).
 - **No conflict resolution beyond optimistic concurrency.** Each resource carries a `version` integer; writes specify the expected version; mismatches return `409 conflict`. No CRDT, no last-writer-wins.
 
 ## Deliverables
 
-1. **CRUD endpoints** under `/api/dataplane/v1/`:
-   - `binds`, `listeners`, `routes`, `backends`, `bridges` (Phase 16)
-   - `security/scanners`, `security/attestations`, `security/drift_gates`, `security/pins` (Phase 17)
-   - Each resource: `GET` (list), `POST` (create), `GET /{id}` (read), `PUT /{id}` (update), `DELETE /{id}` (delete), `PATCH /{id}` (partial update via JSON Merge Patch).
-2. **Watch channel** at `/api/dataplane/v1/watch` (SSE). Operators specify a `?resource=routes,backends` query; events are emitted as `created` / `updated` / `deleted` with the after-state and the version. Initial connection sends a snapshot followed by the watermark; subsequent events are tagged with monotonic versions so a client can resume.
-3. **Optimistic concurrency** — every resource has `metadata.version`; writes that don't match the current version return `409`. Watch events carry the new version.
-4. **Validation pipeline** — every write is validated by the same code paths the YAML loader uses. Validation errors return `422` with JSON-Pointer-shaped details (the Phase 8 convention).
-5. **Audit envelope** — every successful write emits an audit event of type `dataplane.config_changed` with `actor`, `resource_kind`, `resource_id`, `version_before`, `version_after`, and a `diff` (RFC 6902 JSON Patch). Redactor scrubs sensitive fields (e.g. egress_auth credentials).
-6. **Policy gating** — writes are policy-evaluated. A policy rule can deny a write, require approval, or wrap a warning. Pre-existing approval flow (Phase 5) handles the queueing; pending writes appear in the existing approvals queue.
-7. **Transactional bulk apply** — `POST /api/dataplane/v1/apply` accepts a multi-resource document (similar to a Kubernetes manifest) and applies all resources atomically: either every resource is applied or none. Used by the Kubernetes operator (Phase 19) to roll forward / back.
-8. **YAML / API reconciliation** — the YAML loader still produces the cold-start state. After boot, the API takes over as the writeable channel. A `?source=yaml|api|all` filter on the read endpoints exposes provenance. A reload of the YAML file produces a structured diff event over the watch channel; existing API-managed resources are preserved unless the YAML re-declares them with a higher version (deterministic merge semantics, documented in §6.4).
-9. **ADS adapter (optional, build-tag gated)** — `internal/dataplane/ads/` exposes the dataplane state via the Envoy ADS gRPC protocol for the `LDS`, `RDS`, `CDS` resource types. Operators who run an existing xDS-capable control plane (Istio, custom) can manage Portico through it.
-10. **Console** — `/dataplane` becomes the editable surface. List pages gain `+ Add` CTAs and per-row Edit/Delete actions. The §4.5.1 operator UX gates apply. A "history" tab on every resource shows the audit events for that resource (reusing Phase 11's audit query).
-11. **CLI** — `portico dataplane` subcommand: `list`, `get`, `apply -f file.yaml`, `delete`, `diff`, `watch`. Mirrors `kubectl` ergonomics where it's natural.
-12. **Smoke** — `scripts/smoke/phase-18.sh` covers: create / read / update / delete a route via the API; conflict on stale version; watch receives the create event; bulk apply with one invalid resource rolls back all; audit event captures the diff with credentials redacted.
+1. **Versioned API namespace** — `/api/v1/{resource}/...` for every resource type. The pre-Phase-18 endpoints (`/api/agent-profiles`, `/api/governance/virtual-keys`, etc.) become aliases / redirects to the new shape so older callers continue to work.
+2. **Resource registry** — `internal/dataplane/api/registry.go` maps resource kind names (`AgentProfile`, `VirtualKey`, `Team`, `Customer`, `Budget`, `Server`, `Skill`, `SkillSource`, `Policy`, `A2APeer`, `SecurityPolicy`, `AttestationConfig`, `DriftGate`, `PinnedSource`, `CacheConfig`) to their repos, validators, and policy bundles. Adding a future resource type is a registry registration.
+3. **CRUD per resource** — `GET` (list), `POST` (create), `GET /{id}` (read), `PUT /{id}` (update), `DELETE /{id}`, `PATCH /{id}` (JSON Merge Patch).
+4. **Watch channel** — `GET /api/v1/watch?resource=<kinds>` (SSE). Events: `created` / `updated` / `deleted` with after-state and version. Initial snapshot followed by a watermark; events tagged with monotonic versions so consumers can resume from a `?since=<version>` parameter.
+5. **Optimistic concurrency** — every resource has `metadata.version`; writes that don't match the current version return `409`. Watch events carry the new version.
+6. **Validation pipeline** — every write is validated by the same code paths the YAML loader uses. Validation errors return `422` with JSON-Pointer-shaped details (the Phase 8 convention).
+7. **Audit envelope** — every successful write emits an audit event of type `resource.changed` with `actor`, `resource_kind`, `resource_id`, `version_before`, `version_after`, and a `diff` (RFC 6902 JSON Patch). Redactor scrubs sensitive fields (e.g. VK secrets, cache credentials, vault refs).
+8. **Policy gating on writes** — writes are policy-evaluated. A policy rule can deny a write, require approval, or wrap a warning. The pre-existing approval flow (Phase 5) handles the queueing; pending writes appear in the existing approvals queue.
+9. **Transactional bulk apply** — `POST /api/v1/apply` accepts a multi-resource document and applies all resources atomically: either every resource is applied or none. Used by the Kubernetes operator (Phase 19) to roll forward / back.
+10. **YAML / API reconciliation** — the YAML loader still produces the cold-start state. After boot, the API takes over as the writeable channel. A `?source=yaml|api|all` filter on read endpoints exposes provenance. A reload of the YAML file produces a structured diff event over the watch channel; existing API-managed resources are preserved unless the YAML re-declares them with a higher version (deterministic merge semantics, §6).
+11. **Console** — every existing CRUD page (Agents, Servers, Skills, Tenants, VKs, Teams, Customers, Budgets, Cache, A2A Peers, Security) gains a "History" tab with the audit events for that resource and a "Source" badge (yaml | api). The §4.5.1 operator UX gates already apply to all CRUD pages from prior phases — Phase 18 doesn't introduce new screens, it enriches the detail pages.
+12. **CLI** — `portico apply -f file.yaml`, `portico diff -f file.yaml`, `portico delete <kind>/<name>`, `portico watch <kinds>`, `portico get <kind>/<name> -o yaml`. Mirrors `kubectl` ergonomics where it's natural.
+13. **Smoke** — `scripts/smoke/phase-18.sh` covers: create / read / update / delete via the API for each resource kind (parametrised); conflict on stale version; watch receives the create event; bulk apply with one invalid resource rolls back all; audit event captures the diff with credentials redacted.
 
 ## Acceptance criteria
 
-1. **CRUD round trip.** `POST /api/dataplane/v1/routes` with a valid spec creates the route; `GET` returns it; the new route resolves traffic immediately; `DELETE` removes it; `GET` returns 404.
-2. **Validation parity with YAML.** A spec that the YAML loader would reject (e.g. unknown backend reference) is rejected by the API with a 422 + JSON-Pointer details.
+1. **CRUD round trip for every resource kind.** Parametrised test: for each kind in {AgentProfile, VirtualKey, Team, Customer, Budget, Server, Skill, SkillSource, Policy, A2APeer, SecurityPolicy, AttestationConfig, DriftGate, PinnedSource, CacheConfig}, POST → GET → PUT → DELETE → GET 404. The new resource resolves traffic immediately (Profile applies on next request; VK applies on next call; etc.).
+2. **Validation parity with YAML.** A spec that the YAML loader would reject (e.g. unknown Profile binding to a non-existent Server) is rejected by the API with a 422 + JSON-Pointer details.
 3. **Optimistic concurrency.** Two concurrent `PUT`s with the same `metadata.version` produce one success and one 409; the failed client refreshes and retries.
 4. **Watch — initial snapshot.** A new SSE consumer receives the current state of every requested resource type as `created` events, followed by a `watermark` event with the current version. Subsequent changes are streamed as they happen.
 5. **Watch — resume.** A consumer that disconnects and reconnects with `?since=<version>` receives every event after that version; missing events (because the consumer was offline beyond the retention window) yield a `410 gone` and the consumer must re-snapshot.
-6. **Audit diff.** Updating a route's `match.path_prefix` from `/billing/` to `/payments/` produces an audit event whose `diff` is `[{"op":"replace","path":"/match/path_prefix","value":"/payments/"}]`.
-7. **Credential redaction.** Updating a backend's `egress_auth.vault_ref` value produces an audit event whose `diff` shows the field changed but does not include the value. (Vault refs are paths, not secrets, but the same redactor surface that handles MCP tool args applies here too.)
-8. **Policy gating — deny.** A policy rule `deny if resource_kind=routes and actor.scope contains 'developer' and route.match.host == 'admin.example.com'` blocks the write with 403; an audit event records the deny.
-9. **Policy gating — approval.** A policy rule `require_approval if resource_kind=backends and resource.driver=http_proxy and resource.config.upstreams[*].url ~ /prod/` queues the write in the approvals queue; the requesting client receives `202 accepted` with the approval id; on operator approval the write is applied and a watch event fires.
-10. **Bulk apply atomicity.** `POST /apply` with three resources where the second is invalid returns 422 with details on the second resource only; resources one and three are not applied.
-11. **YAML reconciliation.** Editing the on-disk `portico.yaml` to declare a route that the API has also created merges deterministically per §6.4; observed via the watch channel as zero, one, or two events depending on the merge outcome.
-12. **ADS adapter.** With the build tag enabled, an Envoy ADS client (test fixture) successfully fetches `LDS`, `RDS`, `CDS` for the configured listeners/routes/backends. Subsequent updates push to the ADS client.
-13. **Console parity.** Every resource type has a list page with `+ Add`, an edit form covering all spec fields, a delete confirmation, and a history tab. Playwright covers create + edit + delete for `routes` and `backends`.
-14. **CLI parity.** `portico dataplane list routes`, `apply -f routes.yaml`, `delete route foo` work and emit the same audit events as the API. `portico dataplane watch routes` follows the SSE channel.
-15. **Smoke gate.** `scripts/smoke/phase-18.sh` shows OK ≥ 22, FAIL = 0; prior phases' smokes still pass.
+6. **Audit diff.** Updating an Agent Profile's `allowed_mcp_servers` from `[github, jira]` to `[github, jira, slack]` produces an audit event whose `diff` is a JSON Patch capturing the addition. Updating a VK's allowlists similarly.
+7. **Credential redaction.** Updating a backend's `egress_auth.vault_ref` value (when Phase 15 is eventually revived — for now, updating any vault-backed field on a Server or A2A Peer) produces an audit event whose `diff` shows the field changed but does not include the value. The redactor surface that handles MCP tool args applies here.
+8. **Policy gating — deny.** A policy rule `deny if resource_kind=AgentProfile and actor.scope contains 'developer' and resource.name starts_with 'admin-'` blocks the write with 403; an audit event records the deny.
+9. **Policy gating — approval.** A policy rule `require_approval if resource_kind=VirtualKey and resource.attached_to_profile contains 'prod'` queues the write in the approvals queue; the requesting client receives `202 accepted` with the approval id; on operator approval the write is applied and a watch event fires.
+10. **Bulk apply atomicity.** `POST /api/v1/apply` with three resources where the second is invalid returns 422 with details on the second resource only; resources one and three are not applied. The audit log records a single `apply.rolled_back` event with the offending resource.
+11. **YAML reconciliation.** Editing the on-disk `portico.yaml` to declare an Agent Profile that the API has also created merges deterministically per §6; observed via the watch channel as zero, one, or two events depending on the merge outcome. The integration test covers all three outcomes.
+12. **Aliasing of pre-Phase-18 endpoints.** Calling the pre-existing `/api/agent-profiles` succeeds and is functionally identical to `/api/v1/agent-profiles`. Documented as legacy aliases.
+13. **Console history tab.** Every CRUD detail page shows a "History" tab with the audit events for that resource (chronological, redacted) plus a "Source" chip (yaml | api). Playwright covers it.
+14. **CLI parity.** `portico apply -f file.yaml` applies the same resources as the API and emits the same audit events. `portico watch agent-profiles` follows the SSE channel. `portico diff -f file.yaml` shows what would change without applying.
+15. **Smoke gate.** `scripts/smoke/phase-18.sh` shows OK ≥ 18, FAIL = 0; prior phases' smokes still pass.
 16. **Coverage.** `internal/dataplane/api/` ≥ 85%; `internal/dataplane/state/` ≥ 90% (the state object is the heart of correctness).
 
 ## Architecture
 
-### 6.1 Package layout
+### Package layout
 
 ```
-internal/dataplane/
-├── state/
-│   ├── store.go             # in-memory state object (binds, listeners, routes, backends)
-│   ├── version.go           # monotonic version counter + per-resource version
-│   ├── snapshot.go          # immutable snapshot for watch fan-out
-│   ├── diff.go              # RFC 6902 JSON Patch diffs
-│   └── store_test.go
-├── api/
-│   ├── handlers_routes.go
-│   ├── handlers_backends.go
-│   ├── handlers_listeners.go
-│   ├── handlers_binds.go
-│   ├── handlers_security.go
-│   ├── handlers_apply.go    # bulk apply endpoint
-│   ├── handlers_watch.go    # SSE watch
-│   └── shared.go            # shared validation, optimistic-concurrency, error shapes
-├── reconcile/
-│   ├── yaml_to_state.go     # YAML loader → state writes
-│   └── merge.go             # YAML × API merge rules
-└── ads/                     # build-tag: portico_ads
-    ├── server.go            # Envoy ADS gRPC server
-    └── translate.go         # state → Envoy resource projection
+internal/dataplane/api/
+├── api.go                     # versioned routing setup (/api/v1/...)
+├── registry.go                # resource kind ↔ repo/validator/policy map
+├── handlers.go                # generic CRUD handler factory
+├── watch.go                   # SSE watch channel + replay buffer
+├── apply.go                   # transactional bulk apply
+├── reconcile.go               # YAML × API merge rules
+├── alias.go                   # pre-Phase-18 endpoint compatibility
+└── api_test.go
+
+internal/dataplane/state/
+├── state.go                   # in-memory aggregate state (one snapshot across all kinds)
+├── version.go                 # monotonic version counter + replay buffer
+├── events.go                  # event emission for the watch channel
+└── state_test.go
+
+cmd/portico/
+├── cmd_apply.go               # `portico apply -f`
+├── cmd_diff.go                # `portico diff -f`
+├── cmd_get.go                 # `portico get <kind>/<name>`
+└── cmd_watch.go               # `portico watch <kinds>`
+
+web/console/src/lib/api/
+└── watch.ts                   # typed SSE client for the watch channel
+
+(All existing CRUD pages already exist from prior phases. Phase 18 adds:)
+web/console/src/lib/components/HistoryTab.svelte    # reusable history tab for any resource detail page
+web/console/tests/history.spec.ts
 ```
 
-### 6.2 State object
+### Resource model
+
+Every resource registered in `internal/dataplane/api/registry.go` provides:
 
 ```go
-package state
-
-type Store struct {
-    mu       sync.RWMutex
-    binds    map[string]*Bind
-    listeners map[string]*Listener
-    routes   map[string]*Route
-    backends map[string]*Backend
-    version  uint64
-    perResource map[string]uint64  // resource_id → version
-    subscribers []*subscriber
-}
-
-type ChangeEvent struct {
-    Kind     string         // "created" | "updated" | "deleted"
-    Resource string         // "routes" | "backends" | …
-    ID       string
-    Version  uint64
-    After    any            // nil on delete
+type Resource struct {
+    Kind         string                  // "AgentProfile", "VirtualKey", ...
+    APIPath      string                  // "/api/v1/agent-profiles", ...
+    AliasPaths   []string                // ["/api/agent-profiles"] for back-compat
+    Repo         CRUDRepo                // tenant-scoped repo (List/Get/Put/Delete)
+    Validator    func(any) error         // same validator the YAML loader uses
+    Differ       func(before, after any) JSONPatch
+    Redactor     func(JSONPatch) JSONPatch
+    PolicyBundle string                  // policy rules that apply to writes on this kind
 }
 ```
 
-Reads are lock-free (snapshot-based); writes acquire the write lock briefly to swap the snapshot. Subscribers receive change events on a buffered channel; slow consumers are dropped after the documented threshold (drop-oldest with a `dataplane.subscriber_dropped` audit event, per `AGENTS.md` §5 concurrency rules).
+The CRUD handler factory turns a `Resource` into a `chi.Router` mounted at its `APIPath` + alias paths. Validation, audit, policy, and watch-emission are wired uniformly.
 
-### 6.3 Watch channel
+### State + watch
 
-SSE on `/api/dataplane/v1/watch?resource=routes,backends&since=<version>`:
+A single in-memory `State` object holds the current aggregate of every resource kind. Writes mutate it under a per-kind mutex; reads are lock-free (CoW snapshot). Every successful write bumps a monotonic global `version` counter and appends an event to a bounded ring buffer (default 1024 events, configurable). SSE consumers tail the ring; consumers behind by more than the ring's capacity get `410 gone`.
 
-- Initial response: `created` events for every existing matching resource, followed by a `watermark` event with the current version.
-- Subsequent: `created` / `updated` / `deleted` events as they occur.
-- Heartbeat: `: keepalive\n\n` every 15 s.
-- Disconnection: client may reconnect with `?since=<last_version>`; if the gap exceeds retention (default 5 minutes of history), respond with `410 gone` and the client must re-snapshot.
+The watch channel emits events grouped by resource kind (filtered by `?resource=…`) and serialised as JSON-per-line:
 
-### 6.4 YAML × API merge rules
+```
+event: created
+data: {"version": 4711, "kind": "AgentProfile", "id": "01H...", "after": {...}}
 
-The reconciliation algorithm:
+event: updated
+data: {"version": 4712, "kind": "AgentProfile", "id": "01H...", "before_version": 4711, "after": {...}, "diff": [...]}
 
-1. **Cold start**: YAML is the only producer; every resource is owned by `source=yaml`.
-2. **API write**: the resource is annotated `source=api` and version-bumped.
-3. **YAML reload**:
-   - For each resource in YAML:
-     - If absent from state: create as `source=yaml`.
-     - If present and `source=yaml` and content differs: update.
-     - If present and `source=api`: warn (audit event), do nothing. The YAML is not authoritative for API-owned resources.
-   - For each resource in state with `source=yaml`:
-     - If absent from YAML: delete.
-   - For each resource in state with `source=api`: untouched.
+event: deleted
+data: {"version": 4713, "kind": "AgentProfile", "id": "01H...", "before": {...}}
 
-A resource's source can be flipped via `PATCH /{id}` with `metadata.source: yaml` or `metadata.source: api` (admin scope; explicit operator decision; audit-logged).
+event: watermark
+data: {"version": 4713}
+```
 
-### 6.5 Policy gating for writes
+### YAML × API reconciliation (§6)
 
-Writes go through the policy engine before the state is mutated. The matcher surface for write rules:
+Both producers write into the same `State`. The merge rule on reload of `portico.yaml`:
 
-- `resource_kind` (routes / backends / …)
-- `resource.id`, `resource.driver`, `resource.match.*`
-- `actor.tenant`, `actor.user`, `actor.scope`
-- `change.kind` (create / update / delete)
-- `change.diff[*]` (JSON-Pointer paths in the diff)
+1. Compute the YAML's declared resource set per kind.
+2. For each declared resource, compare against the current `State`:
+   - If the resource does not exist → create it with source: `yaml`.
+   - If the resource exists with source: `yaml` and content differs → update.
+   - If the resource exists with source: `api` and YAML declares it explicitly with a higher `version` → take the YAML side; emit `updated` event.
+   - If the resource exists with source: `api` and YAML does not declare it → leave it alone (the operator chose to manage it via API).
+3. For each previously-yaml-managed resource that's no longer in the YAML → delete it; emit `deleted` event.
 
-The action surface: `allow`, `deny`, `require_approval`, `wrap_warning`. Same vocabulary the rest of the policy engine uses.
+The integration test (`TestE2E_DataPlane_API_YAMLReconciliation_*`) covers all four cases.
 
-### 6.6 ADS adapter
+### Bulk apply
 
-Build-tag-gated (`portico_ads`) so operators who do not need it pay zero binary size. Implements:
-
-- `LDS` → projects each `state.Listener` as an Envoy `Listener` resource.
-- `RDS` → projects each `state.Route` as an Envoy `RouteConfiguration` resource.
-- `CDS` → projects each `state.Backend` as an Envoy `Cluster` resource (HTTP-proxy and gRPC-proxy backends only; MCP/A2A/LLM are not Envoy-native).
-- ADS pushes are triggered by the same `state.ChangeEvent` channel as the SSE watch.
-
-The adapter is one-way (state → ADS); we do not consume Envoy xDS configuration as input. That stays a future RFC.
-
-## Configuration extensions
+`POST /api/v1/apply` accepts:
 
 ```yaml
-dataplane_api:
-  enabled: true                    # default true; can be disabled to lock the data plane
-  watch:
-    history_window: 5m
-    max_subscribers: 64
-  ads:
-    enabled: false                 # only effective if built with -tags portico_ads
-    bind: 127.0.0.1:18000
+apiVersion: portico/v1
+kind: List
+items:
+  - kind: AgentProfile
+    metadata: { name: "support-eu", version: 3 }
+    spec: { ... }
+  - kind: VirtualKey
+    metadata: { name: "support-eu-prod", version: 1 }
+    spec: { ... }
+  - kind: Budget
+    metadata: { name: "support-eu-monthly", version: 1 }
+    spec: { ... }
 ```
 
-## REST APIs
+Apply runs in a single transactional pass. Either every resource validates + applies, or none does. Partial failures return 422 with a `failed_at` index and the original list intact in `State`.
 
-The full surface is too large to list per row; the shape is uniform:
+## REST API
 
-- `GET    /api/dataplane/v1/{resource}` — list (filter, sort, paginate)
-- `POST   /api/dataplane/v1/{resource}` — create
-- `GET    /api/dataplane/v1/{resource}/{id}` — read
-- `PUT    /api/dataplane/v1/{resource}/{id}` — replace (requires `metadata.version`)
-- `PATCH  /api/dataplane/v1/{resource}/{id}` — JSON Merge Patch (requires `metadata.version`)
-- `DELETE /api/dataplane/v1/{resource}/{id}` — delete (requires `metadata.version` query param)
-- `POST   /api/dataplane/v1/apply` — bulk transactional apply
-- `GET    /api/dataplane/v1/watch` — SSE
-- `GET    /api/dataplane/v1/{resource}/{id}/history` — audit events for one resource
+```
+# Versioned generic shape (one row per registered kind):
+GET    /api/v1/{kind-plural}                      # list, paginated
+POST   /api/v1/{kind-plural}                      # create
+GET    /api/v1/{kind-plural}/{name-or-id}         # read
+PUT    /api/v1/{kind-plural}/{name-or-id}         # update (version-matched)
+PATCH  /api/v1/{kind-plural}/{name-or-id}         # partial update (JSON Merge Patch)
+DELETE /api/v1/{kind-plural}/{name-or-id}
 
-Resource kinds: `binds`, `listeners`, `routes`, `backends`, `bridges`, `security/scanners`, `security/attestations`, `security/drift_gates`, `security/pins`.
+# Watch + apply + provenance:
+GET    /api/v1/watch?resource=<kinds-csv>&since=<version>   # SSE
+POST   /api/v1/apply                                          # transactional bulk
+GET    /api/v1/{kind-plural}?source=<yaml|api|all>            # provenance filter
 
-Standard error envelope: `{"error":"<code>","message":"...","details":{}}`. Common codes: `not_found`, `conflict`, `invalid`, `forbidden`, `approval_required`.
+# Legacy aliases (kept for back-compat through V2):
+GET    /api/agent-profiles    → /api/v1/agent-profiles
+GET    /api/governance/virtual-keys → /api/v1/virtual-keys
+... (one alias entry per pre-Phase-18 endpoint)
+```
+
+## CLI
+
+```bash
+portico apply -f resources.yaml                  # transactional bulk apply
+portico apply -f dir/                            # apply every YAML in a directory (still transactional)
+portico diff  -f resources.yaml                  # show what would change without applying
+portico get   <kind>/<name> -o yaml              # current state, YAML-shaped
+portico delete <kind>/<name>
+portico watch <kinds-csv>                        # follow the SSE channel
+portico edit  <kind>/<name>                      # opens $EDITOR; PUT on save
+```
 
 ## Implementation walkthrough
 
-1. **State store.** `internal/dataplane/state.Store` — in-memory, versioned, subscribable. Tests cover concurrent writes, slow-consumer drop, snapshot consistency.
-2. **CRUD endpoints — routes first.** Validate, version, audit-log, mutate state. Smoke proves a round trip.
-3. **Watch endpoint.** SSE with snapshot → live → keepalive → resume semantics.
-4. **Remaining resource kinds.** Backends, listeners, binds, bridges, security/*. Same shape.
-5. **Bulk apply.** Transactional; error returns details on the first invalid resource only.
-6. **YAML reconciliation.** Implement merge rules; audit any conflict.
-7. **Policy gating.** Hook into the policy engine; queue approval-required writes.
-8. **CLI.** `portico dataplane …` subcommands.
-9. **Console editable surfaces.** Promote read-only screens to editable; add history tab; Playwright for create/edit/delete.
-10. **ADS adapter (build-tag).** Behind `portico_ads`; integration test with a stub Envoy client.
-11. **Smoke + perf.** `phase-18.sh`; perf gate (write latency p99 ≤ 50 ms, read latency p99 ≤ 5 ms at 100 r/s).
+### Step 1 — Resource registry + generic CRUD handler
+
+Define the `Resource` shape. Register every existing resource kind. The generic handler factory turns a `Resource` into mounted `chi.Router` endpoints. Each kind's repo is already implemented by its phase (P14 for AgentProfile, P15.5 for VK/Team/Customer/Budget/Cache, etc.); Phase 18 wraps them.
+
+### Step 2 — Versioning + audit + redactor wiring
+
+Every write goes through: validate → policy → bump version → persist → emit audit (redacted) → emit watch event. Tests cover each layer in isolation, plus end-to-end.
+
+### Step 3 — State + watch channel
+
+`State` is the in-memory aggregate. Watch channel tails its event ring. Initial-snapshot replay is the materialisation of every registered repo's `List`. Resume is a ring lookup with `410` fallback.
+
+### Step 4 — Legacy aliases
+
+For each pre-Phase-18 endpoint (`/api/agent-profiles`, `/api/governance/*`, `/api/llm/cache/*`, `/api/a2a/peers`, `/api/security/*`), add an alias route that 308-redirects (or transparent-proxies) to the canonical `/api/v1/...` path. Documented.
+
+### Step 5 — YAML × API reconciliation
+
+The YAML loader gains an `ApplyToState(state *State) error` method. On reload, the merge rule (§6) executes; events emit. Integration tests cover all four merge cases.
+
+### Step 6 — Bulk apply
+
+Transactional bulk: parse list, validate all, policy-check all, then commit all under one State lock or roll back the whole batch.
+
+### Step 7 — CLI
+
+`portico apply` reads YAML, posts to `/api/v1/apply`. `portico diff` does the same but uses a dry-run query param. `portico watch` consumes SSE.
+
+### Step 8 — Console history tab
+
+Reusable `HistoryTab.svelte` component pulls audit events for `(kind, id)` from the Phase 11 audit query API. Mounted on every resource detail page. Source chip rendered next to the resource name.
+
+### Step 9 — Smoke
+
+`scripts/smoke/phase-18.sh`:
+- POST a Profile via `/api/v1/agent-profiles` → 201.
+- GET → 200.
+- PUT with stale version → 409.
+- PUT with matching version → 200.
+- Watch subscription receives the updated event.
+- Bulk apply with three resources (one invalid) → 422; assert State unchanged.
+- YAML reload that declares a previously-API-only Profile with higher version → State takes YAML side.
+- Legacy alias path `/api/agent-profiles` works.
+
+OK ≥ 18 by phase close, FAIL = 0.
 
 ## Test plan
 
-Unit:
+### Unit
 
-- `TestStore_CreateRead`
-- `TestStore_OptimisticConcurrency_Conflict`
-- `TestStore_Watch_InitialSnapshot`
-- `TestStore_Watch_LiveEvents`
-- `TestStore_Watch_SlowConsumerDrop`
-- `TestStore_Snapshot_Immutable`
-- `TestAPI_RouteCreate_Valid`
-- `TestAPI_RouteCreate_RejectsUnknownBackend`
-- `TestAPI_RoutePatch_AppliesMergePatch`
-- `TestAPI_BulkApply_AtomicRollback`
-- `TestAPI_Watch_ResumeFromVersion`
-- `TestAPI_Watch_GoneAfterRetentionWindow`
-- `TestAPI_Audit_DiffShape`
-- `TestAPI_Audit_RedactsSecrets`
-- `TestPolicy_DenyWrite`
-- `TestPolicy_RequireApprovalForWrite`
-- `TestReconcile_YAML_OwnedDoesNotOverwriteAPI`
-- `TestADS_TranslatesListenerToEnvoy`
-- `TestADS_PushesOnStateChange`
+- `internal/dataplane/api/registry_test.go` — registry registration + lookup + duplicate detection.
+- `internal/dataplane/api/handlers_test.go`
+  - `TestCRUDHandler_HappyPath`
+  - `TestCRUDHandler_ValidationError_Returns422`
+  - `TestCRUDHandler_PolicyDeny_Returns403`
+  - `TestCRUDHandler_ApprovalRequired_Returns202`
+  - `TestCRUDHandler_OptimisticConcurrency`
+- `internal/dataplane/state/state_test.go`
+  - `TestState_VersionMonotonic`
+  - `TestState_EventRing_Bounded`
+  - `TestState_CoWSnapshot_NoTearingReads`
+- `internal/dataplane/api/watch_test.go`
+  - `TestWatch_InitialSnapshot`
+  - `TestWatch_StreamingEvents`
+  - `TestWatch_Resume_FromSince`
+  - `TestWatch_Resume_BeyondRing_Returns410`
+- `internal/dataplane/api/apply_test.go`
+  - `TestApply_AllValid_AllApplied`
+  - `TestApply_OneInvalid_NoneApplied`
+  - `TestApply_AuditTrailRecordsRollback`
+- `internal/dataplane/api/reconcile_test.go`
+  - `TestReconcile_YAMLDeclaresNew`
+  - `TestReconcile_YAMLOverridesAPI_HigherVersion`
+  - `TestReconcile_APIOnlyResource_Preserved`
+  - `TestReconcile_YAMLRemoval_DeletesPreviouslyDeclared`
+- `internal/dataplane/api/alias_test.go` — every legacy alias resolves to the canonical handler.
 
-Integration:
+### Integration
 
-- `TestE2E_DataPlaneAPI_RouteRoundTrip_TrafficResolves`
-- `TestE2E_DataPlaneAPI_DeleteRoute_StopsResolution`
-- `TestE2E_DataPlaneAPI_BulkApply_KubernetesShape`
-- `TestE2E_DataPlaneAPI_PolicyDeny_BlockedAndAudited`
-- `TestE2E_DataPlaneAPI_ApprovalQueue_PendingWritesApply`
-- `TestE2E_DataPlaneAPI_YAMLReload_DoesNotClobberAPIResources`
-- `TestE2E_DataPlaneAPI_ADS_EnvoyClientRoundTrip` (build-tag-gated)
+- `TestE2E_DataPlane_API_CRUDAllKinds` — parametrised across every registered kind.
+- `TestE2E_DataPlane_API_OptimisticConcurrency_Conflict`
+- `TestE2E_DataPlane_API_Watch_RealTime`
+- `TestE2E_DataPlane_API_Apply_RollsBackOnInvalid`
+- `TestE2E_DataPlane_API_YAMLReconciliation_AllFourCases`
+- `TestE2E_DataPlane_API_Audit_DiffWithRedaction`
+- `TestE2E_DataPlane_API_Policy_DenyAndApproval`
+- `TestE2E_DataPlane_API_LegacyAliases_StillWork`
+- `TestE2E_DataPlane_API_CrossTenantIsolation`
+
+### Frontend tests
+
+- Playwright: history tab renders audit events on every resource detail page (covered via one test that exercises a Profile + a VK + a Server + a Skill, asserting the pattern is uniform).
+
+### Smoke
+
+`scripts/smoke/phase-18.sh` — listed above. OK ≥ 18.
+
+### Coverage gates
+
+- `internal/dataplane/api/` ≥ 85%.
+- `internal/dataplane/state/` ≥ 90% (correctness-critical).
 
 ## Common pitfalls
 
-1. **Watch fan-out blocking writers.** Subscriber channels are buffered; full channels drop oldest with an audit event; writers never block on subscribers. Test `TestStore_Watch_SlowConsumerDrop` enforces.
-2. **Version monotonicity across restarts.** The `state.version` counter persists in SQLite; restart resumes from the persisted value. A test asserts the version does not regress on restart.
-3. **JSON Merge Patch surprises.** Merge Patch deletes keys with `null`. Document this clearly in the API reference and add an explicit test.
-4. **Bulk apply that mutates state mid-transaction.** Bulk apply validates *all* resources first against the current state, then applies them atomically. No partial state mutation; no observable interleaving.
-5. **YAML × API merge confusion.** The §6.4 algorithm is deterministic but subtle. Document with examples and run integration tests for every merge case (yaml-only, api-only, conflict).
-6. **ADS push storms.** Coalesce updates: if the state changes 50 times in 100 ms, push once with the final state, not 50 times. Coalescing window is configurable.
-7. **Policy write rules that disable themselves.** A `deny` rule on `resource_kind: dataplane_api` writes locks the data plane. There must always be an `admin` escape: writes by an `admin`-scope JWT bypass deny rules but still go through audit. Tests assert.
-8. **Schema evolution mid-flight.** Adding a new optional field to a resource is fine. Removing or renaming a field is a breaking change requiring an API version bump. The Phase 18 surface is `v1` forever; v2 is a separate path.
+- **Reintroducing Listener/Route/Backend via the generic registry.** The registry's job is to wrap the resource kinds Portico actually has. Adding a "Listener" kind here brings back the substrate we explicitly dropped. §13 forbidden practice (updated by this phase).
+- **State ring too small.** A consumer offline for more than the ring's window can't resume. Default 1024 events; configurable. Document; the consumer's `410 gone` recovery path is to re-snapshot.
+- **Event tearing on concurrent writes.** Two writes to different kinds proceed in parallel under per-kind mutexes; their event ordering is monotonic only by version, not by wall clock. Watch consumers must order by version, not arrival.
+- **Diff redaction missing a field.** A new resource kind that adds a sensitive field needs a redactor entry. The Phase 18 generic handler reads the redactor from the Resource registration; the §13 forbidden practice (updated) is "registering a kind without a redactor for fields that match the audit-secret regex set."
+- **YAML loader path drift.** The YAML × API reconciliation depends on the YAML loader producing equivalent shapes to the API handler. Test parity matters; the parametrised "validation parity with YAML" criterion covers this.
+- **Bulk apply non-atomic across kinds.** A bulk apply that crosses kinds (Profile + VK + Budget) holds the per-kind mutexes in a deterministic order to avoid deadlock; the integration test exercises high-concurrency apply to catch ordering bugs.
+- **Alias confusion.** Pre-Phase-18 endpoints are aliases, not parallel implementations. Operators who edit the alias mapping by hand can desync; the §13 forbidden practice (updated) is "implementing a parallel CRUD path for a registered kind outside the generic handler."
+- **Approval-queue flooding.** A policy requiring approval on every Profile write floods the approvals UI during a GitOps reconcile. Phase 18 supports a per-policy `approval_batch: true` mode where many pending writes from one actor are presented as a single approval card (batched diff); the operator approves or rejects the whole batch atomically.
+- **Watch back-pressure.** A slow SSE consumer can stall the ring's broadcast goroutine. Per-connection bounded channel with drop-oldest policy + an `audit.dropped` event on overflow. Never block other consumers.
+
+## Out of scope (recap)
+
+- Listener / Route / Backend resource types (substrate dropped 2026-05-12).
+- Envoy ADS / xDS adapter (dropped 2026-05-12).
+- GraphQL.
+- Outbound webhooks (except Phase 15.5's budget-critical narrow case).
+- CRDT / last-writer-wins conflict resolution.
+- Multi-version API (`v2`+ is post-V2).
+- A resource-kind plugin system (kinds are Go-coded; adding one requires a code change + a registry entry).
+
+## Done definition
+
+1. All acceptance criteria pass.
+2. `make preflight` green; `scripts/smoke/phase-18.sh` shows OK ≥ 18, FAIL = 0; prior smokes unaffected.
+3. Coverage gates met.
+4. Docs site gains `/docs/concepts/dynamic-config-api`, `/docs/how-to/gitops-with-portico`, `/docs/reference/api-v1`.
+5. `AGENTS.md` §13 forbidden practices updated:
+   - "Adding a Listener / Route / Backend resource kind to the dynamic config registry."
+   - "Implementing a parallel CRUD path for a registered kind outside the generic handler."
+   - "Registering a resource kind without a redactor declared for fields that may carry secrets."
+6. RFC-001 updated with a Dynamic Configuration API section.
+7. `docs/plans/README.md` index updated.
 
 ## Hand-off to Phase 19
 
-Phase 19 inherits the dynamic-config API as the integration seam for:
+Phase 19 inherits:
 
-- The Kubernetes operator (Phase 19 watches CRDs and writes to `/api/dataplane/v1/apply`).
-- Federation (the leader's writes propagate to followers' API endpoints; followers' watches drive local state).
-- Multi-instance hot-reload (Redis pub/sub triggers each instance to refresh from the leader's API).
-
-The `metadata.source` provenance field gains `federation` as a value when Phase 19 lands; the merge rules extend accordingly.
+- The `/api/v1/...` shape — the Kubernetes operator translates CRDs (one CRD per registered resource kind) to API calls. **The CRD set is**: `AgentProfile`, `VirtualKey`, `Team`, `Customer`, `Budget`, `Server`, `Skill`, `SkillSource`, `Policy`, `A2APeer`, `SecurityPolicy`, `AttestationConfig`, `DriftGate`, `PinnedSource`, `CacheConfig`. **Notably absent**: `Listener`, `Route`, `Backend`, `Bridge` — these were dropped with the substrate pivot.
+- The watch channel — federation in Phase 19 consumes it for shared-resource replication (with tenant-scope filters that drop tenant-scoped resources at the boundary).
+- The bulk apply — the K8s operator uses it for reconcile-from-CRD-list to roll forward/back atomically.
+- The audit diff — federation messages carry signed diffs derived from the same Patch shape.
