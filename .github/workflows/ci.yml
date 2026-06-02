@@ -178,7 +178,7 @@ jobs:
           go tool cover -func=coverage.out | tail -1
       - name: Upload coverage artifact
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: coverage.out
@@ -229,7 +229,7 @@ jobs:
             fi
           fi
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: portico-${{ matrix.goos }}-${{ matrix.goarch }}
           path: bin/portico-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -306,7 +306,7 @@ jobs:
       - name: Build
         run: npm run build
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: console-build
           path: web/console/build/
@@ -376,7 +376,7 @@ jobs:
         run: npm run e2e
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: web/console/playwright-report/
