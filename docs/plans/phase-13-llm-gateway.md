@@ -118,9 +118,9 @@ internal/llm/
 └── policy_extensions.go          # LLM matcher/action support for the policy engine
 
 internal/storage/sqlite/migrations/
-├── 0013_llm_providers_models.sql
-├── 0014_llm_quotas_costs.sql
-└── 0015_llm_sessions.sql
+├── 0014_llm_providers_models.sql
+├── 0015_llm_quotas_costs.sql
+└── 0016_llm_sessions.sql
 
 internal/server/api/
 ├── llm_providers.go
@@ -239,7 +239,15 @@ This means: **after Phase 13, Portico exposes a strict superset of Agent Gateway
 
 ## SQL DDL
 
-### Migration 0013 — providers + models
+> **As-built note (2026-06-16).** Migration numbers below are corrected from the original
+> draft: `0013` was already taken by `0013_imported_sessions.sql` (Phase 11), so the LLM
+> migrations land at **0014 / 0015 / 0016**. Also, per `CLAUDE.md` §4.4, the stores live in
+> `internal/storage/{ifaces,sqlite}` (domain types + `LLMProviderStore`/`LLMModelStore`
+> interfaces in `ifaces/`, SQLite impls in `sqlite/<feature>_store.go`, exposed via `*DB`
+> accessor methods) — not in `internal/llm/providers/store.go` as the package tree above
+> sketches. The `internal/llm/...` tree still owns the engine/gateway/bridge logic.
+
+### Migration 0014 — providers + models
 
 ```sql
 CREATE TABLE IF NOT EXISTS tenant_llm_providers (
@@ -283,7 +291,7 @@ CREATE TABLE IF NOT EXISTS tenant_llm_models (
 );
 ```
 
-### Migration 0014 — quotas + costs
+### Migration 0015 — quotas + costs
 
 ```sql
 CREATE TABLE IF NOT EXISTS tenant_llm_quotas (
@@ -317,7 +325,7 @@ CREATE TABLE IF NOT EXISTS tenant_llm_cost_daily (
 CREATE INDEX IF NOT EXISTS idx_llm_cost_daily ON tenant_llm_cost_daily(tenant_id, day DESC, alias);
 ```
 
-### Migration 0015 — chat sessions
+### Migration 0016 — chat sessions
 
 ```sql
 -- LLM "chat sessions" are conversations — distinct from MCP sessions.

@@ -134,6 +134,11 @@ func (d *DB) EntityActivity() ifaces.EntityActivityStore {
 	return &entityActivityStore{db: d.sql}
 }
 
+// LLMProviders returns an LLMProviderStore backed by this DB (Phase 13).
+func (d *DB) LLMProviders() ifaces.LLMProviderStore {
+	return &llmProviderStore{db: d.sql}
+}
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {
