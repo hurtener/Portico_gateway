@@ -7,6 +7,9 @@ package ifaces
 import (
 	"context"
 	"log/slog"
+
+	"github.com/hurtener/Portico_gateway/internal/secrets"
+	storageifaces "github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
 
 // ChatMessage is one message in a chat completion exchange.
@@ -75,11 +78,14 @@ type ProviderHealth struct {
 	Detail   string
 }
 
-// Deps carries the cross-cutting services an engine driver may need. Kept minimal
-// for now; more services (audit, vault, provider store, tracer) are added when the
-// first real driver consumes them.
+// Deps carries the cross-cutting services an engine driver may need. The driver
+// reads provider configs from Providers (tenant-scoped) and resolves their API
+// keys from Vault on every dispatch (no plaintext caching). More services
+// (audit, tracer) are added when a unit consumes them.
 type Deps struct {
-	Logger *slog.Logger
+	Logger    *slog.Logger
+	Providers storageifaces.LLMProviderStore
+	Vault     secrets.Vault
 }
 
 // Engine dispatches fully-resolved requests to an underlying inference engine.

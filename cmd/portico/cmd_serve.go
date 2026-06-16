@@ -36,6 +36,9 @@ import (
 	// Side-effect: register the Phase 8 source drivers.
 	_ "github.com/hurtener/Portico_gateway/internal/skills/source/git"
 	_ "github.com/hurtener/Portico_gateway/internal/skills/source/http"
+
+	// Side-effect: register the Phase 13 LLM engine driver (Bifrost).
+	_ "github.com/hurtener/Portico_gateway/internal/llm/engine/bifrost"
 	"github.com/hurtener/Portico_gateway/internal/storage"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 
