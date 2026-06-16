@@ -139,6 +139,11 @@ func (d *DB) LLMProviders() ifaces.LLMProviderStore {
 	return &llmProviderStore{db: d.sql}
 }
 
+// LLMModels returns an LLMModelStore backed by this DB (Phase 13).
+func (d *DB) LLMModels() ifaces.LLMModelStore {
+	return &llmModelStore{db: d.sql}
+}
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {
