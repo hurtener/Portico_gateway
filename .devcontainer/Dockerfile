@@ -6,9 +6,10 @@ FROM golang:1.25-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Base tooling
+# Base tooling. The build target is CGO_ENABLED=0, so no C toolchain is needed —
+# `make` (for the Makefile gates) is the only build tool required, not build-essential.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl git unzip ripgrep jq build-essential \
+        ca-certificates curl git unzip ripgrep jq make \
     && rm -rf /var/lib/apt/lists/*
 
 # Node.js 22 LTS + npm — for the SvelteKit + Vite Console UI (web/console).
@@ -26,8 +27,15 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && rm -rf /var/lib/apt/lists/*
 
 # golangci-lint pinned to the CI version (.github/workflows/ci.yml) so an
-# in-container `make lint` matches the merge gate exactly.
-RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+# in-container `make lint` matches the merge gate exactly. It MUST be `go install`d
+# (not a prebuilt binary): golangci-lint refuses to run when the Go version it was
+# built with is older than the targeted go.mod version (1.25.x), so it has to be
+# compiled with this image's Go 1.25 toolchain. The ~750MB of Go build cache that
+# `go install` leaves behind is what bloated the layer — clean it in the same RUN
+# so only the ~50MB binary remains.
+RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8 \
+    && golangci-lint version \
+    && go clean -cache
 
 # Bun (opencode plugin installer) + opencode CLI
 ENV BUN_INSTALL=/usr/local/bun
