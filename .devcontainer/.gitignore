@@ -1,3 +1,4 @@
 # Injected secrets and runtime logs — never commit
 secrets/
 var/
+TASK.md
