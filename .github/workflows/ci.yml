@@ -18,7 +18,7 @@ env:
   # Pinned to 1.25.10 to clear GO-2026-* vulns in the stdlib (html/template,
   # net, net/http). Bumping requires no source change because the toolchain
   # directive in go.mod already requests 1.25.10.
-  GO_VERSION: "1.25.10"
+  GO_VERSION: "1.25.11"
   CGO_ENABLED: "0"
 
 jobs:
