@@ -20,7 +20,12 @@ FALLBACK_VARIANT="${FALLBACK_VARIANT-}"
 ACTIVE="primary"
 FB_ITERS=0
 RETRY_PRIMARY_EVERY="${RETRY_PRIMARY_EVERY:-4}"
-CMD_NAME="${COMMAND:-portico-build}"
+# The fixed orchestration prompt is passed as the message to `opencode run` with
+# --agent. (opencode 1.17.7's `--command` path crashes in SessionPrompt.command;
+# the plain message + --agent path works. Per-unit detail lives in
+# .devcontainer/TASK.md, which the prompt tells the agent to read every iteration.)
+BUILD_PROMPT="$(cat /workspace/portico/.devcontainer/BUILD_PROMPT.md)"
+BUILD_AGENT="${BUILD_AGENT:-build}"
 MAX_ITERS="${MAX_ITERS:-2000}"
 LOG="${LOG:-/var/portico/run.log}"
 STATUS="/var/portico/status.txt"
@@ -28,7 +33,7 @@ STATUS="/var/portico/status.txt"
 mkdir -p "$(dirname "$LOG")"
 note() { echo "$(date -u +%H:%M:%S) | $*" | tee -a "$LOG" >&2; }
 
-note "=== portico build loop start (primary=$PRIMARY_MODEL fallback=$FALLBACK_MODEL command=$CMD_NAME max=$MAX_ITERS) ==="
+note "=== portico build loop start (primary=$PRIMARY_MODEL fallback=$FALLBACK_MODEL agent=$BUILD_AGENT max=$MAX_ITERS) ==="
 echo "RUNNING" > "$STATUS"
 
 i=0
@@ -50,7 +55,7 @@ while [ "$i" -lt "$MAX_ITERS" ]; do
 
   variant_args=()
   [ -n "$CUR_VARIANT" ] && variant_args=(--variant "$CUR_VARIANT")
-  out="$(opencode run --model "$CUR_MODEL" "${variant_args[@]}" --command "$CMD_NAME" 2>&1)"
+  out="$(opencode run --model "$CUR_MODEL" "${variant_args[@]}" --agent "$BUILD_AGENT" "$BUILD_PROMPT" 2>&1)"
   printf '%s\n' "$out" >> "$LOG"
 
   if printf '%s' "$out" | grep -q '\[goal:complete\]'; then
