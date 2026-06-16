@@ -118,9 +118,10 @@ internal/llm/
 └── policy_extensions.go          # LLM matcher/action support for the policy engine
 
 internal/storage/sqlite/migrations/
-├── 0014_llm_providers_models.sql
-├── 0015_llm_quotas_costs.sql
-└── 0016_llm_sessions.sql
+├── 0014_llm_providers_models.sql   # providers + weighted keys (models split to 0015)
+├── 0015_llm_models.sql             # model aliases
+├── 0016_llm_quotas_costs.sql
+└── 0017_llm_sessions.sql
 
 internal/server/api/
 ├── llm_providers.go
@@ -241,7 +242,7 @@ This means: **after Phase 13, Portico exposes a strict superset of Agent Gateway
 
 > **As-built note (2026-06-16).** Migration numbers below are corrected from the original
 > draft: `0013` was already taken by `0013_imported_sessions.sql` (Phase 11), so the LLM
-> migrations land at **0014 / 0015 / 0016**. Also, per `CLAUDE.md` §4.4, the stores live in
+> migrations land at **0014 (providers+keys) / 0015 (models) / 0016 (quotas+costs) / 0017 (sessions)** — providers and models are separate migrations because 0014 merged before the model table was added. Also, per `CLAUDE.md` §4.4, the stores live in
 > `internal/storage/{ifaces,sqlite}` (domain types + `LLMProviderStore`/`LLMModelStore`
 > interfaces in `ifaces/`, SQLite impls in `sqlite/<feature>_store.go`, exposed via `*DB`
 > accessor methods) — not in `internal/llm/providers/store.go` as the package tree above
