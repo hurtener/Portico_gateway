@@ -1,0 +1,13 @@
+{
+  "name": "portico-builder",
+  "build": { "dockerfile": "Dockerfile" },
+  "workspaceFolder": "/workspace/portico",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/portico,type=bind",
+  "mounts": [
+    "source=${localWorkspaceFolder}/.devcontainer/secrets,target=/run/secrets,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.devcontainer/var,target=/var/portico,type=bind"
+  ],
+  "remoteUser": "root",
+  "overrideCommand": true,
+  "shutdownAction": "none"
+}
