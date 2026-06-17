@@ -160,6 +160,16 @@ tenants (noisy-neighbor) or pin a core indefinitely.
      isolation is a documented post-V1 hardening (run the sandbox out-of-process).
   These residuals are called out honestly rather than papered over.
 
+  *Why not `thread.SetMaxAllocs`?* Starlark's allocation-accounting API (which would trap
+  inside the offending op rather than on a sampler, closing residual #1) is **not present in
+  the pinned `go.starlark.net`** version. Adopting it requires a dependency bump, which is
+  out of scope for a hardening pass (and the pinned version was chosen deliberately — see the
+  govulncheck note in the build docs). The watchdog + wall-clock backstop stand until
+  out-of-process isolation lands. *Chained suspend/resume* aggregate work is bounded: each
+  suspend consumes a distinct tool-call ordinal, so a chain cannot exceed `MaxToolCalls`
+  resumes, and each resume is independently `MaxSteps`-bounded — total work ≤
+  `MaxSteps × MaxToolCalls` (prefix re-execution is wasteful but bounded).
+
 **Tests:** `TestSandbox_StepBudgetEnforced`, `TestSandbox_WallClockBudgetEnforced`,
 `TestSandbox_MaxToolCallsEnforced`, `TestSandbox_PrintBufferTruncation`,
 `TestSandbox_AllocationBombHitsStepBudgetFirst`, `TestSandbox_WatchdogGoroutineDoesNotLeak`.
@@ -186,18 +196,31 @@ approval bypass (C2) through the back door.
 - **TTL** — continuations expire (default 24 h); resume past expiry fails with
   `code_mode.continuation_expired`; a sweeper deletes expired rows.
 - **Determinism** — replay re-executes the snippet with only deterministic bindings; prior
-  calls return their cached results, the awaited call returns the now-approved result, and
-  `time.now` returns the *original* execution timestamp (not the replay wall clock) so call
-  ordering cannot diverge. The approval is still re-checked through the envelope on resume;
-  the cache substitutes results, never the *decision*.
+  calls return their cached results (served by ordinal, never re-dispatched, so a prior side
+  effect never runs twice), the awaited call re-dispatches live, and `time.now` returns the
+  *original* execution timestamp (frozen, persisted in the continuation) so call ordering
+  cannot diverge. The approval is still re-checked through the envelope on resume; the cache
+  substitutes results, never the *decision*.
+- **Replay-window strict identity** — on resume the awaited call re-dispatches through the
+  identical governed envelope; the approval gate honours the prior grant only when the
+  threaded approval id matches the same tool, the same FULL arguments (compared by a
+  non-lossy SHA-256 hash, *not* the 1024-byte display summary), and the same skill id. Any
+  mismatch fails closed to a fresh pending flow. This is the self-enforced invariant — the
+  gate does not rely on the resume path's determinism to incidentally pin args/skill.
 - **Cross-tenant** — every continuation read/write is `WHERE tenant_id = ?`; a token from
   tenant A is invisible to tenant B.
 
-**Tests:** `TestContinuation_SuspendsOnApprovalRequired`,
-`TestContinuation_ResumesWithCachedResults`, `TestContinuation_RejectsSnapshotDrift`,
-`TestContinuation_DoubleResumeRejected`, `TestContinuation_TTLExpiry`,
-`TestContinuation_CrossTenantTokenInvisible`,
-`TestContinuation_ReplayDeterministic_TimeNowFrozen`.
+**Tests:** runtime — `TestContinuation_SuspendsOnApprovalRequired`,
+`TestContinuation_ResumesWithCachedResults`, `TestContinuation_ChainedSuspends_ExtendCache`,
+`TestContinuation_FrozenClockReplaysDeterministically`,
+`TestContinuation_BudgetStillBoundsReplay`. Handler —
+`TestResume_SnapshotDrift_FailsClosed`, `TestResume_DoubleResume_Mapped`,
+`TestResume_Expired_Mapped`, `TestResume_NotFound_Mapped`, `TestResume_NoStore_FailsClosed`.
+Store — `TestCodeModeStore_ConsumeContinuation_{SingleUse,Expired,CrossTenantInvisible}`.
+Approval replay window — `TestFlow_Replay_{ApprovedGrantSkipsReprompt,ArgsMismatchDoesNotReplay,
+DeniedGrantStaysDenied,ArgsTruncationCollision_NotReplayed,SkillMismatch_NotReplayed}`.
+Integration — `TestE2E_CodeMode_ApprovalSuspension_AndResume`,
+`TestE2E_CodeMode_ResumeUnknownToken_FailsClosed`.
 
 ### C5 — Cross-tenant leakage
 
@@ -318,6 +341,36 @@ Each attacker wrote and ran concrete exploit tests against `runtime.Execute`.
   already has the data); redaction is best-effort defense-in-depth. Hardening: widened the
   sensitive-key set; documented the credential-boundary primary control and the operational
   guidance (don't expose secret-returning tools to Code Mode). See C6.
+
+**Round 2** (post-continuation flow; focus C4, reverify C1/C2/C3/C5; 5 worktree attackers +
+skeptic verification, ~776K subagent tokens). Attackers exercised the runtime replay, the
+approval replay window, the store guards, and the handler.
+
+- **C1 escape / C2 governance / C5 cross-tenant — STILL HELD.** No break. The continuation
+  surface added no new escape: an injected `Clock` stays an inert frozen value, cached results
+  round-trip through `jsonToStarlark` as pure data (no callable/host handle smuggling), the
+  replay's awaited call still traverses `DispatchToolCall`, `WithResumeApprovalID` only threads
+  an id (cannot itself authorize), and a tenant-A continuation token is invisible/unusable by
+  tenant B (`ConsumeContinuation` is `WHERE tenant_id = ?`, fails closed on empty tenant).
+- **C4 continuation — 2 BREAKS, hardened.** Both in the approval replay window
+  (`approval.replayDecision`), which previously compared the **truncated** `ArgsSummary` and
+  ignored the skill id: (1) *args-truncation collision* (HIGH) — two payloads sharing a
+  1024-byte prefix replayed one's approval onto the other (e.g. `fs.delete /tmp/safe` →
+  `/etc/shadow`); (2) *cross-skill replay* (MEDIUM) — an approval granted under skill-A
+  replayed for the same tool+args under skill-B, violating §7 #4. **Both currently masked** by
+  the resume path's determinism (it replays identical code/clock/snapshot, so args+skill are
+  incidentally pinned) — not freely exploitable end-to-end, but the gate itself was unsound.
+  **Hardening:** `replayDecision` now enforces strict three-way identity — same tool, same
+  FULL arguments by non-lossy SHA-256 hash (stored in the approval row's metadata), and same
+  skill id — failing closed on any mismatch or a pre-guard row. Regression locks:
+  `TestFlow_Replay_{ArgsTruncationCollision_NotReplayed,SkillMismatch_NotReplayed}`.
+- **C3 budget — residual reconfirmed, not newly broken.** Step / tool-call / output /
+  recursion bounds all held, **including across replay** (cached calls count toward the
+  tool-call budget before the cache serve). The single-fast-op `MaxAllocBytes` evasion
+  (`len("x" * (16*1024*1024))` allocating in one `BinaryOp` between 20 ms samples) is the same
+  documented residual from Round 1; `thread.SetMaxAllocs` — the in-op fix the report
+  recommends — is not in the pinned `go.starlark.net` (see C3). Out-of-process isolation
+  remains the durable answer.
 
 ## Review checklist (every Code Mode PR)
 

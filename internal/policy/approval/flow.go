@@ -13,6 +13,8 @@ package approval
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -168,6 +170,11 @@ func (f *Flow) Run(ctx context.Context, tenantID, sessionID, userID string, dec 
 		ExpiresAt:   now.Add(timeout),
 		Metadata: map[string]any{
 			"skill_id": call.SkillID,
+			// args_hash is a non-lossy digest of the FULL arguments. The replay
+			// window compares it (not the 1024-byte display summary), so an
+			// approval can never be replayed onto arguments that merely share a
+			// 1024-byte prefix (red-team round 2, C4-1).
+			"args_hash": argsHash(call.Arguments),
 		},
 	}
 	if err := f.store.Insert(ctx, a); err != nil {
@@ -230,10 +237,15 @@ func (f *Flow) replayDecision(ctx context.Context, tenantID string, dec policy.D
 	if err != nil || existing == nil {
 		return Outcome{}, false // unknown id → fail closed to the pending flow
 	}
-	// Strict identity: the prior approval must be for the same tool and the same
-	// arguments. This stops a continuation from replaying one tool's approval
-	// onto a different call (threat-model class C4, continuation tamper).
-	if existing.Tool != dec.Tool || existing.ArgsSummary != summarizeArgs(call.Arguments) {
+	// Strict three-way identity (CLAUDE.md §7 #4): the prior approval must be for
+	// the same tool, the same FULL arguments (compared by non-lossy hash, not the
+	// truncated display summary), and the same skill id. Any mismatch — or a row
+	// from before this guard existed (no args_hash) — fails closed to the pending
+	// flow. This stops a continuation from replaying one approval onto a different
+	// call, different arguments, or a different skill (red-team round 2, C4-1/C4-2).
+	storedHash, _ := existing.Metadata["args_hash"].(string)
+	storedSkill, _ := existing.Metadata["skill_id"].(string)
+	if existing.Tool != dec.Tool || storedHash == "" || storedHash != argsHash(call.Arguments) || storedSkill != call.SkillID {
 		return Outcome{}, false
 	}
 	switch existing.Status {
@@ -311,6 +323,24 @@ func summarizeArgs(args json.RawMessage) string {
 		return string(args[:max]) + "…"
 	}
 	return string(args)
+}
+
+// argsHash returns a SHA-256 hex digest of the arguments, canonicalised
+// (re-marshalled to normalise key order / whitespace) when they are valid JSON
+// so the same logical arguments hash identically regardless of serialisation.
+// Unlike summarizeArgs it is non-lossy: two payloads differ in their hash even
+// if they share a 1024-byte prefix. Used only for the replay-window identity
+// check; the human-readable ArgsSummary is unchanged.
+func argsHash(args json.RawMessage) string {
+	canonical := []byte(args)
+	var v any
+	if err := json.Unmarshal(args, &v); err == nil {
+		if b, mErr := json.Marshal(v); mErr == nil {
+			canonical = b
+		}
+	}
+	sum := sha256.Sum256(canonical)
+	return hex.EncodeToString(sum[:])
 }
 
 // extractApprovePayload reads `{"approve": bool}` from the elicitation

@@ -308,6 +308,59 @@ func TestFlow_Replay_DeniedGrantStaysDenied(t *testing.T) {
 	}
 }
 
+// TestFlow_Replay_ArgsTruncationCollision_NotReplayed is the regression lock for
+// red-team round 2 break C4-1: two payloads sharing a >1024-byte prefix must NOT
+// replay one's approval onto the other. The guard compares a full-args hash, not
+// the truncated display summary.
+func TestFlow_Replay_ArgsTruncationCollision_NotReplayed(t *testing.T) {
+	f, _, _ := newFlow(t, nil, fixedSessions{hasElicit: false})
+	dec := policy.Decision{Tool: "fs.delete", RiskClass: policy.RiskDestructive, ApprovalTimeout: time.Minute}
+
+	pad := make([]byte, 1100)
+	for i := range pad {
+		pad[i] = 'a'
+	}
+	granted := json.RawMessage(`{"pad":"` + string(pad) + `","target":"/tmp/safe-to-delete"}`)
+	attack := json.RawMessage(`{"pad":"` + string(pad) + `","target":"/etc/shadow"}`)
+
+	out, _ := f.Run(context.Background(), "acme", "s1", "u1", dec, approval.CallContext{Tool: "fs.delete", Arguments: granted})
+	id := out.Approval.ID
+	if _, err := f.ResolveManually(context.Background(), "acme", id, approval.StatusApproved, "operator"); err != nil {
+		t.Fatal(err)
+	}
+
+	replay, _ := f.Run(context.Background(), "acme", "s1", "u1", dec,
+		approval.CallContext{Tool: "fs.delete", Arguments: attack, ApprovalID: id})
+	if replay.Approved() {
+		t.Fatal("approval replayed onto args differing only past byte 1024 — C4-1 not fixed")
+	}
+	if !replay.FallbackRequired() {
+		t.Errorf("decision = %q, want fallback_required", replay.Decision)
+	}
+}
+
+// TestFlow_Replay_SkillMismatch_NotReplayed is the regression lock for red-team
+// round 2 break C4-2: an approval granted under one skill must NOT replay for the
+// same tool+args under a different skill (CLAUDE.md §7 #4).
+func TestFlow_Replay_SkillMismatch_NotReplayed(t *testing.T) {
+	f, _, _ := newFlow(t, nil, fixedSessions{hasElicit: false})
+	dec := policy.Decision{Tool: "github.x", RiskClass: policy.RiskExternalSideEffect, ApprovalTimeout: time.Minute}
+	args := json.RawMessage(`{"repo":"owner/r"}`)
+
+	out, _ := f.Run(context.Background(), "acme", "s1", "u1", dec,
+		approval.CallContext{Tool: "github.x", Arguments: args, SkillID: "skill-A"})
+	id := out.Approval.ID
+	if _, err := f.ResolveManually(context.Background(), "acme", id, approval.StatusApproved, "operator"); err != nil {
+		t.Fatal(err)
+	}
+
+	replay, _ := f.Run(context.Background(), "acme", "s1", "u1", dec,
+		approval.CallContext{Tool: "github.x", Arguments: args, SkillID: "skill-B", ApprovalID: id})
+	if replay.Approved() {
+		t.Fatal("approval replayed across skills — C4-2 not fixed")
+	}
+}
+
 func TestFlow_Sweep_ExpiresPendings(t *testing.T) {
 	f, store, _ := newFlow(t, nil, fixedSessions{hasElicit: false})
 	dec := policy.Decision{Tool: "github.x", RiskClass: policy.RiskDestructive, ApprovalTimeout: time.Nanosecond}
