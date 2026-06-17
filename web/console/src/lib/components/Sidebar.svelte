@@ -14,6 +14,7 @@
   import IconGauge from 'lucide-svelte/icons/gauge';
   import IconCoins from 'lucide-svelte/icons/coins';
   import IconHeartPulse from 'lucide-svelte/icons/heart-pulse';
+  import IconMessagesSquare from 'lucide-svelte/icons/messages-square';
   import IconPackage from 'lucide-svelte/icons/package';
   import IconActivity from 'lucide-svelte/icons/activity';
   import IconShieldCheck from 'lucide-svelte/icons/shield-check';
@@ -62,7 +63,8 @@
         { labelKey: 'nav.llm_models', href: '/llm/models', Icon: IconBoxes },
         { labelKey: 'nav.llm_quotas', href: '/llm/quotas', Icon: IconGauge },
         { labelKey: 'nav.llm_cost', href: '/llm/cost', Icon: IconCoins },
-        { labelKey: 'nav.llm_health', href: '/llm/health', Icon: IconHeartPulse }
+        { labelKey: 'nav.llm_health', href: '/llm/health', Icon: IconHeartPulse },
+        { labelKey: 'nav.llm_sessions', href: '/llm/sessions', Icon: IconMessagesSquare }
       ]
     },
     {
