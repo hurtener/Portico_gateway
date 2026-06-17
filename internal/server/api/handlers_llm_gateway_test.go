@@ -46,8 +46,14 @@ func (f *fakeModelStore) GetModel(_ context.Context, tenantID, alias string) (*s
 	return nil, storageifaces.ErrLLMModelNotFound
 }
 func (f *fakeModelStore) CreateModel(context.Context, *storageifaces.LLMModel) error { return nil }
-func (f *fakeModelStore) ListModels(context.Context, string) ([]*storageifaces.LLMModel, error) {
-	return nil, nil
+func (f *fakeModelStore) ListModels(_ context.Context, tenantID string) ([]*storageifaces.LLMModel, error) {
+	out := []*storageifaces.LLMModel{}
+	for _, m := range f.models {
+		if m.TenantID == tenantID {
+			out = append(out, m)
+		}
+	}
+	return out, nil
 }
 func (f *fakeModelStore) UpdateModel(context.Context, *storageifaces.LLMModel) error { return nil }
 func (f *fakeModelStore) DeleteModel(context.Context, string, string) error          { return nil }

@@ -111,6 +111,9 @@ linters:
     - forbidigo
 
 issues:
+  exclude-dirs:
+    - web/console/node_modules
+    - web/console/build
   exclude-rules:
     - path: _test\.go
       linters:
