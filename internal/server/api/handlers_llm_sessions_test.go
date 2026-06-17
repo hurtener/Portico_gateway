@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -58,10 +59,15 @@ func (s *stubLLMSessionStore) ListSessions(ctx context.Context, tenantID string,
 		if sess.TenantID == tenantID {
 			cp := *sess
 			out = append(out, &cp)
-			if limit > 0 && len(out) >= limit {
-				break
-			}
 		}
+	}
+	// Map iteration order is randomized, so sort for a deterministic result
+	// before applying the limit. The production store orders by started_at DESC
+	// (covered by the sqlite store tests); this double orders by chat_id so the
+	// handler tests assert a stable sequence without a timing dependency.
+	sort.Slice(out, func(i, j int) bool { return out[i].ChatID < out[j].ChatID })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }
