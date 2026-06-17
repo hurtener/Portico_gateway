@@ -73,3 +73,6 @@ web/console/.playwright/
 
 # opencode session scratch (autonomous build harness)
 .opencode/
+
+# Code Mode red-team workflow scratch script (orchestrator-run, not source)
+.devcontainer/*.workflow.js
