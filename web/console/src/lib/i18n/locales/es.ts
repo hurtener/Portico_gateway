@@ -38,6 +38,7 @@ export default {
   'nav.section.catalog': 'Catálogo',
   'nav.section.llm': 'Puerta LLM',
   'nav.llm_providers': 'Proveedores',
+  'nav.llm_models': 'Modelos',
   'nav.section.operations': 'Operaciones',
   'nav.section.admin': 'Administración',
   'nav.servers': 'Servidores',

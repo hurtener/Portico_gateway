@@ -54,7 +54,10 @@
     },
     {
       labelKey: 'nav.section.llm',
-      items: [{ labelKey: 'nav.llm_providers', href: '/llm/providers', Icon: IconCloud }]
+      items: [
+        { labelKey: 'nav.llm_providers', href: '/llm/providers', Icon: IconCloud },
+        { labelKey: 'nav.llm_models', href: '/llm/models', Icon: IconBoxes }
+      ]
     },
     {
       labelKey: 'nav.section.operations',
