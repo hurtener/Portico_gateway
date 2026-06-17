@@ -23,6 +23,7 @@
     Textarea,
     toast
   } from '$lib/components';
+  import { PROVIDER_PRESETS } from '$lib/llm/providerPresets';
   import IconPlus from 'lucide-svelte/icons/plus';
   import IconTrash from 'lucide-svelte/icons/trash-2';
 
@@ -48,6 +49,21 @@
   const ALL_DRIVERS = [...NATIVE_DRIVERS, 'custom_openai'];
   // Select takes an options array ({value,label}), not slotted <option>s.
   const driverOptions = ALL_DRIVERS.map((d) => ({ value: d, label: d }));
+
+  // Custom-provider catalog: one-click templates that prefill base_url for
+  // OpenAI-compatible endpoints. Labelled by group so hosted vs local is clear.
+  const templateOptions = PROVIDER_PRESETS.map((p) => ({
+    value: p.id,
+    label: p.group === 'local' ? `${p.label} (local)` : p.label
+  }));
+  let fTemplate = '';
+
+  function applyTemplate() {
+    const preset = PROVIDER_PRESETS.find((p) => p.id === fTemplate);
+    if (!preset) return;
+    fBaseURL = preset.baseUrl;
+    if (!fName.trim()) fName = preset.id;
+  }
 
   let providers: LLMProvider[] = [];
   let loading = true;
@@ -135,6 +151,7 @@
     fDriver = 'openai';
     fBaseURL = '';
     fHeaders = '';
+    fTemplate = '';
     fCredentialRef = '';
     fEnabled = true;
     keys = [];
@@ -368,11 +385,21 @@
             <Input label="Name" bind:value={fName} placeholder="my-openai" disabled={!creating} />
             <Select label="Driver" bind:value={fDriver} options={driverOptions} />
             {#if isCustom(fDriver)}
+              {#if creating}
+                <Select
+                  label="Start from a template (optional)"
+                  bind:value={fTemplate}
+                  options={templateOptions}
+                  placeholder="Choose a provider…"
+                  on:change={applyTemplate}
+                />
+              {/if}
               <Input
                 label="Base URL"
                 bind:value={fBaseURL}
                 type="url"
                 placeholder="https://api.deepseek.com"
+                hint="Portico appends /v1/chat/completions to this base URL."
               />
               <Textarea
                 label="Headers (JSON)"
