@@ -19,6 +19,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
 	llmengineifaces "github.com/hurtener/Portico_gateway/internal/llm/engine/ifaces"
+	"github.com/hurtener/Portico_gateway/internal/llm/quota"
 	mcpnb "github.com/hurtener/Portico_gateway/internal/mcp/northbound/http"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/policy/approval"
@@ -127,6 +128,11 @@ type Deps struct {
 	LLMProviders ifaces.LLMProviderStore
 	LLMModels    ifaces.LLMModelStore
 	LLMEngine    llmengineifaces.Engine
+
+	// Phase 13: per-tenant quota enforcement. Both optional — when either is nil
+	// the handlers skip enforcement (unlimited).
+	LLMQuotas ifaces.LLMQuotaStore
+	LLMQuota  *quota.Enforcer
 }
 
 // approvalFlow is the slice of internal/policy/approval.Flow the API

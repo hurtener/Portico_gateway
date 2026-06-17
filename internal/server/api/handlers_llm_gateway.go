@@ -97,6 +97,11 @@ func chatCompletionsHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
+		// Quota: enforce per-tenant limits before dispatch (both stream + non-stream).
+		if !checkQuota(d, w, r, id.TenantID, req.Model) {
+			return
+		}
+
 		if req.Stream {
 			streamChatCompletion(w, r, d, id.TenantID, req.Model, prov, model, req)
 			return
@@ -114,6 +119,7 @@ func chatCompletionsHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusBadGateway, "upstream_error", err.Error(), nil)
 			return
 		}
+		recordQuotaUsage(d, id.TenantID, resp.Usage.TotalTokens)
 
 		writeJSON(w, http.StatusOK, openAIChatResponse{
 			ID:      orDefault(resp.ID, "chatcmpl-portico"),
