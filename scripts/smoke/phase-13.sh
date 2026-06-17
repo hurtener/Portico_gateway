@@ -98,4 +98,15 @@ if [ "$RESPONSE_STATUS" = "200" ]; then
   assert_json_path '.provider_model' 'gpt-4o' "created model round-trips"
 fi
 
+# 8) Per-tenant LLM quota GET/PUT (one row per tenant; dev identity is admin).
+skip_if_404 200 "GET /api/llm/quota" -- "$(api_url '/api/llm/quota')"
+if [ "$RESPONSE_STATUS" = "200" ]; then
+  assert_json_path '.requests_per_minute | type' 'number' "quota exposes requests_per_minute"
+
+  assert_status 200 "PUT /api/llm/quota (upsert)" \
+    -- -X PUT "$(api_url '/api/llm/quota')" -H "Content-Type: application/json" \
+       --data '{"requests_per_minute":120,"tokens_per_minute":50000,"tokens_per_day":1000000,"cost_usd_per_day":25}'
+  assert_json_path '.requests_per_minute' '120' "quota update round-trips"
+fi
+
 end_phase

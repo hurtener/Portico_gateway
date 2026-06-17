@@ -39,6 +39,7 @@ export default {
   'nav.section.llm': 'Puerta LLM',
   'nav.llm_providers': 'Proveedores',
   'nav.llm_models': 'Modelos',
+  'nav.llm_quotas': 'Cuotas',
   'nav.section.operations': 'Operaciones',
   'nav.section.admin': 'Administración',
   'nav.servers': 'Servidores',

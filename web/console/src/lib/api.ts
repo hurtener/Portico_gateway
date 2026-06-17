@@ -320,6 +320,14 @@ export interface LLMModel {
   updated_at?: string;
 }
 
+export interface LLMQuota {
+  requests_per_minute: number;
+  tokens_per_minute: number;
+  tokens_per_day: number;
+  cost_usd_per_day: number;
+  updated_at?: string;
+}
+
 export const api = {
   health: () => request<{ status: string }>('/healthz'),
   ready: () => request<{ status: string }>('/readyz'),
@@ -663,6 +671,9 @@ export const api = {
     }),
   deleteLLMModel: (alias: string) =>
     request<void>(`/api/llm/models/${encodeURIComponent(alias)}`, { method: 'DELETE' }),
+  getLLMQuota: () => request<LLMQuota>('/api/llm/quota'),
+  updateLLMQuota: (q: LLMQuota) =>
+    request<LLMQuota>('/api/llm/quota', { method: 'PUT', body: JSON.stringify(q) }),
 
   // ── Phase 10: Playground ────────────────────────────────────────────
   startPlaygroundSession: (req: PlaygroundStartSessionRequest = {}) =>
