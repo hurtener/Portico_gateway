@@ -122,6 +122,23 @@ if [ "$RESPONSE_STATUS" = "200" ]; then
   assert_json_path '.prices | type' 'array' "price book returns an array"
 fi
 
+# 9b) LLM chat sessions: list + get transcript (read-only, requires llm:admin scope).
+skip_if_404 200 "GET /api/llm/sessions (list)" -- "$(api_url '/api/llm/sessions')"
+if [ "$RESPONSE_STATUS" = "200" ]; then
+  assert_json_path '. | type' 'array' "sessions list returns an array"
+
+  # If there's at least one session, test the get transcript endpoint
+  FIRST_CHAT_ID=$(echo "$RESPONSE_BODY" | jq -r '.[0].chat_id // empty' 2>/dev/null || true)
+  if [ -n "$FIRST_CHAT_ID" ] && [ "$FIRST_CHAT_ID" != "null" ]; then
+    skip_if_404 200 "GET /api/llm/sessions/$FIRST_CHAT_ID (transcript)" \
+      -- "$(api_url "/api/llm/sessions/$FIRST_CHAT_ID")"
+    if [ "$RESPONSE_STATUS" = "200" ]; then
+      assert_json_path '.chat_id' "$FIRST_CHAT_ID" "transcript returns same chat_id"
+      assert_json_path '.messages | type' 'array' "transcript carries messages array"
+    fi
+  fi
+fi
+
 # 10) Per-provider health (engine view × configured providers).
 skip_if_404 200 "GET /api/llm/health" -- "$(api_url '/api/llm/health')"
 if [ "$RESPONSE_STATUS" = "200" ]; then
