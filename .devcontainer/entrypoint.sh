@@ -39,6 +39,12 @@ else
   echo "[entrypoint] WARN: no gh_token — pushes and PRs will fail"
 fi
 
+# 3b. Point opencode at the repo config (.devcontainer/opencode.json is not at the
+#     repo root, so opencode won't auto-load it from cwd). Sets the NIM provider +
+#     64k output limit + permission:allow for every login shell.
+echo 'export OPENCODE_CONFIG=/workspace/portico/.devcontainer/opencode.json' > /etc/profile.d/opencode-config.sh
+chmod 644 /etc/profile.d/opencode-config.sh
+
 # 4. git identity — match the host's PERSONAL account (never the work one).
 git config --global user.name "hurtener"
 git config --global user.email "benvenuto.santiago@hotmail.com"
