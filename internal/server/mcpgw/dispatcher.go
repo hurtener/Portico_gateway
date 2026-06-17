@@ -11,6 +11,7 @@ import (
 
 	"github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/catalog/namespace"
+	"github.com/hurtener/Portico_gateway/internal/mcp/codemode/catalog"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	"github.com/hurtener/Portico_gateway/internal/mcp/southbound"
 	httpclient "github.com/hurtener/Portico_gateway/internal/mcp/southbound/http"
@@ -36,6 +37,8 @@ type Dispatcher struct {
 
 	snapshots *SnapshotBinder
 
+	codeModeCache *catalog.ProjectionCache
+
 	cacheMu          sync.Mutex
 	toolsCache       map[string]toolsCacheEntry // sessionID -> tools
 	cacheTTL         time.Duration
@@ -56,6 +59,7 @@ func NewDispatcher(m *southboundmgr.Manager, log *slog.Logger) *Dispatcher {
 	return &Dispatcher{
 		manager:          m,
 		log:              log,
+		codeModeCache:    catalog.NewProjectionCache(catalog.DefaultProjectionCacheSize),
 		toolsCache:       make(map[string]toolsCacheEntry),
 		cacheTTL:         60 * time.Second,
 		listToolsTimeout: 5 * time.Second,
@@ -183,6 +187,9 @@ func (d *Dispatcher) handleInitialize(ctx context.Context, sess *Session, req *p
 	}
 	sess.InitParams = params
 	sess.ClientCaps = protocol.RecordClientCaps(params.Capabilities)
+	// Phase 13.5: per-session Code Mode opt-in. nil leaves the session on the
+	// regular namespaced catalog (no drift for existing clients).
+	sess.CodeMode = extractCodeModeOpts(params.Capabilities.Experimental)
 
 	// Aggregate downstream caps. Phase 1 surfaces tools-only; resources +
 	// prompts come in Phase 3 once the dispatcher routes them.
@@ -247,6 +254,14 @@ func (d *Dispatcher) handleInitialize(ctx context.Context, sess *Session, req *p
 }
 
 func (d *Dispatcher) handleToolsList(ctx context.Context, sess *Session, _ *protocol.Request) (json.RawMessage, *protocol.Error) {
+	// Phase 13.5: a Code Mode session sees the meta-tools instead of the
+	// namespaced catalog. The literal catalog is reached on demand via the
+	// meta-tools, so a 200-tool catalog never lands in the model's context.
+	if sess.CodeMode != nil {
+		body, _ := json.Marshal(protocol.ListToolsResult{Tools: codeModeMetaTools()})
+		return body, nil
+	}
+
 	// Phase 6: stable mode — when a snapshot is bound to the session,
 	// answer from it. The snapshot is created lazily on first
 	// catalog-touching call and lives for the session lifetime; downstream
@@ -352,6 +367,14 @@ func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *pr
 		telemetry.String(telemetry.AttrUserID, sess.UserID),
 	)
 	defer span.End()
+
+	// Phase 13.5: Code Mode meta-tools (reserved mcp.* namespace). Only routed
+	// when the session opted in; otherwise they fall through and are rejected as
+	// unqualified tool names, so a non-Code-Mode session cannot reach them.
+	if sess.CodeMode != nil && isCodeModeMetaTool(params.Name) {
+		return d.handleCodeModeMetaTool(ctx, sess, params)
+	}
+
 	serverID, toolName, ok := namespace.SplitTool(params.Name)
 	if !ok {
 		return nil, protocol.NewError(protocol.ErrToolNotEnabled, "tool name must be qualified as <server>.<tool>", map[string]string{"name": params.Name})

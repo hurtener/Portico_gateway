@@ -28,6 +28,13 @@ type Session struct {
 	CreatedAt    time.Time
 	LastSeenAt   atomic.Int64 // unix nanos
 
+	// CodeMode is the per-session Code Mode opt-in, parsed from the initialize
+	// capabilities (capabilities.experimental.portico.code_mode). nil means the
+	// session sees the regular namespaced catalog — no behavioural drift for
+	// existing clients (Phase 13.5 acceptance #1). Set once at initialize;
+	// read-only thereafter.
+	CodeMode *CodeModeOpts
+
 	// notifCh is the outbound notification channel served to the long-lived
 	// SSE GET /mcp stream (and in Phase 5 to the server-initiated request
 	// path). Bounded; oldest dropped on overflow.
