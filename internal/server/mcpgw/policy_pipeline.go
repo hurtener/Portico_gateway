@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hurtener/Portico_gateway/internal/audit"
+	"github.com/hurtener/Portico_gateway/internal/mcp/codemode/runtime"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	"github.com/hurtener/Portico_gateway/internal/policy"
 	"github.com/hurtener/Portico_gateway/internal/policy/approval"
@@ -132,11 +133,17 @@ func (p *PolicyPipeline) Evaluate(ctx context.Context, sess *Session, params pro
 			telemetry.String(telemetry.AttrTool, dec.Tool),
 			telemetry.String(telemetry.AttrPolicyRiskClass, dec.RiskClass),
 		)
+		// On a Code Mode resume, the runtime threads the granted approval id onto
+		// the awaited call's context. Passing it through lets the approval flow's
+		// replay window recognise the prior grant instead of prompting again —
+		// the call still traverses this identical governed envelope (acceptance
+		// #8); only the approval gate short-circuits. Empty for every other call.
 		out, err := p.approvals.Run(approvalCtx, sess.TenantID, sess.ID, sess.UserID, dec, approval.CallContext{
-			Tool:      dec.Tool,
-			Arguments: params.Arguments,
-			SkillID:   dec.SkillID,
-			RiskClass: dec.RiskClass,
+			Tool:       dec.Tool,
+			Arguments:  params.Arguments,
+			SkillID:    dec.SkillID,
+			RiskClass:  dec.RiskClass,
+			ApprovalID: runtime.ResumeApprovalIDFrom(ctx),
 		})
 		if out.Approval != nil {
 			approvalSpan.SetAttributes(telemetry.String(telemetry.AttrApprovalID, out.Approval.ID))

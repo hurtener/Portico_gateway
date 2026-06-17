@@ -123,6 +123,18 @@ capture_status "tools/call mcp.executeToolCode (unsafe load)" \
      -d "$CALL_UNSAFE"
 assert_json_path '.error.data.code' 'code_mode.unsafe_call' "unsafe snippet returns code_mode.unsafe_call"
 
+# 8b) Continuation surface: resuming with an unknown token fails closed with the
+#     typed not-found guard (proves the executeToolCode continuation_token branch
+#     is wired). The full approve→resume happy path is covered by the integration
+#     suite (it needs an approval-gated downstream tool dev mode does not stand up).
+CALL_RESUME=$(jsonrpc tools/call '{"name":"mcp.executeToolCode","arguments":{"continuation_token":"smoke-unknown-token-aaaa"}}' 9)
+capture_status "tools/call mcp.executeToolCode (unknown continuation)" \
+  -- -X POST "$(mcp_url)" \
+     -H 'Content-Type: application/json' \
+     -H "Mcp-Session-Id: $SESSION_ID" \
+     -d "$CALL_RESUME"
+assert_json_path '.error.data.code' 'code_mode.continuation_not_found' "unknown continuation token returns code_mode.continuation_not_found"
+
 # 9) Acceptance #1: a session WITHOUT the opt-in does not see the meta-tools.
 PLAIN_INIT='{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"preflight","version":"0"}}'
 PLAIN_HEADERS=$(curl -s -D - -o /dev/null -X POST "$(mcp_url)" \

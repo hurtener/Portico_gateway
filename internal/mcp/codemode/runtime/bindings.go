@@ -48,8 +48,24 @@ type ToolBinding struct {
 // one run. Driven solely from the single interpreter goroutine, so it needs no
 // locking.
 type callState struct {
-	toolCalls    int
+	toolCalls    int // total calls issued this run (budget dimension)
 	maxToolCalls int
+	callIndex    int // 0-based ordinal of the NEXT tool call
+
+	// Replay (resume) state. cachedResults are served by ordinal without
+	// dispatch (calls 0..len-1); resumeApprovalID is threaded onto the awaited
+	// call's context (the call at index len(cachedResults)).
+	cachedResults    []json.RawMessage
+	resumeApprovalID string
+
+	// liveResults accumulates the results of calls actually dispatched this run
+	// (i.e. not served from cache), in order. On suspend, cachedResults ++
+	// liveResults is the full prefix [0..awaited-1] persisted for the next replay.
+	liveResults []json.RawMessage
+
+	// suspended is set when a tool call returned approval_required; the run
+	// aborts and the runtime builds a *Suspension from it.
+	suspended *suspendInfo
 }
 
 // buildToolModules groups bindings by module and returns a predeclared
@@ -93,11 +109,26 @@ func makeToolBuiltin(ctx context.Context, disp ToolDispatcher, module, fn, names
 		if len(args) > 0 {
 			return nil, &SandboxError{Code: CodeRuntimeError, Detail: qualified, Cause: fmt.Errorf("tool calls take keyword arguments only, got %d positional", len(args))}
 		}
-		// Budget: count the call before issuing it, fail closed past the cap.
+		// Ordinal of THIS call; advance for the next one. Every call (cached or
+		// live) counts toward the ordinal AND the budget, so the budget bounds a
+		// replay just as it bounds a fresh run.
+		idx := state.callIndex
+		state.callIndex++
 		state.toolCalls++
 		if state.toolCalls > state.maxToolCalls {
 			return nil, newBudget(BudgetToolCalls)
 		}
+
+		// Replay: a call whose result we already cached is served verbatim, with
+		// no dispatch — a prior tool's side effect must not run twice (class C4).
+		if idx < len(state.cachedResults) {
+			val, err := jsonToStarlark(state.cachedResults[idx])
+			if err != nil {
+				return nil, &SandboxError{Code: CodeToolError, Detail: namespaced, Cause: err}
+			}
+			return val, nil
+		}
+
 		if disp == nil {
 			return nil, &SandboxError{Code: CodeToolError, Detail: namespaced, Cause: fmt.Errorf("no tool dispatcher configured")}
 		}
@@ -107,15 +138,31 @@ func makeToolBuiltin(ctx context.Context, disp ToolDispatcher, module, fn, names
 			return nil, &SandboxError{Code: CodeRuntimeError, Detail: qualified, Cause: err}
 		}
 
-		resultJSON, perr := disp.DispatchToolCall(ctx, namespaced, argsObj)
+		// The awaited call on resume (the first non-cached call) carries the
+		// granted approval id so the governed gate recognises the prior grant
+		// instead of prompting again. Threaded only when resuming.
+		callCtx := ctx
+		if state.resumeApprovalID != "" && idx == len(state.cachedResults) {
+			callCtx = WithResumeApprovalID(ctx, state.resumeApprovalID)
+		}
+
+		resultJSON, perr := disp.DispatchToolCall(callCtx, namespaced, argsObj)
 		if perr != nil {
 			if perr.Code == protocol.ErrApprovalRequired {
-				// The whole execution must suspend; surface a typed signal the
-				// runtime intercepts to drive the continuation flow.
+				// Capture the suspend point and abort. The runtime turns this into
+				// a *Suspension carrying the cached prefix for the continuation.
+				state.suspended = &suspendInfo{
+					callIndex:  idx,
+					approvalID: extractApprovalID(perr.Data),
+					tool:       namespaced,
+				}
 				return nil, &SandboxError{Code: CodeApprovalRequired, Detail: namespaced, Cause: fmt.Errorf("%s", perr.Message)}
 			}
 			return nil, &SandboxError{Code: CodeToolError, Detail: namespaced, Cause: fmt.Errorf("%s (code %d)", perr.Message, perr.Code)}
 		}
+
+		// Record the live result so the next suspend can persist the full prefix.
+		state.liveResults = append(state.liveResults, resultJSON)
 
 		val, err := jsonToStarlark(resultJSON)
 		if err != nil {

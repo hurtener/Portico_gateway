@@ -9,11 +9,9 @@ import (
 
 	"github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
-	"github.com/hurtener/Portico_gateway/internal/mcp/codemode"
 	"github.com/hurtener/Portico_gateway/internal/mcp/codemode/catalog"
 	"github.com/hurtener/Portico_gateway/internal/mcp/codemode/runtime"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
-	"github.com/hurtener/Portico_gateway/internal/telemetry"
 )
 
 // Code Mode meta-tool names. They live under the reserved `mcp.` namespace and
@@ -111,8 +109,8 @@ func codeModeMetaTools() []protocol.Tool {
 		},
 		{
 			Name:        metaExecuteToolCode,
-			Description: "Run a Starlark snippet that calls tools through their server modules and returns a final `result`. Intermediate values stay in the sandbox; only `result` crosses back.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"code":{"type":"string","description":"Starlark source. Assign the final value to ` + "`result`" + `."}},"required":["code"],"additionalProperties":false}`),
+			Description: "Run a Starlark snippet that calls tools through their server modules and returns a final `result`. Intermediate values stay in the sandbox; only `result` crosses back. If a called tool needs operator approval the run suspends, returning status `approval_required` plus a `continuation_token`; once approved, call again with that token to resume.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"code":{"type":"string","description":"Starlark source. Assign the final value to ` + "`result`" + `."},"continuation_token":{"type":"string","description":"Resume a suspended execution after approval. Supply this INSTEAD of code."}},"additionalProperties":false}`),
 		},
 	}
 }
@@ -173,71 +171,26 @@ func (a sessionToolDispatcher) DispatchToolCall(ctx context.Context, name string
 	return a.d.dispatchToolCall(ctx, a.sess, protocol.CallToolParams{Name: name, Arguments: args}, "")
 }
 
-// metaExecuteToolCode runs an LLM-authored Starlark snippet under the hardened
-// runtime, with every in-sandbox tool call routed through the governed
-// dispatcher. It opens an execution span, emits code_mode.execution_* audit
-// events, and returns the snippet's `result` plus the token-savings estimate.
+// metaExecuteToolCode is the meta-tool entry point. A fresh call carries `code`
+// and runs the snippet; a resume carries `continuation_token` and replays a
+// suspended execution after operator approval (acceptance #9). The heavy lifting
+// — sandbox execution, suspension/continuation, audit, savings — lives in
+// runCodeMode / resumeCodeMode (codemode_continuation.go).
 func (d *Dispatcher) metaExecuteToolCode(ctx context.Context, sess *Session, args json.RawMessage) (json.RawMessage, *protocol.Error) {
 	var in struct {
-		Code string `json:"code"`
+		Code              string `json:"code"`
+		ContinuationToken string `json:"continuation_token"`
 	}
-	if err := json.Unmarshal(args, &in); err != nil || in.Code == "" {
-		return nil, protocol.NewError(protocol.ErrInvalidParams, "executeToolCode requires a non-empty 'code' argument", nil)
+	if err := json.Unmarshal(args, &in); err != nil {
+		return nil, protocol.NewError(protocol.ErrInvalidParams, "executeToolCode requires a JSON object", nil)
 	}
-
-	ctx, span := telemetry.StartSpan(ctx, "code_mode.execution",
-		telemetry.String(telemetry.AttrTenantID, sess.TenantID),
-		telemetry.String(telemetry.AttrSessionID, sess.ID),
-		telemetry.String(telemetry.AttrUserID, sess.UserID),
-	)
-	defer span.End()
-
-	proj, snap, perr := d.projectCodeMode(ctx, sess)
-	if perr != nil {
-		return nil, perr
+	if in.ContinuationToken != "" {
+		return d.resumeCodeMode(ctx, sess, in.ContinuationToken)
 	}
-
-	budget := runtime.DefaultBudget()
-	if sess.CodeMode != nil && sess.CodeMode.MaxToolCalls > 0 {
-		budget.MaxToolCalls = sess.CodeMode.MaxToolCalls
+	if in.Code == "" {
+		return nil, protocol.NewError(protocol.ErrInvalidParams, "executeToolCode requires a non-empty 'code' argument (or a 'continuation_token' to resume)", nil)
 	}
-	cfg := runtime.Config{
-		Budget:     budget,
-		Bindings:   toRuntimeBindings(proj.Tools),
-		Dispatcher: sessionToolDispatcher{d: d, sess: sess},
-		Redactor:   d.codeModeRedactor,
-	}
-
-	d.emitCodeMode(ctx, sess, audit.EventCodeModeExecStarted, map[string]any{"code_bytes": len(in.Code)})
-
-	res, runErr := runtime.Execute(ctx, in.Code, cfg)
-	if runErr != nil {
-		_ = telemetry.RecordErr(span, runErr)
-		d.emitCodeMode(ctx, sess, audit.EventCodeModeExecFailed, codeModeErrPayload(runErr))
-		return nil, codeModeErrorToProtocol(runErr)
-	}
-
-	saved := codemode.EstimateTokensSaved(snap, res.ToolCalls, len(in.Code), len(res.Result))
-	span.SetAttributes(
-		telemetry.Int("code_mode.tool_calls", res.ToolCalls),
-		telemetry.Int("code_mode.tokens_saved_est", saved),
-	)
-	d.emitCodeMode(ctx, sess, audit.EventCodeModeExecCompleted, map[string]any{
-		"tool_calls":       res.ToolCalls,
-		"tokens_saved_est": saved,
-		"duration_ms":      res.Duration.Milliseconds(),
-		"output_truncated": res.OutputTruncated,
-	})
-
-	structured, _ := json.Marshal(map[string]any{
-		"result":           res.Result,
-		"output":           res.Output,
-		"output_truncated": res.OutputTruncated,
-		"tool_calls":       res.ToolCalls,
-		"tokens_saved_est": saved,
-		"duration_ms":      res.Duration.Milliseconds(),
-	})
-	return metaResult(structured, res.Output)
+	return d.runCodeMode(ctx, sess, in.Code, nil, time.Time{}, "")
 }
 
 // toRuntimeBindings converts catalog ToolRefs into runtime ToolBindings.
