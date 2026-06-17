@@ -438,6 +438,9 @@ These will cause the PR to be rejected on sight.
 - ❌ Committing `web/console/build/` or `web/console/node_modules/`. CI builds them.
 - ❌ Adding a non-Svelte frontend dependency (React/Vue/etc.) to `web/console/`.
 - ❌ Hand-rolled `fetch` calls in `.svelte` files — go through `web/console/src/lib/api.ts`.
+- ❌ Registering a tool whose namespaced name begins with `mcp.` from anywhere except `internal/mcp/codemode/` and its dispatcher wiring (`internal/server/mcpgw/codemode.go`). The `mcp.*` namespace is reserved for the Code Mode meta-tools (Phase 13.5).
+- ❌ Exposing host-side I/O (file, network, subprocess, `os`) to Starlark from inside the Code Mode runtime, or constructing a `*starlark.Thread` whose `Load` is non-nil. The sandbox built-in surface is an allowlist; widening it requires a threat-model update (`docs/security/code-mode-threat-model.md`).
+- ❌ Adding a second path for a Code Mode in-sandbox tool call to reach a downstream tool. The only path is the `runtime.ToolDispatcher` seam → `dispatchToolCall`; an in-sandbox call must traverse the identical governed envelope as a direct `tools/call` (Phase 13.5 acceptance #8).
 
 ---
 
