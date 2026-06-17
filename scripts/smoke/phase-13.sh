@@ -33,7 +33,37 @@ if [ "$RESPONSE_STATUS" = "400" ]; then
   fi
 fi
 
-# 3) Provider CRUD round-trip (dev-mode identity is admin).
+# 3) GET /v1/models mounted: returns 200 + OpenAI shape.
+skip_if_404 200 "GET /v1/models (list)" -- "$(api_url '/v1/models')"
+if [ "$RESPONSE_STATUS" = "200" ]; then
+  assert_json_path '.object' 'list' "models list returns object=list"
+  assert_json_path '.data | type' 'array' "models list returns data array"
+fi
+
+# 4) POST /v1/embeddings mounted: empty body -> typed 400 (model+input required).
+skip_if_404 400 "POST /v1/embeddings (empty body)" \
+  -- -X POST "$(api_url '/v1/embeddings')" \
+     -H "Content-Type: application/json" --data '{}'
+if [ "$RESPONSE_STATUS" = "400" ]; then
+  assert_json_path '.error' 'invalid_request' "embeddings rejects empty request with typed error"
+fi
+
+# 5) Unknown model alias for embeddings -> typed 404 model_not_found.
+#    Only asserted when check 4 proved the route is mounted.
+if [ "$RESPONSE_STATUS" = "400" ]; then
+  capture_status "POST /v1/embeddings (unknown model)" \
+    -X POST "$(api_url '/v1/embeddings')" \
+    -H "Content-Type: application/json" \
+    --data '{"model":"no-such-alias","input":["hi"]}'
+  if [ "$RESPONSE_STATUS" = "404" ]; then
+    assert_json_path '.error' 'model_not_found' "unknown model alias for embeddings returns typed 404"
+  else
+    say_fail "expected 404 model_not_found for embeddings, got $RESPONSE_STATUS"
+    PHASE_FAIL=$((PHASE_FAIL + 1))
+  fi
+fi
+
+# 6) Provider CRUD round-trip (dev-mode identity is admin).
 skip_if_404 200 "GET /api/llm/providers (list)" -- "$(api_url '/api/llm/providers')"
 if [ "$RESPONSE_STATUS" = "200" ]; then
   assert_json_path '.providers | type' 'array' "providers list returns an array"
@@ -45,7 +75,7 @@ if [ "$RESPONSE_STATUS" = "200" ]; then
   assert_status 200 "GET /api/llm/providers/smoke-prov" -- "$(api_url '/api/llm/providers/smoke-prov')"
   assert_json_path '.driver' 'openai' "created provider round-trips"
 
-  # 4) Model alias CRUD (references the provider just created).
+  # 7) Model alias CRUD (references the provider just created).
   assert_status 201 "POST /api/llm/models (create)" \
     -- -X POST "$(api_url '/api/llm/models')" -H "Content-Type: application/json" \
        --data '{"alias":"smoke-model","provider_name":"smoke-prov","provider_model":"gpt-4o","enabled":true}'

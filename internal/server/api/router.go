@@ -284,6 +284,12 @@ func NewRouter(d Deps) http.Handler {
 		// when the engine + alias/provider stores are wired (requires llm:invoke).
 		if d.LLMEngine != nil && d.LLMModels != nil && d.LLMProviders != nil {
 			r.Post("/v1/chat/completions", chatCompletionsHandler(d))
+			r.Post("/v1/embeddings", embeddingsHandler(d))
+		}
+		// GET /v1/models only needs LLMModels but keep it in the same block
+		// for simplicity so the route appears when the LLM gateway is configured.
+		if d.LLMEngine != nil && d.LLMModels != nil && d.LLMProviders != nil {
+			r.Get("/v1/models", listModelsHandler(d))
 		}
 
 		// Phase 13: admin REST CRUD for LLM providers (+ weighted keys).
