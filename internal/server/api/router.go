@@ -18,6 +18,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/auth/scope"
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
+	llmengineifaces "github.com/hurtener/Portico_gateway/internal/llm/engine/ifaces"
 	mcpnb "github.com/hurtener/Portico_gateway/internal/mcp/northbound/http"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/policy/approval"
@@ -120,6 +121,12 @@ type Deps struct {
 	BundleStore    sessionbundle.ImportedStore
 	SpanReader     SpanReader
 	AuditSearch    AuditSearcher
+
+	// Phase 13: LLM gateway. All optional — the OpenAI-compatible northbound
+	// (/v1/chat/completions) mounts only when the engine + stores are wired.
+	LLMProviders ifaces.LLMProviderStore
+	LLMModels    ifaces.LLMModelStore
+	LLMEngine    llmengineifaces.Engine
 }
 
 // approvalFlow is the slice of internal/policy/approval.Flow the API
@@ -271,6 +278,12 @@ func NewRouter(d Deps) http.Handler {
 		}
 		if d.SkillValidator != nil {
 			r.Post("/api/skills/validate", validateSkillHandler(d))
+		}
+
+		// Phase 13: OpenAI-compatible LLM gateway (northbound). Mounted only
+		// when the engine + alias/provider stores are wired (requires llm:invoke).
+		if d.LLMEngine != nil && d.LLMModels != nil && d.LLMProviders != nil {
+			r.Post("/v1/chat/completions", chatCompletionsHandler(d))
 		}
 
 		// Phase 4: skills runtime APIs.
