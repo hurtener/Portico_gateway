@@ -46,6 +46,7 @@ export default {
   'nav.llm_models': 'Models',
   'nav.llm_quotas': 'Quotas',
   'nav.llm_cost': 'Cost',
+  'nav.llm_health': 'Health',
   'nav.servers': 'Servers',
   'nav.resources': 'Resources',
   'nav.prompts': 'Prompts',

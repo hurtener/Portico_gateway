@@ -122,4 +122,10 @@ if [ "$RESPONSE_STATUS" = "200" ]; then
   assert_json_path '.prices | type' 'array' "price book returns an array"
 fi
 
+# 10) Per-provider health (engine view × configured providers).
+skip_if_404 200 "GET /api/llm/health" -- "$(api_url '/api/llm/health')"
+if [ "$RESPONSE_STATUS" = "200" ]; then
+  assert_json_path '.providers | type' 'array' "health returns a providers array"
+fi
+
 end_phase
