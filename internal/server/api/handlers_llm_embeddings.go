@@ -117,6 +117,8 @@ func embeddingsHandler(d Deps) http.HandlerFunc {
 			return
 		}
 		recordQuotaUsage(d, id.TenantID, resp.Usage.TotalTokens)
+		// Embeddings have no completion tokens; price on input only.
+		recordCost(d, r, id.TenantID, req.Model, prov.Driver, model.ProviderModel, resp.Usage.PromptTokens, 0)
 
 		// Convert to OpenAI shape
 		data := make([]openAIEmbeddingData, len(resp.Embeddings))

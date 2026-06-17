@@ -109,4 +109,17 @@ if [ "$RESPONSE_STATUS" = "200" ]; then
   assert_json_path '.requests_per_minute' '120' "quota update round-trips"
 fi
 
+# 9) Cost telemetry: daily rollups + global price book (dev identity is admin).
+skip_if_404 200 "GET /api/llm/costs" -- "$(api_url '/api/llm/costs')"
+if [ "$RESPONSE_STATUS" = "200" ]; then
+  assert_json_path '.summary | type' 'object' "costs response carries a summary"
+  assert_json_path '.daily | type' 'array' "costs response carries a daily array"
+
+  assert_status 200 "PUT /api/llm/costs/prices (upsert)" \
+    -- -X PUT "$(api_url '/api/llm/costs/prices')" -H "Content-Type: application/json" \
+       --data '{"provider_driver":"openai","provider_model":"gpt-4o","input_per_1k":2.5,"output_per_1k":10}'
+  skip_if_404 200 "GET /api/llm/costs/prices" -- "$(api_url '/api/llm/costs/prices')"
+  assert_json_path '.prices | type' 'array' "price book returns an array"
+fi
+
 end_phase

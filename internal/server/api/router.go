@@ -133,6 +133,10 @@ type Deps struct {
 	// the handlers skip enforcement (unlimited).
 	LLMQuotas ifaces.LLMQuotaStore
 	LLMQuota  *quota.Enforcer
+
+	// Phase 13: cost telemetry — global price book + per-tenant daily rollups.
+	// Optional; when nil, dispatch records no cost and the cost API is absent.
+	LLMCosts ifaces.LLMCostStore
 }
 
 // approvalFlow is the slice of internal/policy/approval.Flow the API
@@ -322,6 +326,13 @@ func NewRouter(d Deps) http.Handler {
 		if d.LLMQuotas != nil {
 			r.Get("/api/llm/quota", getLLMQuotaHandler(d))
 			r.Put("/api/llm/quota", putLLMQuotaHandler(d))
+		}
+		// Phase 13: cost telemetry. Daily rollups (readable by the tenant) and
+		// the global price book (PUT requires admin scope).
+		if d.LLMCosts != nil {
+			r.Get("/api/llm/costs", listLLMCostsHandler(d))
+			r.Get("/api/llm/costs/prices", listLLMPricesHandler(d))
+			r.Put("/api/llm/costs/prices", putLLMPriceHandler(d))
 		}
 
 		// Phase 4: skills runtime APIs.
