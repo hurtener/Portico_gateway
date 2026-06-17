@@ -289,6 +289,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+// Phase 13 LLM gateway DTOs. Mirror internal/server/api/handlers_llm_providers.go.
+export interface LLMProvider {
+  name: string;
+  driver: string; // a Bifrost native driver OR 'custom_openai'
+  config?: Record<string, unknown>; // base_url / headers for custom_openai
+  credential_ref?: string;
+  enabled: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LLMProviderKey {
+  key_id?: string;
+  credential_ref: string;
+  weight?: number;
+  model_allowlist?: string[];
+  enabled: boolean;
+  created_at?: string;
+}
+
 export const api = {
   health: () => request<{ status: string }>('/healthz'),
   ready: () => request<{ status: string }>('/readyz'),
@@ -595,6 +615,32 @@ export const api = {
       body: JSON.stringify(rules ? { call, rules: { rules } } : { call })
     }),
   policyActivity: () => request<EntityActivityRow[]>('/api/policy/activity'),
+
+  // ── Phase 13: LLM gateway — providers + keys ─────────────────────────
+  listLLMProviders: () => request<{ providers: LLMProvider[] }>('/api/llm/providers'),
+  getLLMProvider: (name: string) =>
+    request<LLMProvider>(`/api/llm/providers/${encodeURIComponent(name)}`),
+  createLLMProvider: (p: LLMProvider) =>
+    request<LLMProvider>('/api/llm/providers', { method: 'POST', body: JSON.stringify(p) }),
+  updateLLMProvider: (name: string, p: LLMProvider) =>
+    request<LLMProvider>(`/api/llm/providers/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify(p)
+    }),
+  deleteLLMProvider: (name: string) =>
+    request<void>(`/api/llm/providers/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  listLLMProviderKeys: (name: string) =>
+    request<{ keys: LLMProviderKey[] }>(`/api/llm/providers/${encodeURIComponent(name)}/keys`),
+  addLLMProviderKey: (name: string, key: LLMProviderKey) =>
+    request<LLMProviderKey>(`/api/llm/providers/${encodeURIComponent(name)}/keys`, {
+      method: 'POST',
+      body: JSON.stringify(key)
+    }),
+  deleteLLMProviderKey: (name: string, keyId: string) =>
+    request<void>(
+      `/api/llm/providers/${encodeURIComponent(name)}/keys/${encodeURIComponent(keyId)}`,
+      { method: 'DELETE' }
+    ),
 
   // ── Phase 10: Playground ────────────────────────────────────────────
   startPlaygroundSession: (req: PlaygroundStartSessionRequest = {}) =>

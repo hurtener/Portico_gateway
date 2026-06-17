@@ -21,6 +21,7 @@
   import IconScale from 'lucide-svelte/icons/scale';
   import IconPlay from 'lucide-svelte/icons/play';
   import IconPlug from 'lucide-svelte/icons/plug';
+  import IconCloud from 'lucide-svelte/icons/cloud';
   import IconChevronLeft from 'lucide-svelte/icons/chevron-left';
   import IconChevronRight from 'lucide-svelte/icons/chevron-right';
 
@@ -50,6 +51,10 @@
         { labelKey: 'nav.apps', href: '/apps', Icon: IconBoxes },
         { labelKey: 'nav.skills', href: '/skills', Icon: IconPackage }
       ]
+    },
+    {
+      labelKey: 'nav.section.llm',
+      items: [{ labelKey: 'nav.llm_providers', href: '/llm/providers', Icon: IconCloud }]
     },
     {
       labelKey: 'nav.section.operations',
