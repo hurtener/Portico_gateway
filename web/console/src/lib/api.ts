@@ -328,6 +328,36 @@ export interface LLMQuota {
   updated_at?: string;
 }
 
+export interface LLMCostDaily {
+  day: string;
+  alias: string;
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+}
+
+export interface LLMCostSummary {
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+}
+
+export interface LLMCostsResponse {
+  from?: string;
+  to?: string;
+  summary: LLMCostSummary;
+  daily: LLMCostDaily[];
+}
+
+export interface LLMUnitPrice {
+  provider_driver: string;
+  provider_model: string;
+  input_per_1k: number;
+  output_per_1k: number;
+}
+
 export const api = {
   health: () => request<{ status: string }>('/healthz'),
   ready: () => request<{ status: string }>('/readyz'),
@@ -674,6 +704,16 @@ export const api = {
   getLLMQuota: () => request<LLMQuota>('/api/llm/quota'),
   updateLLMQuota: (q: LLMQuota) =>
     request<LLMQuota>('/api/llm/quota', { method: 'PUT', body: JSON.stringify(q) }),
+  listLLMCosts: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<LLMCostsResponse>(`/api/llm/costs${suffix}`);
+  },
+  listLLMPrices: () => request<{ prices: LLMUnitPrice[] }>('/api/llm/costs/prices'),
+  updateLLMPrice: (p: LLMUnitPrice) =>
+    request<LLMUnitPrice>('/api/llm/costs/prices', { method: 'PUT', body: JSON.stringify(p) }),
 
   // ── Phase 10: Playground ────────────────────────────────────────────
   startPlaygroundSession: (req: PlaygroundStartSessionRequest = {}) =>

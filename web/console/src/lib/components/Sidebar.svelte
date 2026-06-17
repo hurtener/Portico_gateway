@@ -12,6 +12,7 @@
   import IconFileText from 'lucide-svelte/icons/file-text';
   import IconBoxes from 'lucide-svelte/icons/boxes';
   import IconGauge from 'lucide-svelte/icons/gauge';
+  import IconCoins from 'lucide-svelte/icons/coins';
   import IconPackage from 'lucide-svelte/icons/package';
   import IconActivity from 'lucide-svelte/icons/activity';
   import IconShieldCheck from 'lucide-svelte/icons/shield-check';
@@ -58,7 +59,8 @@
       items: [
         { labelKey: 'nav.llm_providers', href: '/llm/providers', Icon: IconCloud },
         { labelKey: 'nav.llm_models', href: '/llm/models', Icon: IconBoxes },
-        { labelKey: 'nav.llm_quotas', href: '/llm/quotas', Icon: IconGauge }
+        { labelKey: 'nav.llm_quotas', href: '/llm/quotas', Icon: IconGauge },
+        { labelKey: 'nav.llm_cost', href: '/llm/cost', Icon: IconCoins }
       ]
     },
     {
