@@ -224,6 +224,90 @@ func TestFlow_ResolveManually_AllowsLater(t *testing.T) {
 	}
 }
 
+func TestFlow_Replay_ApprovedGrantSkipsReprompt(t *testing.T) {
+	f, store, em := newFlow(t, nil, fixedSessions{hasElicit: false})
+	dec := policy.Decision{Tool: "github.x", RiskClass: policy.RiskExternalSideEffect, ApprovalTimeout: time.Minute}
+	args := json.RawMessage(`{"repo":"owner/r"}`)
+
+	// First call falls back; operator approves out of band.
+	out, _ := f.Run(context.Background(), "acme", "s1", "u1", dec, approval.CallContext{Tool: "github.x", Arguments: args})
+	if !out.FallbackRequired() {
+		t.Fatal("expected fallback_required")
+	}
+	id := out.Approval.ID
+	if _, err := f.ResolveManually(context.Background(), "acme", id, approval.StatusApproved, "operator"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Resume: same tool + same args + the granted id → replay approved, no new row.
+	pendingBefore, _ := store.ListPending(context.Background(), "acme")
+	replay, err := f.Run(context.Background(), "acme", "s1", "u1", dec,
+		approval.CallContext{Tool: "github.x", Arguments: args, ApprovalID: id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !replay.Approved() {
+		t.Fatalf("replay decision = %q, want approved", replay.Decision)
+	}
+	pendingAfter, _ := store.ListPending(context.Background(), "acme")
+	if len(pendingAfter) != len(pendingBefore) {
+		t.Errorf("replay must not open a new pending row: before=%d after=%d", len(pendingBefore), len(pendingAfter))
+	}
+	// A replay audit event was emitted.
+	sawReplay := false
+	for _, e := range em.Events() {
+		if e.Type == audit.EventApprovalReplayed {
+			sawReplay = true
+		}
+	}
+	if !sawReplay {
+		t.Error("expected an approval.replayed audit event")
+	}
+}
+
+func TestFlow_Replay_ArgsMismatchDoesNotReplay(t *testing.T) {
+	f, _, _ := newFlow(t, nil, fixedSessions{hasElicit: false})
+	dec := policy.Decision{Tool: "github.x", RiskClass: policy.RiskExternalSideEffect, ApprovalTimeout: time.Minute}
+
+	out, _ := f.Run(context.Background(), "acme", "s1", "u1", dec,
+		approval.CallContext{Tool: "github.x", Arguments: json.RawMessage(`{"repo":"a"}`)})
+	id := out.Approval.ID
+	if _, err := f.ResolveManually(context.Background(), "acme", id, approval.StatusApproved, "operator"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Same id but DIFFERENT args must NOT replay the grant — it falls back to a
+	// fresh pending flow (class C4: an approval cannot be smuggled onto other args).
+	replay, _ := f.Run(context.Background(), "acme", "s1", "u1", dec,
+		approval.CallContext{Tool: "github.x", Arguments: json.RawMessage(`{"repo":"DIFFERENT"}`), ApprovalID: id})
+	if replay.Approved() {
+		t.Fatal("approval was replayed onto mismatched args — tamper guard failed")
+	}
+	if !replay.FallbackRequired() {
+		t.Errorf("decision = %q, want fallback_required", replay.Decision)
+	}
+}
+
+func TestFlow_Replay_DeniedGrantStaysDenied(t *testing.T) {
+	f, _, _ := newFlow(t, nil, fixedSessions{hasElicit: false})
+	dec := policy.Decision{Tool: "github.x", RiskClass: policy.RiskExternalSideEffect, ApprovalTimeout: time.Minute}
+	args := json.RawMessage(`{"repo":"owner/r"}`)
+
+	out, _ := f.Run(context.Background(), "acme", "s1", "u1", dec, approval.CallContext{Tool: "github.x", Arguments: args})
+	id := out.Approval.ID
+	if _, err := f.ResolveManually(context.Background(), "acme", id, approval.StatusDenied, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	replay, _ := f.Run(context.Background(), "acme", "s1", "u1", dec,
+		approval.CallContext{Tool: "github.x", Arguments: args, ApprovalID: id})
+	if replay.Approved() {
+		t.Fatal("a denied approval must not replay as approved")
+	}
+	if replay.Decision != approval.StatusDenied {
+		t.Errorf("decision = %q, want denied", replay.Decision)
+	}
+}
+
 func TestFlow_Sweep_ExpiresPendings(t *testing.T) {
 	f, store, _ := newFlow(t, nil, fixedSessions{hasElicit: false})
 	dec := policy.Decision{Tool: "github.x", RiskClass: policy.RiskDestructive, ApprovalTimeout: time.Nanosecond}

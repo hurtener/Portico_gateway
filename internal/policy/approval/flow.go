@@ -134,6 +134,23 @@ func (f *Flow) Run(ctx context.Context, tenantID, sessionID, userID string, dec 
 		return Outcome{}, errors.New("approval: flow not configured")
 	}
 	now := time.Now().UTC()
+
+	// Replay window (CLAUDE.md §7.4): when the caller supplies an approval id
+	// for an approval that was already decided for THIS tool with THESE exact
+	// arguments, honour the prior decision instead of opening a fresh pending
+	// row. This is what lets the Code Mode continuation flow resume the awaited
+	// tool call — the runtime threads the granted approval id, the call
+	// re-dispatches through the identical governed envelope, and the gate
+	// recognises the grant rather than prompting again. The match is strict
+	// (same tool + same args summary) and fails closed: a mismatch, a pending
+	// row, or a lookup error falls through to the normal pending flow, never to
+	// an unchecked allow.
+	if call.ApprovalID != "" {
+		if out, ok := f.replayDecision(ctx, tenantID, dec, call); ok {
+			return out, nil
+		}
+	}
+
 	timeout := dec.ApprovalTimeout
 	if timeout <= 0 {
 		timeout = 5 * time.Minute
@@ -201,6 +218,36 @@ func (f *Flow) Run(ctx context.Context, tenantID, sessionID, userID string, dec 
 		a.DecidedAt = &decided
 		f.emit(ctx, audit.EventApprovalExpired, a, map[string]any{"reason": "unknown_action", "action": res.Action})
 		return Outcome{Approval: a, Decision: StatusExpired}, nil
+	}
+}
+
+// replayDecision returns the outcome for an already-decided approval matching
+// the supplied id, or ok=false to fall through to the normal pending flow. It
+// only ever SHORTENS the flow — it can return approved/denied/expired for a row
+// that already reached that state, never create or grant a new approval.
+func (f *Flow) replayDecision(ctx context.Context, tenantID string, dec policy.Decision, call CallContext) (Outcome, bool) {
+	existing, err := f.store.Get(ctx, tenantID, call.ApprovalID)
+	if err != nil || existing == nil {
+		return Outcome{}, false // unknown id → fail closed to the pending flow
+	}
+	// Strict identity: the prior approval must be for the same tool and the same
+	// arguments. This stops a continuation from replaying one tool's approval
+	// onto a different call (threat-model class C4, continuation tamper).
+	if existing.Tool != dec.Tool || existing.ArgsSummary != summarizeArgs(call.Arguments) {
+		return Outcome{}, false
+	}
+	switch existing.Status {
+	case StatusApproved:
+		f.emit(ctx, audit.EventApprovalReplayed, existing, map[string]any{"tool": existing.Tool})
+		return Outcome{Approval: existing, Decision: StatusApproved}, true
+	case StatusDenied:
+		return Outcome{Approval: existing, Decision: StatusDenied}, true
+	case StatusExpired:
+		return Outcome{Approval: existing, Decision: StatusExpired}, true
+	default:
+		// Still pending — the operator hasn't acted; let the normal flow run so
+		// the caller gets a fresh fallback/elicitation rather than a stale row.
+		return Outcome{}, false
 	}
 }
 

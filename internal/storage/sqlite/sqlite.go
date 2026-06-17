@@ -159,6 +159,12 @@ func (d *DB) LLMSessions() ifaces.LLMSessionStore {
 	return &llmSessionStore{db: d.sql}
 }
 
+// CodeMode returns a CodeModeStore backed by this DB (Phase 13.5). It persists
+// executeToolCode execution records and approval-suspension continuations.
+func (d *DB) CodeMode() ifaces.CodeModeStore {
+	return &codeModeStore{db: d.sql}
+}
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {
