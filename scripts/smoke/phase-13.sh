@@ -33,4 +33,24 @@ if [ "$RESPONSE_STATUS" = "400" ]; then
   fi
 fi
 
+# 3) Provider CRUD round-trip (dev-mode identity is admin).
+skip_if_404 200 "GET /api/llm/providers (list)" -- "$(api_url '/api/llm/providers')"
+if [ "$RESPONSE_STATUS" = "200" ]; then
+  assert_json_path '.providers | type' 'array' "providers list returns an array"
+
+  assert_status 201 "POST /api/llm/providers (create)" \
+    -- -X POST "$(api_url '/api/llm/providers')" -H "Content-Type: application/json" \
+       --data '{"name":"smoke-prov","driver":"openai","config":{"base_url":"https://example.invalid"},"enabled":true}'
+
+  assert_status 200 "GET /api/llm/providers/smoke-prov" -- "$(api_url '/api/llm/providers/smoke-prov')"
+  assert_json_path '.driver' 'openai' "created provider round-trips"
+
+  # 4) Model alias CRUD (references the provider just created).
+  assert_status 201 "POST /api/llm/models (create)" \
+    -- -X POST "$(api_url '/api/llm/models')" -H "Content-Type: application/json" \
+       --data '{"alias":"smoke-model","provider_name":"smoke-prov","provider_model":"gpt-4o","enabled":true}'
+  assert_status 200 "GET /api/llm/models/smoke-model" -- "$(api_url '/api/llm/models/smoke-model')"
+  assert_json_path '.provider_model' 'gpt-4o' "created model round-trips"
+fi
+
 end_phase

@@ -286,6 +286,26 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/v1/chat/completions", chatCompletionsHandler(d))
 		}
 
+		// Phase 13: admin REST CRUD for LLM providers (+ weighted keys).
+		if d.LLMProviders != nil {
+			r.Get("/api/llm/providers", listLLMProvidersHandler(d))
+			r.Post("/api/llm/providers", upsertLLMProviderHandler(d, false))
+			r.Get("/api/llm/providers/{name}", getLLMProviderHandler(d))
+			r.Put("/api/llm/providers/{name}", upsertLLMProviderHandler(d, true))
+			r.Delete("/api/llm/providers/{name}", deleteLLMProviderHandler(d))
+			r.Get("/api/llm/providers/{name}/keys", listLLMProviderKeysHandler(d))
+			r.Post("/api/llm/providers/{name}/keys", addLLMProviderKeyHandler(d))
+			r.Delete("/api/llm/providers/{name}/keys/{keyID}", deleteLLMProviderKeyHandler(d))
+		}
+		// Phase 13: admin REST CRUD for LLM model aliases.
+		if d.LLMModels != nil {
+			r.Get("/api/llm/models", listLLMModelsHandler(d))
+			r.Post("/api/llm/models", upsertLLMModelHandler(d, false))
+			r.Get("/api/llm/models/{alias}", getLLMModelHandler(d))
+			r.Put("/api/llm/models/{alias}", upsertLLMModelHandler(d, true))
+			r.Delete("/api/llm/models/{alias}", deleteLLMModelHandler(d))
+		}
+
 		// Phase 4: skills runtime APIs.
 		if d.Skills != nil {
 			r.Get("/v1/skills", listSkillsHandler(d))
