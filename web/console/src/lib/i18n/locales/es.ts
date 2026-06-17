@@ -41,6 +41,7 @@ export default {
   'nav.llm_models': 'Modelos',
   'nav.llm_quotas': 'Cuotas',
   'nav.llm_cost': 'Costo',
+  'nav.llm_health': 'Salud',
   'nav.section.operations': 'Operaciones',
   'nav.section.admin': 'Administración',
   'nav.servers': 'Servidores',

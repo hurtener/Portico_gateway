@@ -358,6 +358,14 @@ export interface LLMUnitPrice {
   output_per_1k: number;
 }
 
+export interface LLMProviderHealth {
+  name: string;
+  driver: string;
+  enabled: boolean;
+  healthy: boolean;
+  detail: string;
+}
+
 export const api = {
   health: () => request<{ status: string }>('/healthz'),
   ready: () => request<{ status: string }>('/readyz'),
@@ -714,6 +722,7 @@ export const api = {
   listLLMPrices: () => request<{ prices: LLMUnitPrice[] }>('/api/llm/costs/prices'),
   updateLLMPrice: (p: LLMUnitPrice) =>
     request<LLMUnitPrice>('/api/llm/costs/prices', { method: 'PUT', body: JSON.stringify(p) }),
+  listLLMHealth: () => request<{ providers: LLMProviderHealth[] }>('/api/llm/health'),
 
   // ── Phase 10: Playground ────────────────────────────────────────────
   startPlaygroundSession: (req: PlaygroundStartSessionRequest = {}) =>

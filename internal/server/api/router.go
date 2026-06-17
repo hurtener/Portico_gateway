@@ -296,6 +296,10 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/v1/chat/completions", chatCompletionsHandler(d))
 			r.Post("/v1/embeddings", embeddingsHandler(d))
 		}
+		// Phase 13: per-provider live health (engine view × configured providers).
+		if d.LLMEngine != nil && d.LLMProviders != nil {
+			r.Get("/api/llm/health", getLLMHealthHandler(d))
+		}
 		// GET /v1/models only needs LLMModels but keep it in the same block
 		// for simplicity so the route appears when the LLM gateway is configured.
 		if d.LLMEngine != nil && d.LLMModels != nil && d.LLMProviders != nil {
