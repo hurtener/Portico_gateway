@@ -39,6 +39,7 @@ import (
 
 	llmengine "github.com/hurtener/Portico_gateway/internal/llm/engine"
 	llmengineifaces "github.com/hurtener/Portico_gateway/internal/llm/engine/ifaces"
+	"github.com/hurtener/Portico_gateway/internal/llm/quota"
 
 	// Side-effect: register the Phase 13 LLM engine driver (Bifrost).
 	_ "github.com/hurtener/Portico_gateway/internal/llm/engine/bifrost"
@@ -509,11 +510,14 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	var (
 		llmProviders ifaces.LLMProviderStore
 		llmModels    ifaces.LLMModelStore
+		llmQuotas    ifaces.LLMQuotaStore
 		llmEngine    llmengineifaces.Engine
 	)
+	llmQuotaEnforcer := quota.NewEnforcer()
 	if sqliteBackend, ok := backend.(*sqlitestorage.DB); ok {
 		llmProviders = sqliteBackend.LLMProviders()
 		llmModels = sqliteBackend.LLMModels()
+		llmQuotas = sqliteBackend.LLMQuotas()
 		eng, err := llmengine.Open("bifrost", nil, llmengineifaces.Deps{
 			Logger:    logger.With("component", "llm.engine"),
 			Providers: llmProviders,
@@ -577,6 +581,8 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		LLMProviders: llmProviders,
 		LLMModels:    llmModels,
 		LLMEngine:    llmEngine,
+		LLMQuotas:    llmQuotas,
+		LLMQuota:     llmQuotaEnforcer,
 	}
 
 	handler := api.NewRouter(deps)

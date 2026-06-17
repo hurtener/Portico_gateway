@@ -101,6 +101,11 @@ func embeddingsHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
+		// Quota: enforce per-tenant limits before dispatch.
+		if !checkQuota(d, w, r, id.TenantID, req.Model) {
+			return
+		}
+
 		resp, err := d.LLMEngine.Embedding(r.Context(), &engineifaces.EmbeddingRequest{
 			TenantID:      id.TenantID,
 			Provider:      prov.Driver,
@@ -111,6 +116,7 @@ func embeddingsHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusBadGateway, "upstream_error", err.Error(), nil)
 			return
 		}
+		recordQuotaUsage(d, id.TenantID, resp.Usage.TotalTokens)
 
 		// Convert to OpenAI shape
 		data := make([]openAIEmbeddingData, len(resp.Embeddings))
