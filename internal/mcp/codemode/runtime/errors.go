@@ -41,6 +41,7 @@ const (
 	BudgetWallClock   = "wall_clock"
 	BudgetToolCalls   = "tool_calls"
 	BudgetOutputBytes = "output_bytes"
+	BudgetMemory      = "memory"
 )
 
 // SandboxError is the typed failure returned by the runtime. Code is one of the

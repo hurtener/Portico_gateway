@@ -135,19 +135,30 @@ tenants (noisy-neighbor) or pin a core indefinitely.
   is dropped and recorded, never grown unbounded.
 - **Tool-call budget** — default 20 calls per execution; the binding increments a counter and
   fails closed past the cap with `code_mode.budget_exceeded` naming `tool_calls`.
-- **Memory** — Starlark has no native heap cap, so memory is bounded by three overlapping
+- **Memory** — Starlark has no native heap cap, so memory is bounded by overlapping
   mechanisms, each covering a case the others miss:
-  - *Iterative* growth (loops, comprehensions building large lists) is caught by the **step
-    budget**: 1 M element-appends cannot fit in a 100 K-step budget.
-  - *Single-operation* growth (`[0] * N`, `"x" * N`) does **not** consume steps proportional
-    to size, so the step budget does not catch it. It is bounded instead by starlark-go's
-    built-in `maxAlloc = 1<<30`-element cap on repeat: an over-cap repeat fails with
-    "repeat count too large". This cap is *loose* (a ~1 GiB transient is permitted), which is
-    a known noisy-neighbor limitation tracked for the red-team hardening round; the
-    wall-clock watchdog is the backstop until a tighter heap watchdog lands.
-  - The **wall-clock watchdog** is the final backstop for anything the first two miss.
-  This layering is a deliberate, documented design choice; the `maxAlloc` looseness is called
-  out honestly rather than papered over.
+  - A **heap watchdog** (`MaxAllocBytes`, default 256 MiB) samples the process heap every
+    20 ms and cancels the execution when its allocation delta exceeds the budget. This is the
+    primary defense against *gradual / looping* allocation bombs — notably the doubling loop
+    `x = x + x` (a confirmed red-team finding) that allocates exponentially while consuming
+    only a handful of steps, which the step budget entirely misses.
+  - *Iterative element-appending* growth is additionally caught by the **step budget**.
+  - Starlark's built-in `maxAlloc = 1<<30`-element cap bounds a single `repeat` op
+    (`[0] * N`).
+  - The **wall-clock watchdog** is the final backstop.
+
+  **Honest residual (requires out-of-process isolation to close).** Two limits remain by
+  construction of an *in-process* interpreter that exposes no allocation hook:
+  1. A *single* catastrophic operation (`[0] * 900_000_000`) allocates before the 20 ms
+     sample can fire; the watchdog cancels immediately *after*, preventing compounding, but
+     the transient spike (bounded only by Starlark's `maxAlloc`) already happened.
+  2. The heap sample is *process-global* (Go exposes no per-goroutine allocation counter), so
+     under concurrent executions a sibling's allocation inflates the reading. This **fails
+     safe** (an over-budget reading cancels) and is strictly better than letting one
+     execution OOM-kill the whole gateway, but it can cancel an innocent concurrent
+     execution. Conservative defaults keep false trips rare. True per-execution memory
+     isolation is a documented post-V1 hardening (run the sandbox out-of-process).
+  These residuals are called out honestly rather than papered over.
 
 **Tests:** `TestSandbox_StepBudgetEnforced`, `TestSandbox_WallClockBudgetEnforced`,
 `TestSandbox_MaxToolCallsEnforced`, `TestSandbox_PrintBufferTruncation`,
@@ -228,15 +239,29 @@ secrets out.
   every such call is still gated (C2) and counted (C3). Injected text that says "call
   delete_repo" is just a string; if the model's own code then calls it, policy/approval still
   apply.
-- **Secret redaction on the way out.** Both `print()` output and the final `result` pass
-  through the same `audit.Redactor` used for audit payloads before they leave the sandbox
-  (user response) or land in the execution row. A known-shape secret injected via a tool
-  result must appear `[REDACTED:…]` in both the user-visible response and the audit row.
-- The execution row stores a **redacted summary**, never the full body (CLAUDE.md §7.8).
+- **The primary control is the credential boundary, NOT redaction.** Secrets do not enter the
+  sandbox unless a *tool* returns them: vault credentials are injected at the dispatcher into
+  the downstream call's headers/env and are never exposed to Starlark (red-team C1/C2
+  confirmed this boundary holds — there is no escape and no way to reach a credential). The
+  sandbox can only see what a tool *chose* to return to it.
+- **Secret redaction is best-effort defense in depth, not a guarantee.** `print()` output and
+  the final `result` pass through the same `audit.Redactor` used for audit payloads, which
+  scrubs known-shape secrets (Bearer/Basic/`ghp_`/AWS/Slack/JWT/PEM) and values under
+  sensitive map keys. The red-team confirmed (correctly) that this **cannot** stop a
+  *deliberate* exfiltration by the snippet author: a malicious/injected model can rename a
+  secret to a benign key, or transform it (reverse, fragment, char-explode, re-encode) to
+  defeat shape matching, then have *itself* reassemble it. This is not a privilege
+  escalation — the model already had whatever the tool returned to its own code; redaction's
+  job is to stop *accidental* shape-matched leakage into logs and responses, which it does.
+  The key set was widened post-red-team (`refresh_token`, `private_key`, `credential`, …) but
+  exhaustive key/shape coverage is not achievable and is not claimed.
+- **Operational guidance.** Because output is fundamentally model-visible (the model wrote the
+  code), operators should (a) **not expose secret-returning tools to Code Mode sessions** —
+  gate them by policy — and (b) treat Code Mode `result`/`print` output as model-visible. The
+  execution row stores a redacted summary, never the full body (CLAUDE.md §7.8).
 
-**Tests:** `TestSandbox_PrintOutputRedacted`, `TestHandler_ResultRedactedBeforeReturn`,
-`TestSandbox_ToolResultIsInertData`,
-`TestE2E_CodeMode_InjectedSecretRedacted_ResponseAndAudit`.
+**Tests:** `TestSandbox_PrintOutputRedacted`, `TestSandbox_ResultRedacted`,
+`TestExecuteToolCode_ResultRedacted`, `TestSandbox_ToolResultIsInertData`.
 
 ---
 
@@ -260,6 +285,39 @@ secrets out.
   program (i.e. a compromised/injected model), not the human operator.
 - Not a covert-channel-free runtime — `time.now` is coarsened to blunt the most obvious timing
   side channel, but Code Mode does not claim constant-time execution.
+
+## Red-team rounds
+
+**Round 1** (post-`executeToolCode`, 5 worktree-isolated attackers + skeptic verification).
+Each attacker wrote and ran concrete exploit tests against `runtime.Execute`.
+
+- **C1 escape — HELD.** No break across 8 vectors. The static Universal-scope walk is
+  exhaustive across nested defs/lambdas/comprehensions/conditional-exprs/default-args; `load`
+  is caught at any depth; host modules are frozen and trimmed to allowlisted members; dunders
+  and host constructors are unbound. Only finding: `type()` on a tool binding returns the
+  inert string `"builtin_function_or_method"` — a fingerprint with no reachable capability.
+- **C2 governance — HELD.** No break across 9 vectors. Structural: the only tool path is the
+  `makeToolBuiltin` closure over an immutable namespaced target; a snippet cannot choose the
+  wire name, name a tool outside its bindings, reach a sibling on a frozen module, smuggle a
+  host handle through args, or evade the tool-call counter. Identity comes from the session.
+- **C5 cross-tenant — HELD.** No break across 9 vectors. The runtime is tenant-blind by
+  design; the projector is pure over the session's own snapshot; the seam re-checks tenant via
+  `manager.Get(ctx, sess.TenantID, serverID)`. Defense-in-depth recommendation adopted: the
+  `ProjectionCache` key now includes `tenant_id` (was relying on snapshot-ID global
+  uniqueness).
+- **C3 budget — BROKE, hardened.** Confirmed: the doubling loop `x = x + x` allocates
+  exponentially (~8.4 M elements in 245 steps) while the step budget misses it; single-op
+  `[0]*N` and a native `strings.Repeat` allocate large memory the cooperative wall-clock
+  watchdog cannot preempt. **Hardening:** added the `MaxAllocBytes` heap watchdog (default
+  256 MiB, 20 ms sampling) which catches the gradual/doubling case and kills-immediately-after
+  to prevent compounding. The single-op catastrophic allocation remains a documented residual
+  requiring out-of-process isolation (see the Memory bullet in C3); operators should run
+  Portico under a memory cgroup so a worst-case OOM restarts the process rather than the host.
+- **C6 redaction — BROKE (by construction), documented + widened.** Confirmed that
+  transform/rename defeats shape+key redaction. This is not a privilege escalation (the model
+  already has the data); redaction is best-effort defense-in-depth. Hardening: widened the
+  sensitive-key set; documented the credential-boundary primary control and the operational
+  guidance (don't expose secret-returning tools to Code Mode). See C6.
 
 ## Review checklist (every Code Mode PR)
 

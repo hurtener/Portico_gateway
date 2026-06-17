@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	goruntime "runtime"
 	"sort"
 	"time"
 
@@ -231,20 +232,40 @@ func runProgram(ctx context.Context, prog *starlark.Program, predeclared starlar
 		th.Cancel(BudgetSteps)
 	}
 
-	// Wall-clock watchdog: cancels the interpreter at the deadline. The goroutine
-	// is always joined via done (no leak — threat model C3 / goroutine hygiene).
+	// Watchdog: cancels the interpreter on the wall-clock deadline OR when heap
+	// growth exceeds the memory budget. The goroutine is always joined via done
+	// (no leak — threat model C3 / goroutine hygiene). The memory sample catches
+	// gradual/looping allocation bombs the step budget misses (e.g. x = x + x);
+	// see classifyExecError and the threat model for the residual on a single
+	// catastrophic op.
 	runCtx, cancel := context.WithTimeout(ctx, budget.WallClock)
 	defer cancel()
-	var wallExceeded bool
+	var wallExceeded, memExceeded bool
+	baseHeap := heapAlloc()
+	// budget.MaxAllocBytes is positive (normalized); compare in the uint64 domain
+	// the heap counters use to avoid a signed conversion of the delta.
+	maxAllocBytes := uint64(budget.MaxAllocBytes) //nolint:gosec // normalized() guarantees MaxAllocBytes > 0
 	done := make(chan struct{})
 	go func() {
-		select {
-		case <-runCtx.Done():
-			if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
-				wallExceeded = true
+		ticker := time.NewTicker(memSampleInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-runCtx.Done():
+				if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+					wallExceeded = true
+				}
+				thread.Cancel("context_cancelled")
+				return
+			case <-done:
+				return
+			case <-ticker.C:
+				if grown := heapAlloc(); grown > baseHeap && grown-baseHeap > maxAllocBytes {
+					memExceeded = true
+					thread.Cancel("memory_exceeded")
+					return
+				}
 			}
-			thread.Cancel("context_cancelled")
-		case <-done:
 		}
 	}()
 
@@ -254,7 +275,7 @@ func runProgram(ctx context.Context, prog *starlark.Program, predeclared starlar
 	duration := time.Since(started)
 
 	if execErr != nil {
-		return nil, classifyExecError(execErr, stepsExceeded, wallExceeded, runCtx)
+		return nil, classifyExecError(execErr, stepsExceeded, wallExceeded, memExceeded, runCtx)
 	}
 
 	resultJSON, err := extractResult(globals, cfg.Redactor)
@@ -274,10 +295,13 @@ func runProgram(ctx context.Context, prog *starlark.Program, predeclared starlar
 // classifyExecError maps a failed Init into a typed SandboxError. Order matters:
 // a typed binding error (tool error, approval-required, tool-call budget) is
 // recovered first; then the budget flags; then a generic runtime error.
-func classifyExecError(execErr error, stepsExceeded, wallExceeded bool, runCtx context.Context) error {
+func classifyExecError(execErr error, stepsExceeded, wallExceeded, memExceeded bool, runCtx context.Context) error {
 	var se *SandboxError
 	if errors.As(execErr, &se) {
 		return se
+	}
+	if memExceeded {
+		return newBudget(BudgetMemory)
 	}
 	if stepsExceeded {
 		return newBudget(BudgetSteps)
@@ -289,6 +313,24 @@ func classifyExecError(execErr error, stepsExceeded, wallExceeded bool, runCtx c
 		return &SandboxError{Code: CodeRuntimeError, Cause: err}
 	}
 	return &SandboxError{Code: CodeRuntimeError, Cause: execErr}
+}
+
+// memSampleInterval is how often the watchdog samples the process heap. Short
+// enough to catch a doubling loop before it compounds, long enough that
+// ReadMemStats overhead is negligible for normal executions.
+const memSampleInterval = 20 * time.Millisecond
+
+// heapAlloc returns the current process heap-allocated bytes. It is a
+// process-global figure (Go exposes no per-goroutine allocation counter), so the
+// memory watchdog is a backstop, not precise accounting: under concurrent
+// executions a sibling's allocation inflates the sample. This fails safe (an
+// over-budget reading cancels) and is strictly better than letting one execution
+// OOM-kill the whole gateway. True per-execution isolation needs an
+// out-of-process sandbox (documented residual, threat model C3).
+func heapAlloc() uint64 {
+	var ms goruntime.MemStats
+	goruntime.ReadMemStats(&ms)
+	return ms.HeapAlloc
 }
 
 // extractResult reads the `result` global, redacts it, and JSON-encodes it. A

@@ -19,10 +19,13 @@ func TestBudget_NormalizeReplacesNonPositiveWithDefaults(t *testing.T) {
 	if got.MaxToolCalls != DefaultMaxToolCalls {
 		t.Errorf("MaxToolCalls = %d, want default %d", got.MaxToolCalls, DefaultMaxToolCalls)
 	}
+	if got.MaxAllocBytes != DefaultMaxAllocBytes {
+		t.Errorf("MaxAllocBytes = %d, want default %d", got.MaxAllocBytes, DefaultMaxAllocBytes)
+	}
 }
 
 func TestBudget_NormalizeKeepsExplicitValues(t *testing.T) {
-	in := Budget{MaxSteps: 7, WallClock: time.Second, MaxOutputBytes: 11, MaxToolCalls: 13}
+	in := Budget{MaxSteps: 7, WallClock: time.Second, MaxOutputBytes: 11, MaxToolCalls: 13, MaxAllocBytes: 4096}
 	got := in.normalized()
 	if got != in {
 		t.Errorf("normalized mutated explicit budget: %+v", got)

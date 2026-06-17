@@ -7,10 +7,12 @@ import "time"
 // operator raises them deliberately, per route, via policy/config. The zero
 // Budget is not usable — callers take DefaultBudget() and override fields.
 //
-// Memory is intentionally absent as a direct dimension: Starlark exposes no
-// heap cap, so memory is bounded indirectly but reliably by MaxSteps (an
-// allocation bomb exhausts the step budget long before it can allocate
-// dangerously) with WallClock as the backstop. See the threat model, class C3.
+// Memory is bounded by MaxAllocBytes via a heap-sampling watchdog (the step
+// budget does NOT bound a single allocation op or a doubling loop — a red-team
+// finding). See the threat model, class C3, for the watchdog's guarantees and
+// its honest residual (a single Starlark op can transiently allocate up to the
+// interpreter's built-in maxAlloc before the next sample fires; true
+// per-execution memory isolation requires running the sandbox out-of-process).
 type Budget struct {
 	// MaxSteps caps Starlark abstract computation steps (thread step counter).
 	MaxSteps uint64
@@ -21,6 +23,11 @@ type Budget struct {
 	MaxOutputBytes int
 	// MaxToolCalls caps tool calls issued from inside one execution.
 	MaxToolCalls int
+	// MaxAllocBytes caps the heap growth attributable to the execution. A
+	// watchdog samples the process heap and cancels when growth exceeds this;
+	// it catches gradual/looping allocation bombs (e.g. x = x + x) that the step
+	// budget misses.
+	MaxAllocBytes int64
 }
 
 // Default budget constants. These are the conservative out-of-the-box values
@@ -29,8 +36,9 @@ type Budget struct {
 const (
 	DefaultMaxSteps       uint64        = 100_000
 	DefaultWallClock      time.Duration = 30 * time.Second
-	DefaultMaxOutputBytes int           = 1 << 20 // 1 MiB
-	DefaultMaxToolCalls   int           = 20
+	DefaultMaxOutputBytes int           = 1 << 20   // 1 MiB
+	DefaultMaxToolCalls   int           = 20        //
+	DefaultMaxAllocBytes  int64         = 256 << 20 // 256 MiB
 )
 
 // DefaultBudget returns the conservative default budget.
@@ -40,6 +48,7 @@ func DefaultBudget() Budget {
 		WallClock:      DefaultWallClock,
 		MaxOutputBytes: DefaultMaxOutputBytes,
 		MaxToolCalls:   DefaultMaxToolCalls,
+		MaxAllocBytes:  DefaultMaxAllocBytes,
 	}
 }
 
@@ -59,6 +68,9 @@ func (b Budget) normalized() Budget {
 	}
 	if out.MaxToolCalls <= 0 {
 		out.MaxToolCalls = DefaultMaxToolCalls
+	}
+	if out.MaxAllocBytes <= 0 {
+		out.MaxAllocBytes = DefaultMaxAllocBytes
 	}
 	return out
 }

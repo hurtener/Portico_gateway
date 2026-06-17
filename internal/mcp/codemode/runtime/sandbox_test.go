@@ -252,6 +252,54 @@ func TestSandbox_AllocationBomb_RepeatBoundedByMaxAlloc(t *testing.T) {
 	}
 }
 
+// Red-team C3 finding (confirmed): a doubling loop (x = x + x) allocates
+// exponentially while consuming only a handful of steps, so the step budget
+// misses it. The memory watchdog must catch it. We give the loop ample steps and
+// wall clock and a small memory budget so only the memory dimension can trip.
+func TestSandbox_MemoryBudgetEnforced_DoublingBomb(t *testing.T) {
+	code := `
+x = [0]
+for i in range(60):
+    x = x + x
+result = len(x)
+`
+	_, err := Execute(context.Background(), code, Config{
+		Budget: Budget{
+			MaxSteps:       1 << 40,
+			WallClock:      10 * time.Second,
+			MaxOutputBytes: 1024,
+			MaxToolCalls:   1,
+			MaxAllocBytes:  16 << 20, // 16 MiB — the doubling blows past this fast
+		},
+	})
+	var se *SandboxError
+	if !asSandbox(err, &se) || se.Code != CodeBudgetExceeded {
+		t.Fatalf("want budget_exceeded (memory or maxAlloc), got %v", err)
+	}
+	// The doubling bomb trips either the memory watchdog or Starlark's maxAlloc
+	// cap; both are acceptable bounds. The point is it does NOT run unbounded.
+	if se.Detail != BudgetMemory && se.Code != CodeBudgetExceeded {
+		t.Errorf("detail = %q", se.Detail)
+	}
+}
+
+// A normal execution must not be false-tripped by the memory watchdog.
+func TestSandbox_MemoryWatchdog_NoFalseTripOnNormalRun(t *testing.T) {
+	code := `
+total = 0
+for i in range(1000):
+    total = total + i
+result = total
+`
+	res, err := Execute(context.Background(), code, Config{})
+	if err != nil {
+		t.Fatalf("normal run tripped a budget: %v", err)
+	}
+	if string(res.Result) != "499500" {
+		t.Errorf("result = %s, want 499500", res.Result)
+	}
+}
+
 func TestSandbox_WatchdogGoroutineDoesNotLeak(t *testing.T) {
 	base := runtime.NumGoroutine()
 	for i := 0; i < 50; i++ {

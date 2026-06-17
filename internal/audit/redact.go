@@ -61,12 +61,19 @@ var defaultSensitiveKeys = map[string]struct{}{
 	"token":         {},
 	"secret":        {},
 	"password":      {},
+	"passwd":        {},
 	"api_key":       {},
 	"apikey":        {},
 	"authorization": {},
 	"auth":          {},
 	"access_token":  {},
+	"refresh_token": {},
+	"session_token": {},
 	"client_secret": {},
+	"secret_key":    {},
+	"private_key":   {},
+	"credential":    {},
+	"credentials":   {},
 }
 
 // Default pattern set. Compiled once at init; the Redactor itself is
