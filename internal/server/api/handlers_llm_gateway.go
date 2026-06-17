@@ -77,12 +77,7 @@ func chatCompletionsHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusBadRequest, "invalid_request", "model and messages are required", nil)
 			return
 		}
-		if req.Stream {
-			writeJSONError(w, http.StatusBadRequest, "stream_unsupported", "streaming is not supported on this endpoint yet", nil)
-			return
-		}
-
-		// Resolve the alias to a provider + upstream model (tenant-scoped).
+		// Resolve the alias to a provider + upstream model (tenant-scoped) for BOTH stream and non-stream paths.
 		model, err := d.LLMModels.GetModel(r.Context(), id.TenantID, req.Model)
 		if err != nil {
 			if errors.Is(err, storageifaces.ErrLLMModelNotFound) {
@@ -99,6 +94,11 @@ func chatCompletionsHandler(d Deps) http.HandlerFunc {
 		prov, err := d.LLMProviders.GetProvider(r.Context(), id.TenantID, model.ProviderName)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, "provider_missing", "provider not found for alias", nil)
+			return
+		}
+
+		if req.Stream {
+			streamChatCompletion(w, r, d, id.TenantID, req.Model, prov, model, req)
 			return
 		}
 

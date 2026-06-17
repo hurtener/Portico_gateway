@@ -63,6 +63,21 @@ if [ "$RESPONSE_STATUS" = "400" ]; then
   fi
 fi
 
+# 5b) Streaming chat: a stream:true request now reaches alias resolution (no more
+#     stream_unsupported); with an unknown model it returns the typed 404.
+capture_status "POST /v1/chat/completions stream:true (unknown model)" \
+  -X POST "$(api_url '/v1/chat/completions')" \
+  -H "Content-Type: application/json" \
+  --data '{"model":"no-such-alias","stream":true,"messages":[{"role":"user","content":"hi"}]}'
+if [ "$RESPONSE_STATUS" = "404" ]; then
+  assert_json_path '.error' 'model_not_found' "stream request reaches alias resolution (not stream_unsupported)"
+elif [ "$RESPONSE_STATUS" = "501" ] || [ "$RESPONSE_STATUS" = "405" ]; then
+  say_skip "streaming chat not mounted (HTTP $RESPONSE_STATUS)"
+else
+  say_fail "stream request: expected 404 model_not_found, got $RESPONSE_STATUS"
+  PHASE_FAIL=$((PHASE_FAIL + 1))
+fi
+
 # 6) Provider CRUD round-trip (dev-mode identity is admin).
 skip_if_404 200 "GET /api/llm/providers (list)" -- "$(api_url '/api/llm/providers')"
 if [ "$RESPONSE_STATUS" = "200" ]; then

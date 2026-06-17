@@ -164,16 +164,6 @@ func TestChatCompletions_NotConfigured(t *testing.T) {
 	}
 }
 
-func TestChatCompletions_StreamRejected(t *testing.T) {
-	d, _ := llmDeps()
-	body := openAIChatRequest{Model: "gpt-4", Stream: true, Messages: []openAIMessage{{Role: "user", Content: "hi"}}}
-	r := newReq("POST", "/v1/chat/completions", body, ScopeLLMInvoke)
-	w := runHandler(chatCompletionsHandler(d), r)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for stream, got %d", w.Code)
-	}
-}
-
 func llmTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }

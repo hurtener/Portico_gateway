@@ -6,11 +6,16 @@ package ifaces
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/hurtener/Portico_gateway/internal/secrets"
 	storageifaces "github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
+
+// ErrUpstreamUnavailable is returned by an Engine when the upstream inference
+// provider is unreachable, so callers can distinguish it from a request error.
+var ErrUpstreamUnavailable = errors.New("upstream inference engine unavailable")
 
 // ChatMessage is one message in a chat completion exchange.
 type ChatMessage struct {
