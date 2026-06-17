@@ -37,6 +37,9 @@ import (
 	_ "github.com/hurtener/Portico_gateway/internal/skills/source/git"
 	_ "github.com/hurtener/Portico_gateway/internal/skills/source/http"
 
+	llmengine "github.com/hurtener/Portico_gateway/internal/llm/engine"
+	llmengineifaces "github.com/hurtener/Portico_gateway/internal/llm/engine/ifaces"
+
 	// Side-effect: register the Phase 13 LLM engine driver (Bifrost).
 	_ "github.com/hurtener/Portico_gateway/internal/llm/engine/bifrost"
 	"github.com/hurtener/Portico_gateway/internal/storage"
@@ -499,6 +502,30 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		gatewayInfo.JWTScopeClaim = scopeClaim
 	}
 
+	// Phase 13: LLM gateway. The provider/model stores are driver-specific
+	// (on the SQLite backend), and the engine resolves keys from the vault on
+	// every dispatch. All optional — if the engine fails to init the northbound
+	// /v1/chat/completions surface simply stays unmounted.
+	var (
+		llmProviders ifaces.LLMProviderStore
+		llmModels    ifaces.LLMModelStore
+		llmEngine    llmengineifaces.Engine
+	)
+	if sqliteBackend, ok := backend.(*sqlitestorage.DB); ok {
+		llmProviders = sqliteBackend.LLMProviders()
+		llmModels = sqliteBackend.LLMModels()
+		eng, err := llmengine.Open("bifrost", nil, llmengineifaces.Deps{
+			Logger:    logger.With("component", "llm.engine"),
+			Providers: llmProviders,
+			Vault:     vault,
+		})
+		if err != nil {
+			logger.Warn("llm engine init failed; /v1/chat/completions disabled", "error", err)
+		} else {
+			llmEngine = eng
+		}
+	}
+
 	deps := api.Deps{
 		Logger:         logger,
 		Validator:      validator,
@@ -545,6 +572,11 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		BundleStore:    bundleStore,
 		SpanReader:     spanStore,
 		AuditSearch:    auditStore,
+
+		// Phase 13: LLM gateway.
+		LLMProviders: llmProviders,
+		LLMModels:    llmModels,
+		LLMEngine:    llmEngine,
 	}
 
 	handler := api.NewRouter(deps)
