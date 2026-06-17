@@ -317,6 +317,12 @@ func NewRouter(d Deps) http.Handler {
 			r.Put("/api/llm/models/{alias}", upsertLLMModelHandler(d, true))
 			r.Delete("/api/llm/models/{alias}", deleteLLMModelHandler(d))
 		}
+		// Phase 13: per-tenant LLM quota (one row per tenant). GET is
+		// readable by the tenant; PUT requires admin scope.
+		if d.LLMQuotas != nil {
+			r.Get("/api/llm/quota", getLLMQuotaHandler(d))
+			r.Put("/api/llm/quota", putLLMQuotaHandler(d))
+		}
 
 		// Phase 4: skills runtime APIs.
 		if d.Skills != nil {

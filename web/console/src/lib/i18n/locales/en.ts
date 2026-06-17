@@ -44,6 +44,7 @@ export default {
   'nav.section.admin': 'Admin',
   'nav.llm_providers': 'Providers',
   'nav.llm_models': 'Models',
+  'nav.llm_quotas': 'Quotas',
   'nav.servers': 'Servers',
   'nav.resources': 'Resources',
   'nav.prompts': 'Prompts',
