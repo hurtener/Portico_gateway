@@ -375,6 +375,25 @@ export interface LLMSessionSummary {
   summary?: string;
 }
 
+export interface LLMSessionMessage {
+  seq: number;
+  role: string;
+  content: string;
+  tool_call_id?: string;
+  span_id?: string;
+  timestamp: string;
+}
+
+export interface LLMSessionTranscript {
+  chat_id: string;
+  alias: string;
+  user_id?: string;
+  started_at: string;
+  ended_at?: string;
+  summary?: string;
+  messages: LLMSessionMessage[];
+}
+
 export const api = {
   health: () => request<{ status: string }>('/healthz'),
   ready: () => request<{ status: string }>('/readyz'),
@@ -733,6 +752,8 @@ export const api = {
     request<LLMUnitPrice>('/api/llm/costs/prices', { method: 'PUT', body: JSON.stringify(p) }),
   listLLMHealth: () => request<{ providers: LLMProviderHealth[] }>('/api/llm/health'),
   listLLMSessions: () => request<LLMSessionSummary[]>('/api/llm/sessions'),
+  getLLMSession: (chatId: string) =>
+    request<LLMSessionTranscript>(`/api/llm/sessions/${encodeURIComponent(chatId)}`),
 
   // ── Phase 10: Playground ────────────────────────────────────────────
   startPlaygroundSession: (req: PlaygroundStartSessionRequest = {}) =>
