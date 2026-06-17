@@ -67,6 +67,27 @@ test.describe('llm providers', () => {
     await expect(page.getByRole('button', { name: /^save$/i })).toBeVisible();
   });
 
+  test('custom_openai shows the catalog template picker and prefills the base URL', async ({
+    page
+  }) => {
+    await page.goto('/llm/providers');
+    await page
+      .getByRole('button', { name: /add provider/i })
+      .first()
+      .click();
+
+    // Switch the driver to custom_openai → the base URL + template picker appear.
+    await page.getByRole('combobox', { name: /^driver$/i }).selectOption('custom_openai');
+    const template = page.getByRole('combobox', { name: /start from a template/i });
+    await expect(template).toBeVisible();
+
+    // Picking a preset prefills the base URL (Bifrost appends /v1/chat/completions).
+    await template.selectOption('deepseek');
+    await expect(page.getByRole('textbox', { name: /base url/i })).toHaveValue(
+      'https://api.deepseek.com'
+    );
+  });
+
   test('create round-trips through the API and delete removes the row', async ({ page }) => {
     const name = `e2e-prov-${Date.now()}`;
 
