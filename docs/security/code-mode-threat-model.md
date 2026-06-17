@@ -372,6 +372,23 @@ approval replay window, the store guards, and the handler.
   recommends — is not in the pinned `go.starlark.net` (see C3). Out-of-process isolation
   remains the durable answer.
 
+**Round 3** (focused confirmation of the Round-2 replay-window hardening; 2 worktree
+attackers + skeptic verification). Found a real flaw in the Round-2 fix itself.
+
+- **C4 replay window — 1 BREAK, hardened.** The Round-2 `argsHash` *canonicalised* arguments
+  by `json.Unmarshal` into `any` then re-marshal. That round-trip decodes JSON numbers as
+  `float64`, so two **distinct large integers** that round to the same float64 (anything past
+  2^53 — account ids, amounts, snowflake ids) produced identical hashes: an approval for
+  `account 9007199254740992` replayed onto `9007199254740993` (CRITICAL, parser-independent —
+  the forged value is the bytes sent downstream). A duplicate-key variant (`{"target":"/etc/
+  shadow","target":"/tmp/safe"}`) was lower severity (parser-dependent). **Hardening:**
+  `argsHash` now hashes the **raw argument bytes** — no canonicalisation — so byte-different
+  payloads never collide; the only resume caller (the runtime) reproduces byte-identical
+  arguments deterministically, so legitimate replay is unaffected. Also hardened the metadata
+  reads to fail closed on an absent/non-string `args_hash`/`skill_id`. The skill-id + status
+  gates held under all probes. Regression locks:
+  `TestFlow_Replay_{Float64IntegerCollision,DuplicateKeyInjection}_NotReplayed`.
+
 ## Review checklist (every Code Mode PR)
 
 - [ ] Does this PR add a way to execute Starlark or reach a tool? If so, which attack class

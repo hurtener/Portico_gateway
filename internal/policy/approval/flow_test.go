@@ -361,6 +361,51 @@ func TestFlow_Replay_SkillMismatch_NotReplayed(t *testing.T) {
 	}
 }
 
+// TestFlow_Replay_Float64IntegerCollision_NotReplayed is the regression lock for
+// red-team round 3: two distinct large integers that would round to the same
+// float64 must NOT replay one's approval onto the other. Byte-exact hashing has
+// no float64 rounding, so the distinct argument bytes never collide.
+func TestFlow_Replay_Float64IntegerCollision_NotReplayed(t *testing.T) {
+	f, _, _ := newFlow(t, nil, fixedSessions{hasElicit: false})
+	dec := policy.Decision{Tool: "bank.transfer", RiskClass: policy.RiskDestructive, ApprovalTimeout: time.Minute}
+
+	granted := json.RawMessage(`{"account":9007199254740992}`) // 2^53
+	attack := json.RawMessage(`{"account":9007199254740993}`)  // 2^53+1 (rounds to 2^53 as float64)
+
+	out, _ := f.Run(context.Background(), "acme", "s1", "u1", dec, approval.CallContext{Tool: "bank.transfer", Arguments: granted})
+	id := out.Approval.ID
+	if _, err := f.ResolveManually(context.Background(), "acme", id, approval.StatusApproved, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	replay, _ := f.Run(context.Background(), "acme", "s1", "u1", dec,
+		approval.CallContext{Tool: "bank.transfer", Arguments: attack, ApprovalID: id})
+	if replay.Approved() {
+		t.Fatal("approval replayed onto a distinct integer that float64-collides — round-3 break not fixed")
+	}
+}
+
+// TestFlow_Replay_DuplicateKeyInjection_NotReplayed: a resume payload that injects
+// a duplicate key (so a canonicalising hash would fold it to the granted value)
+// must not replay — byte-exact hashing sees the different bytes.
+func TestFlow_Replay_DuplicateKeyInjection_NotReplayed(t *testing.T) {
+	f, _, _ := newFlow(t, nil, fixedSessions{hasElicit: false})
+	dec := policy.Decision{Tool: "fs.delete", RiskClass: policy.RiskDestructive, ApprovalTimeout: time.Minute}
+
+	granted := json.RawMessage(`{"target":"/tmp/safe"}`)
+	attack := json.RawMessage(`{"target":"/etc/shadow","target":"/tmp/safe"}`)
+
+	out, _ := f.Run(context.Background(), "acme", "s1", "u1", dec, approval.CallContext{Tool: "fs.delete", Arguments: granted})
+	id := out.Approval.ID
+	if _, err := f.ResolveManually(context.Background(), "acme", id, approval.StatusApproved, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	replay, _ := f.Run(context.Background(), "acme", "s1", "u1", dec,
+		approval.CallContext{Tool: "fs.delete", Arguments: attack, ApprovalID: id})
+	if replay.Approved() {
+		t.Fatal("approval replayed onto a duplicate-key-injected payload — round-3 break not fixed")
+	}
+}
+
 func TestFlow_Sweep_ExpiresPendings(t *testing.T) {
 	f, store, _ := newFlow(t, nil, fixedSessions{hasElicit: false})
 	dec := policy.Decision{Tool: "github.x", RiskClass: policy.RiskDestructive, ApprovalTimeout: time.Nanosecond}
