@@ -137,6 +137,10 @@ type Deps struct {
 	// Phase 13: cost telemetry — global price book + per-tenant daily rollups.
 	// Optional; when nil, dispatch records no cost and the cost API is absent.
 	LLMCosts ifaces.LLMCostStore
+
+	// Phase 13: LLM chat session store. Optional; when nil, /api/llm/sessions
+	// returns 503.
+	LLMSessions ifaces.LLMSessionStore
 }
 
 // approvalFlow is the slice of internal/policy/approval.Flow the API
@@ -337,6 +341,11 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/api/llm/costs", listLLMCostsHandler(d))
 			r.Get("/api/llm/costs/prices", listLLMPricesHandler(d))
 			r.Put("/api/llm/costs/prices", putLLMPriceHandler(d))
+		}
+		// Phase 13: LLM chat sessions (read-only). List + full transcript.
+		if d.LLMSessions != nil {
+			r.Get("/api/llm/sessions", listLLMSessionsHandler(d))
+			r.Get("/api/llm/sessions/{chat_id}", getLLMSessionHandler(d))
 		}
 
 		// Phase 4: skills runtime APIs.

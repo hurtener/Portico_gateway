@@ -512,6 +512,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		llmModels    ifaces.LLMModelStore
 		llmQuotas    ifaces.LLMQuotaStore
 		llmCosts     ifaces.LLMCostStore
+		llmSessions  ifaces.LLMSessionStore
 		llmEngine    llmengineifaces.Engine
 	)
 	llmQuotaEnforcer := quota.NewEnforcer()
@@ -520,6 +521,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		llmModels = sqliteBackend.LLMModels()
 		llmQuotas = sqliteBackend.LLMQuotas()
 		llmCosts = sqliteBackend.LLMCosts()
+		llmSessions = sqliteBackend.LLMSessions()
 		eng, err := llmengine.Open("bifrost", nil, llmengineifaces.Deps{
 			Logger:    logger.With("component", "llm.engine"),
 			Providers: llmProviders,
@@ -586,6 +588,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		LLMQuotas:    llmQuotas,
 		LLMQuota:     llmQuotaEnforcer,
 		LLMCosts:     llmCosts,
+		LLMSessions:  llmSessions,
 	}
 
 	handler := api.NewRouter(deps)
