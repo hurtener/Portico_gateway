@@ -144,6 +144,11 @@ func (d *DB) LLMModels() ifaces.LLMModelStore {
 	return &llmModelStore{db: d.sql}
 }
 
+// LLMQuotas returns an LLMQuotaStore backed by this DB (Phase 13).
+func (d *DB) LLMQuotas() ifaces.LLMQuotaStore {
+	return &llmQuotaStore{db: d.sql}
+}
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {
