@@ -243,9 +243,12 @@ func (f *Flow) replayDecision(ctx context.Context, tenantID string, dec policy.D
 	// from before this guard existed (no args_hash) — fails closed to the pending
 	// flow. This stops a continuation from replaying one approval onto a different
 	// call, different arguments, or a different skill (red-team round 2, C4-1/C4-2).
-	storedHash, _ := existing.Metadata["args_hash"].(string)
-	storedSkill, _ := existing.Metadata["skill_id"].(string)
-	if existing.Tool != dec.Tool || storedHash == "" || storedHash != argsHash(call.Arguments) || storedSkill != call.SkillID {
+	// Fail closed if either identity field is absent or not a string (a malicious
+	// or corrupt store row): a non-string skill_id must not collapse to "" and
+	// match an empty resume skill (round-3 defense-in-depth).
+	storedHash, hashOK := existing.Metadata["args_hash"].(string)
+	storedSkill, skillOK := existing.Metadata["skill_id"].(string)
+	if !hashOK || !skillOK || existing.Tool != dec.Tool || storedHash == "" || storedHash != argsHash(call.Arguments) || storedSkill != call.SkillID {
 		return Outcome{}, false
 	}
 	switch existing.Status {
@@ -325,21 +328,20 @@ func summarizeArgs(args json.RawMessage) string {
 	return string(args)
 }
 
-// argsHash returns a SHA-256 hex digest of the arguments, canonicalised
-// (re-marshalled to normalise key order / whitespace) when they are valid JSON
-// so the same logical arguments hash identically regardless of serialisation.
-// Unlike summarizeArgs it is non-lossy: two payloads differ in their hash even
-// if they share a 1024-byte prefix. Used only for the replay-window identity
-// check; the human-readable ArgsSummary is unchanged.
+// argsHash returns a SHA-256 hex digest of the EXACT argument bytes. It is
+// deliberately byte-exact — no JSON canonicalisation. The replay window must
+// fail closed on ANY difference, and the only resume caller (the Code Mode
+// runtime) reproduces byte-identical arguments deterministically, so byte-exact
+// matching costs nothing legitimate while being collision-free.
+//
+// An earlier canonicalising version (round-2 hardening) decoded JSON numbers as
+// float64 and folded duplicate keys, which red-team round 3 showed collides
+// distinct large integers (e.g. an approval for account 2^53 replaying onto
+// 2^53+1, which rounds to the same float64) and duplicate-key payloads. Hashing
+// the raw bytes has no such collision class: two byte-different payloads never
+// share a hash, so an approval can never be replayed onto different arguments.
 func argsHash(args json.RawMessage) string {
-	canonical := []byte(args)
-	var v any
-	if err := json.Unmarshal(args, &v); err == nil {
-		if b, mErr := json.Marshal(v); mErr == nil {
-			canonical = b
-		}
-	}
-	sum := sha256.Sum256(canonical)
+	sum := sha256.Sum256(args)
 	return hex.EncodeToString(sum[:])
 }
 
