@@ -154,6 +154,11 @@ func (d *DB) LLMCosts() ifaces.LLMCostStore {
 	return &llmCostStore{db: d.sql}
 }
 
+// LLMSessions returns an LLMSessionStore backed by this DB (Phase 13).
+func (d *DB) LLMSessions() ifaces.LLMSessionStore {
+	return &llmSessionStore{db: d.sql}
+}
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {
