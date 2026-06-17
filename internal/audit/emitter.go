@@ -34,6 +34,12 @@ const (
 	EventApprovalPending  = "approval.pending"
 	EventApprovalDecided  = "approval.decided"
 	EventApprovalExpired  = "approval.expired"
+	// EventApprovalReplayed marks a tool call that reused a prior-granted
+	// approval within the replay window (same tenant + tool + args) instead of
+	// re-prompting (CLAUDE.md §7.4). The Code Mode continuation flow drives this
+	// on resume: the awaited tool call re-dispatches through the identical
+	// governed envelope and the approval gate recognises the existing grant.
+	EventApprovalReplayed = "approval.replayed"
 	//nolint:gosec // event label, not a credential
 	EventCredentialInjected = "credential.injected"
 	//nolint:gosec // event label, not a credential
