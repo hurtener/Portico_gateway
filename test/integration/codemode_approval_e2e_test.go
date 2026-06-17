@@ -11,6 +11,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/apps"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
 	"github.com/hurtener/Portico_gateway/internal/config"
+	"github.com/hurtener/Portico_gateway/internal/mcp/codemode"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/policy"
@@ -27,7 +28,7 @@ import (
 // fallback path (no elicitation) and the Code Mode continuation store wired —
 // the full surface the suspend/resume cycle needs. DefaultRiskClass is
 // external_side_effect so every tool call hits the approval gate.
-func startCodeModeApprovalServer(t *testing.T) (*httptest.Server, *approval.Flow) {
+func startCodeModeApprovalServer(t *testing.T, defaultRisk string, codeModePolicy codemode.Policy) (*httptest.Server, *approval.Flow) {
 	t.Helper()
 	cfg := &config.Config{
 		Server:  config.ServerConfig{Bind: "127.0.0.1:0"},
@@ -67,7 +68,7 @@ func startCodeModeApprovalServer(t *testing.T) (*httptest.Server, *approval.Flow
 	flow := approval.New(approval.NewStorageAdapter(backend.Approvals()), nil, nil, recorder, logger)
 
 	engine := policy.New(mgr, nil, nil, nil, policy.EngineConfig{
-		DefaultRiskClass: policy.RiskExternalSideEffect, // => requires approval
+		DefaultRiskClass: defaultRisk,
 		Logger:           logger,
 	})
 	pipeline := mcpgw.NewPolicyPipeline(mcpgw.PipelineConfig{
@@ -80,6 +81,7 @@ func startCodeModeApprovalServer(t *testing.T) (*httptest.Server, *approval.Flow
 	disp.SetPolicyPipeline(pipeline)
 	disp.SetAuditEmitter(recorder)
 	disp.SetCodeModeStore(backend.CodeMode())
+	disp.SetCodeModePolicy(codeModePolicy)
 
 	probe := mcpgw.NewSnapshotProbe(mgr, reg, nil, nil, engine, nil)
 	svc := snapshots.NewService(snapshots.NewStorageAdapter(backend.Snapshots()), probe, recorder, logger)
@@ -151,7 +153,7 @@ func execToolCode(t *testing.T, srv *httptest.Server, sid string, id int, args m
 // and returns the tool's real result. The awaited call traverses the identical
 // governed envelope on resume — only the approval gate recognises the grant.
 func TestE2E_CodeMode_ApprovalSuspension_AndResume(t *testing.T) {
-	srv, flow := startCodeModeApprovalServer(t)
+	srv, flow := startCodeModeApprovalServer(t, policy.RiskExternalSideEffect, codemode.Policy{})
 	_, sid := rpcPost(t, srv.URL, "", newReq(1, protocol.MethodInitialize, codeModeInitParams()))
 	if sid == "" {
 		t.Fatal("no session id")
@@ -207,7 +209,7 @@ func TestE2E_CodeMode_ApprovalSuspension_AndResume(t *testing.T) {
 // TestE2E_CodeMode_ResumeUnknownToken_FailsClosed proves an unknown / forged
 // continuation token is rejected (not-found), never executed.
 func TestE2E_CodeMode_ResumeUnknownToken_FailsClosed(t *testing.T) {
-	srv, _ := startCodeModeApprovalServer(t)
+	srv, _ := startCodeModeApprovalServer(t, policy.RiskExternalSideEffect, codemode.Policy{})
 	_, sid := rpcPost(t, srv.URL, "", newReq(1, protocol.MethodInitialize, codeModeInitParams()))
 	raw, _ := json.Marshal(map[string]string{"continuation_token": "forged-token-aaaaaaaaaaaa"})
 	resp, _ := rpcPost(t, srv.URL, sid, newReq(2, protocol.MethodToolsCall, protocol.CallToolParams{
@@ -218,5 +220,52 @@ func TestE2E_CodeMode_ResumeUnknownToken_FailsClosed(t *testing.T) {
 	}
 	if !contains(string(resp.Error.Data), "continuation_not_found") {
 		t.Errorf("want continuation_not_found, got %s", resp.Error.Data)
+	}
+}
+
+// TestE2E_CodeMode_RequireApprovalOnExecute gates the WHOLE execution behind
+// approval (the require_approval_on_executeToolCode policy). Tools themselves are
+// read-class (no per-call approval); the first executeToolCode suspends before
+// running, and after the operator approves, resuming runs the snippet — calling
+// the tool — and returns its result. Reuses the continuation plumbing.
+func TestE2E_CodeMode_RequireApprovalOnExecute(t *testing.T) {
+	srv, flow := startCodeModeApprovalServer(t, policy.RiskRead, codemode.Policy{RequireApprovalOnExecute: true})
+	_, sid := rpcPost(t, srv.URL, "", newReq(1, protocol.MethodInitialize, codeModeInitParams()))
+	if sid == "" {
+		t.Fatal("no session id")
+	}
+
+	// Fresh executeToolCode suspends on the execution-level approval gate, before
+	// the snippet runs (tool_calls stays 0).
+	first := execToolCode(t, srv, sid, 2, map[string]string{
+		"code": `result = mock.echo(message="gated run")`,
+	})
+	if first.Status != "approval_required" {
+		t.Fatalf("status = %q, want approval_required (full: %+v)", first.Status, first)
+	}
+	if first.ContinuationToken == "" || first.ApprovalID == "" {
+		t.Fatalf("exec-approval suspension missing token/approval id: %+v", first)
+	}
+	if first.Tool != "mcp.executeToolCode" {
+		t.Errorf("awaited tool = %q, want mcp.executeToolCode (whole-execution gate)", first.Tool)
+	}
+
+	// Operator approves the execution.
+	if _, err := flow.ResolveManually(context.Background(), "dev", first.ApprovalID, approval.StatusApproved, "operator"); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+
+	// Resume → the snippet runs fresh and calls the tool.
+	resumed := execToolCode(t, srv, sid, 3, map[string]string{
+		"continuation_token": first.ContinuationToken,
+	})
+	if resumed.Status == "approval_required" {
+		t.Fatalf("resume re-suspended instead of running: %+v", resumed)
+	}
+	if resumed.ToolCalls != 1 {
+		t.Errorf("resumed tool_calls = %d, want 1", resumed.ToolCalls)
+	}
+	if !contains(string(resumed.Result), "gated run") {
+		t.Errorf("resumed result missing tool output: %s", resumed.Result)
 	}
 }

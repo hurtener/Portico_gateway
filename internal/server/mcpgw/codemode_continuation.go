@@ -13,6 +13,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
 	"github.com/hurtener/Portico_gateway/internal/mcp/codemode"
+	"github.com/hurtener/Portico_gateway/internal/mcp/codemode/catalog"
 	"github.com/hurtener/Portico_gateway/internal/mcp/codemode/runtime"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
@@ -41,7 +42,7 @@ const codeModeStatusAwaitingApproval = "approval_required"
 // timestamp (so time.now() replays identically). executionID is empty for a
 // fresh run (one is generated) and the original id on resume (so the record and
 // any chained continuation stay tied to one logical execution).
-func (d *Dispatcher) runCodeMode(ctx context.Context, sess *Session, code string, resume *runtime.ResumeState, clock time.Time, executionID string) (json.RawMessage, *protocol.Error) {
+func (d *Dispatcher) runCodeMode(ctx context.Context, sess *Session, code string, resume *runtime.ResumeState, clock time.Time, executionID string, execApproved bool) (json.RawMessage, *protocol.Error) {
 	ctx, span := telemetry.StartSpan(ctx, "code_mode.execution",
 		telemetry.String(telemetry.AttrTenantID, sess.TenantID),
 		telemetry.String(telemetry.AttrSessionID, sess.ID),
@@ -55,10 +56,19 @@ func (d *Dispatcher) runCodeMode(ctx context.Context, sess *Session, code string
 	}
 
 	resuming := resume != nil
+	snippetSHA := sha256Hex(code)
+
+	// Code Mode policy gate — only on a genuinely fresh execution (a resume, or a
+	// run already approved at the execution level, has passed it). Returns a deny
+	// or an approval_required suspension; a generated executionID is reused.
+	if !resuming && !execApproved {
+		if done, resp, gErr := d.gateExecution(ctx, sess, code, snippetSHA, &executionID, snap); done {
+			return resp, gErr
+		}
+	}
 	if executionID == "" {
 		executionID = newCodeModeToken()
 	}
-	snippetSHA := sha256Hex(code)
 	d.recordExecution(ctx, sess, &ifaces.CodeModeExecution{
 		ExecutionID: executionID,
 		SessionID:   sess.ID,
@@ -71,6 +81,8 @@ func (d *Dispatcher) runCodeMode(ctx context.Context, sess *Session, code string
 	if sess.CodeMode != nil && sess.CodeMode.MaxToolCalls > 0 {
 		budget.MaxToolCalls = sess.CodeMode.MaxToolCalls
 	}
+	// The policy tool-call ceiling lowers (never raises) the session's request.
+	budget.MaxToolCalls = d.codeModePolicy.EffectiveMaxToolCalls(budget.MaxToolCalls)
 	cfg := runtime.Config{
 		Budget:     budget,
 		Bindings:   toRuntimeBindings(proj.Tools),
@@ -95,6 +107,14 @@ func (d *Dispatcher) runCodeMode(ctx context.Context, sess *Session, code string
 		}
 		_ = telemetry.RecordErr(span, runErr)
 		d.emitCodeMode(ctx, sess, audit.EventCodeModeExecFailed, codeModeErrPayload(runErr))
+		// deny_on_unsafe_starlark: a static-gate rejection is always rejected; this
+		// additionally records it as an audited policy denial for abuse tracking.
+		if d.codeModePolicy.DenyUnsafeStarlark {
+			var se *runtime.SandboxError
+			if errors.As(runErr, &se) && se.Code == runtime.CodeUnsafeCall {
+				d.emitCodeMode(ctx, sess, audit.EventCodeModeUnsafeDenied, map[string]any{"detail": se.Detail})
+			}
+		}
 		d.recordExecution(ctx, sess, &ifaces.CodeModeExecution{
 			ExecutionID: executionID,
 			SessionID:   sess.ID,
@@ -208,6 +228,123 @@ func (d *Dispatcher) suspendCodeMode(ctx context.Context, sess *Session, code, s
 	return metaResult(structured, "approval required for "+susp.Tool)
 }
 
+// execApprovalCallIndex is the AwaitingCallIndex sentinel marking a continuation
+// that gates the WHOLE execution behind approval (require_approval_on_executeToolCode),
+// as opposed to an in-sandbox tool call awaiting approval (index >= 0).
+const execApprovalCallIndex = -1
+
+// Code Mode policy guard reasons (in addition to the continuation reasons above).
+const (
+	reasonApprovalUnavailable = "code_mode.approval_unavailable"
+	reasonExecutionDenied     = "code_mode.execution_denied"
+)
+
+// gateExecution applies the Code Mode policy to a fresh execution before it runs.
+// It returns done=true with a response/error when the call must stop here — a
+// policy deny, or an approval_required suspension when the whole execution needs
+// sign-off. done=false means proceed to run the snippet. executionID is filled
+// in when a suspension needs to reference the execution row.
+func (d *Dispatcher) gateExecution(ctx context.Context, sess *Session, code, snippetSHA string, executionID *string, snap *snapshots.Snapshot) (bool, json.RawMessage, *protocol.Error) {
+	level := catalog.BindingServer
+	if sess.CodeMode != nil {
+		level = sess.CodeMode.BindingLevel
+	}
+	dec := d.codeModePolicy.Evaluate(codemode.EvalInput{
+		Enabled:      true,
+		BindingLevel: string(level),
+		CodeBytes:    len(code),
+		IsResume:     false,
+	})
+	if dec.Deny {
+		d.emitCodeMode(ctx, sess, audit.EventCodeModeExecFailed, map[string]any{"code": dec.Reason})
+		return true, nil, codeModeGuardError(dec.Reason, "code mode policy denied")
+	}
+	if !dec.RequireApproval {
+		return false, nil, nil
+	}
+	// Whole-execution approval gate. Without an approval flow we cannot grant it,
+	// so fail closed rather than run unapproved.
+	if d.policy == nil {
+		return true, nil, codeModeGuardError(reasonApprovalUnavailable, "approval required but no approval flow configured")
+	}
+	if *executionID == "" {
+		*executionID = newCodeModeToken()
+	}
+	out, err := d.policy.ApproveExecution(ctx, sess, execApprovalArgs(snippetSHA), "")
+	if err != nil {
+		return true, nil, codeModeGuardError(reasonApprovalUnavailable, err.Error())
+	}
+	switch {
+	case out.Approved():
+		return false, nil, nil // approved inline (elicitation) → proceed
+	case out.FallbackRequired():
+		resp, perr := d.suspendForExecApproval(ctx, sess, code, snippetSHA, *executionID, snap, out.Approval.ID)
+		return true, resp, perr
+	default: // denied / expired
+		d.emitCodeMode(ctx, sess, audit.EventCodeModeExecFailed, map[string]any{"code": reasonExecutionDenied})
+		return true, nil, codeModeGuardError(reasonExecutionDenied, "execution approval denied")
+	}
+}
+
+// suspendForExecApproval persists an execution-level continuation (no in-sandbox
+// cache) and returns the resumable approval_required status. The resume verifies
+// the whole-execution approval and runs the snippet fresh.
+func (d *Dispatcher) suspendForExecApproval(ctx context.Context, sess *Session, code, snippetSHA, executionID string, snap *snapshots.Snapshot, approvalID string) (json.RawMessage, *protocol.Error) {
+	snapshotID := ""
+	if snap != nil {
+		snapshotID = snap.ID
+	}
+	if d.codeModeStore == nil || approvalID == "" || snapshotID == "" {
+		return nil, protocol.NewError(protocol.ErrApprovalRequired, "approval_required", map[string]any{
+			"tool":        metaExecuteToolCode,
+			"approval_id": approvalID,
+		})
+	}
+	token := newCodeModeToken()
+	d.recordExecution(ctx, sess, &ifaces.CodeModeExecution{
+		ExecutionID: executionID,
+		SessionID:   sess.ID,
+		Status:      ifaces.CodeModeStatusAwaitingApproval,
+		SnippetSHA:  snippetSHA,
+		SpanID:      executionID,
+	})
+	cont := &ifaces.CodeModeContinuation{
+		TenantID:           sess.TenantID,
+		ContinuationToken:  token,
+		ExecutionID:        executionID,
+		SessionID:          sess.ID,
+		SnapshotID:         snapshotID,
+		Code:               code,
+		CachedResultsJSON:  "[]",
+		AwaitingCallIndex:  execApprovalCallIndex,
+		AwaitingApprovalID: approvalID,
+		ClockUnix:          time.Now().Unix(),
+	}
+	if err := d.codeModeStore.PutContinuation(ctx, cont); err != nil {
+		d.log.Warn("code mode: persist exec-approval continuation failed", "session_id", sess.ID, "err", err)
+		return nil, protocol.NewError(protocol.ErrInternalError, "code mode: persist continuation", nil)
+	}
+	d.emitCodeMode(ctx, sess, audit.EventCodeModeExecSuspended, map[string]any{
+		"tool":              metaExecuteToolCode,
+		"awaiting_call_idx": execApprovalCallIndex,
+	})
+	structured, _ := json.Marshal(map[string]any{
+		"status":             codeModeStatusAwaitingApproval,
+		"approval_id":        approvalID,
+		"continuation_token": token,
+		"tool":               metaExecuteToolCode,
+	})
+	return metaResult(structured, "approval required to run this code mode execution")
+}
+
+// execApprovalArgs builds the stable, compact arguments for a whole-execution
+// approval — the snippet digest, so the original gate and the resume hash to the
+// same value and the replay window recognises the grant.
+func execApprovalArgs(snippetSHA string) json.RawMessage {
+	b, _ := json.Marshal(map[string]string{"snippet_sha": snippetSHA})
+	return b
+}
+
 // resumeCodeMode reloads a suspended execution by its continuation token and
 // replays it. It enforces the C4 guards in order: single-use (double_resume),
 // TTL (continuation_expired), cross-tenant/unknown (continuation_not_found), and
@@ -248,6 +385,13 @@ func (d *Dispatcher) resumeCodeMode(ctx context.Context, sess *Session, token st
 		return nil, codeModeGuardError(reasonSnapshotDrifted, "snapshot changed since suspension; re-run required")
 	}
 
+	// An execution-level continuation (the require_approval_on_executeToolCode
+	// gate) carries no in-sandbox cache; it re-verifies the whole-execution
+	// approval and then runs the snippet fresh.
+	if cont.AwaitingCallIndex == execApprovalCallIndex {
+		return d.resumeExecApproval(ctx, sess, cont)
+	}
+
 	var cached []json.RawMessage
 	if cont.CachedResultsJSON != "" {
 		if uerr := json.Unmarshal([]byte(cont.CachedResultsJSON), &cached); uerr != nil {
@@ -256,7 +400,28 @@ func (d *Dispatcher) resumeCodeMode(ctx context.Context, sess *Session, token st
 	}
 	resume := &runtime.ResumeState{CachedResults: cached, ApprovalID: cont.AwaitingApprovalID}
 	clock := time.Unix(cont.ClockUnix, 0).UTC()
-	return d.runCodeMode(ctx, sess, cont.Code, resume, clock, cont.ExecutionID)
+	return d.runCodeMode(ctx, sess, cont.Code, resume, clock, cont.ExecutionID, true)
+}
+
+// resumeExecApproval re-verifies a whole-execution approval (the
+// require_approval_on_executeToolCode gate) and, once granted, runs the snippet
+// fresh. The approval is re-checked through the identical flow + replay window
+// the gate opened; only a genuinely-granted approval for the same snippet digest
+// lets it through.
+func (d *Dispatcher) resumeExecApproval(ctx context.Context, sess *Session, cont *ifaces.CodeModeContinuation) (json.RawMessage, *protocol.Error) {
+	if d.policy == nil {
+		return nil, codeModeGuardError(reasonApprovalUnavailable, "approval flow not configured")
+	}
+	out, err := d.policy.ApproveExecution(ctx, sess, execApprovalArgs(sha256Hex(cont.Code)), cont.AwaitingApprovalID)
+	if err != nil {
+		return nil, codeModeGuardError(reasonApprovalUnavailable, err.Error())
+	}
+	if !out.Approved() {
+		d.emitCodeMode(ctx, sess, audit.EventCodeModeExecFailed, map[string]any{"code": reasonExecutionDenied})
+		return nil, codeModeGuardError(reasonExecutionDenied, "execution approval not granted")
+	}
+	clock := time.Unix(cont.ClockUnix, 0).UTC()
+	return d.runCodeMode(ctx, sess, cont.Code, nil, clock, cont.ExecutionID, true)
 }
 
 // recordExecution upserts an execution row, nil-safe on a missing store. insert

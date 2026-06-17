@@ -190,7 +190,7 @@ func (d *Dispatcher) metaExecuteToolCode(ctx context.Context, sess *Session, arg
 	if in.Code == "" {
 		return nil, protocol.NewError(protocol.ErrInvalidParams, "executeToolCode requires a non-empty 'code' argument (or a 'continuation_token' to resume)", nil)
 	}
-	return d.runCodeMode(ctx, sess, in.Code, nil, time.Time{}, "")
+	return d.runCodeMode(ctx, sess, in.Code, nil, time.Time{}, "", false)
 }
 
 // toRuntimeBindings converts catalog ToolRefs into runtime ToolBindings.

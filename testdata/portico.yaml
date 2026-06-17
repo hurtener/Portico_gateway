@@ -35,3 +35,14 @@ logging:
 
 skills:
   sources: []
+
+# Code Mode (Phase 13.5) — operator-tunable posture for the executeToolCode
+# meta-tool. Omit the whole block for the permissive default (open within a
+# tenant). The per-tool-call governance of in-sandbox calls is unaffected.
+code_mode:
+  disabled: false                  # kill switch: deny every executeToolCode
+  max_execution_bytes: 65536       # reject snippets larger than this (0 = no limit)
+  max_tool_calls_inside: 20        # ceiling on tool calls per execution (0 = runtime default)
+  allowed_binding_levels: []       # restrict to e.g. ["server"]; empty = any
+  require_approval_on_execute: false  # gate every run behind the approval flow
+  deny_unsafe_starlark: false      # audit static-gate rejections as policy denials

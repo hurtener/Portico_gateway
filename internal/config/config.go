@@ -17,6 +17,33 @@ type Config struct {
 	Telemetry TelemetryConfig `yaml:"telemetry,omitempty"`
 	// Servers is consumed by Phase 1+. Phase 0 parses but does not act on it.
 	Servers []ServerSpec `yaml:"servers,omitempty"`
+	// CodeMode is the Phase 13.5 Code Mode posture. Zero value = fully permissive
+	// (open within a tenant); operators tighten it.
+	CodeMode CodeModeConfig `yaml:"code_mode,omitempty"`
+}
+
+// CodeModeConfig is the operator-tunable Code Mode policy (Phase 13.5). It gates
+// the executeToolCode meta-tool itself; the per-tool-call governance of
+// in-sandbox calls is unchanged. See docs/security/code-mode-threat-model.md.
+type CodeModeConfig struct {
+	// Disabled turns Code Mode off entirely (a kill switch): every
+	// executeToolCode is denied regardless of the session opt-in.
+	Disabled bool `yaml:"disabled,omitempty"`
+	// MaxExecutionBytes rejects a snippet larger than this many bytes (0 = no limit).
+	MaxExecutionBytes int `yaml:"max_execution_bytes,omitempty"`
+	// MaxToolCallsInside caps tool calls per execution (0 = runtime default). A
+	// ceiling: it lowers a larger session request, never raises a smaller one.
+	MaxToolCallsInside int `yaml:"max_tool_calls_inside,omitempty"`
+	// AllowedBindingLevels restricts which binding levels may run code mode
+	// ("server"|"tool"). Empty = any.
+	AllowedBindingLevels []string `yaml:"allowed_binding_levels,omitempty"`
+	// RequireApprovalOnExecute gates every executeToolCode behind the approval
+	// flow before the snippet runs.
+	RequireApprovalOnExecute bool `yaml:"require_approval_on_execute,omitempty"`
+	// DenyUnsafeStarlark escalates a static-gate rejection to an audited policy
+	// denial. The static gate already rejects unsafe snippets; this records the
+	// rejection as a policy event for operators tracking abuse.
+	DenyUnsafeStarlark bool `yaml:"deny_unsafe_starlark,omitempty"`
 }
 
 // TelemetryConfig wires the OpenTelemetry tracer + drift detector knobs.

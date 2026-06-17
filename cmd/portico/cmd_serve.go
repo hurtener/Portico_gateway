@@ -16,6 +16,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
 	"github.com/hurtener/Portico_gateway/internal/config"
+	"github.com/hurtener/Portico_gateway/internal/mcp/codemode"
 	porticohttp "github.com/hurtener/Portico_gateway/internal/mcp/northbound/http"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
@@ -331,6 +332,14 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	// reaps expired/consumed continuations hourly.
 	codeModeStore := backend.CodeMode()
 	dispatcher.SetCodeModeStore(codeModeStore)
+	dispatcher.SetCodeModePolicy(codemode.Policy{
+		Disabled:                 cfg.CodeMode.Disabled,
+		MaxExecutionBytes:        cfg.CodeMode.MaxExecutionBytes,
+		MaxToolCallsInside:       cfg.CodeMode.MaxToolCallsInside,
+		AllowedBindingLevels:     cfg.CodeMode.AllowedBindingLevels,
+		RequireApprovalOnExecute: cfg.CodeMode.RequireApprovalOnExecute,
+		DenyUnsafeStarlark:       cfg.CodeMode.DenyUnsafeStarlark,
+	})
 	go func() {
 		t := time.NewTicker(time.Hour)
 		defer t.Stop()

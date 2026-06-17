@@ -389,6 +389,22 @@ attackers + skeptic verification). Found a real flaw in the Round-2 fix itself.
   gates held under all probes. Regression locks:
   `TestFlow_Replay_{Float64IntegerCollision,DuplicateKeyInjection}_NotReplayed`.
 
+**Round 4** (clean-confirmation of the round-3 byte-exact fix; 2 worktree attackers +
+verification). **VERDICT: CLEAN — no remaining defeats.** Both angles (hash-collision and
+skill/status/metadata) failed to break: byte-exact `argsHash` is structurally collision-free
+(two byte-different payloads cannot share a SHA-256), the fail-closed predicate + checked
+`.(string)` type assertions close corrupt/forged rows, and only `approved` rows replay.
+Positive controls confirm the result is true exact-match, not a blanket reject. Two residuals
+to *track, not block*: (1) byte-exactness shifts fragility from security to availability — a
+legitimate resume whose arguments were re-serialised with different bytes would fail closed and
+re-prompt; the Code Mode dispatch preserves `call.Arguments` verbatim, and
+`TestE2E_CodeMode_ApprovalSuspension_AndResume` pins that invariant through the real path. (2)
+**Store-row integrity is an assumed invariant, not an enforced one** — the replay guard trusts
+the approval/continuation row to be authoritative. That holds today (rows are tenant-scoped and
+gateway-owned, never attacker-writable); a future external-store backend would need to preserve
+it. After 4 rounds (sandbox → continuation → 2 hardening passes → clean), C4 is considered
+closed.
+
 ## Review checklist (every Code Mode PR)
 
 - [ ] Does this PR add a way to execute Starlark or reach a tool? If so, which attack class

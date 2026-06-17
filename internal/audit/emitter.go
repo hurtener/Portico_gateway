@@ -91,6 +91,9 @@ const (
 	// EventCodeModeExecSuspended marks an execution that paused on an in-sandbox
 	// approval_required and persisted a continuation (Phase 13.5 acceptance #9).
 	EventCodeModeExecSuspended = "code_mode.execution_suspended"
+	// EventCodeModeUnsafeDenied marks a static-gate rejection escalated to a
+	// policy denial under deny_on_unsafe_starlark (Phase 13.5 §6).
+	EventCodeModeUnsafeDenied = "code_mode.unsafe_denied"
 )
 
 // Event is one structured log entry. Payload is an arbitrary JSON-serialisable
