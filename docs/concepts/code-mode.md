@@ -99,10 +99,15 @@ prompt-injected). The full attack/defense analysis is in
 - **No governance bypass.** A snippet's only path to a tool is the single dispatcher seam,
   which runs the exact same `tools/call` core a direct call runs. There is no second path.
 - **Budgets.** Every execution is bounded by instruction count (default 100 000), wall clock
-  (30 s), output bytes (1 MiB), and tool calls (20). Defaults are conservative; operators
-  raise them per route.
-- **Redaction.** `print()` output and the final `result` pass through the same audit
-  redactor before leaving the sandbox.
+  (30 s), output bytes (1 MiB), tool calls (20), and heap growth (256 MiB, via a sampling
+  watchdog that catches gradual allocation bombs). Defaults are conservative; operators raise
+  them per route. A single catastrophic allocation is a documented in-process residual — run
+  Portico under a memory cgroup.
+- **Redaction.** `print()` output and the final `result` pass through the audit redactor —
+  **best-effort defense in depth, not a guarantee.** It scrubs known secret shapes and
+  sensitive keys but cannot stop a snippet author from transforming data it can already see;
+  the real control is that credentials never enter the sandbox. Don't expose secret-returning
+  tools to Code Mode sessions, and treat output as model-visible.
 - **Determinism.** `time.now()` is frozen per execution and coarsened to the second, so
   replay (after an approval pause) is deterministic.
 

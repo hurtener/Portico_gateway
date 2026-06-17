@@ -39,11 +39,16 @@ func NewProjectionCache(max int) *ProjectionCache {
 
 // Get returns the projection for snap at level, computing and caching it on a
 // miss. A nil snapshot is projected but not cached (no stable key).
+//
+// The cache key includes the snapshot's tenant id as defense in depth: snapshot
+// IDs are globally unique ULIDs today, so tenant-scoping the key is belt-and-
+// suspenders against a future where an ID is reused or made predictable across
+// tenants (a red-team C5 recommendation).
 func (c *ProjectionCache) Get(snap *snapshots.Snapshot, level BindingLevel) Projection {
 	if snap == nil || snap.ID == "" {
 		return Project(snap, level)
 	}
-	key := snap.ID + "|" + string(level)
+	key := cacheKey(snap.TenantID, snap.ID, level)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -55,21 +60,26 @@ func (c *ProjectionCache) Get(snap *snapshots.Snapshot, level BindingLevel) Proj
 	return p
 }
 
-// Invalidate drops every cached level for a snapshot id (called on snapshot
-// rotation for a tenant).
-func (c *ProjectionCache) Invalidate(snapshotID string) {
+// Invalidate drops every cached level for a tenant's snapshot id (called on
+// snapshot rotation for a tenant).
+func (c *ProjectionCache) Invalidate(tenantID, snapshotID string) {
 	if snapshotID == "" {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, level := range []BindingLevel{BindingServer, BindingTool} {
-		key := snapshotID + "|" + string(level)
+		key := cacheKey(tenantID, snapshotID, level)
 		if _, ok := c.entries[key]; ok {
 			delete(c.entries, key)
 			c.removeOrder(key)
 		}
 	}
+}
+
+// cacheKey builds the tenant-scoped projection cache key.
+func cacheKey(tenantID, snapshotID string, level BindingLevel) string {
+	return tenantID + "|" + snapshotID + "|" + string(level)
 }
 
 // put inserts under lock, evicting the oldest entry if at capacity.
