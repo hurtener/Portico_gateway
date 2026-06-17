@@ -3,20 +3,27 @@ package mcpgw
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sort"
+	"time"
 
+	"github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
+	"github.com/hurtener/Portico_gateway/internal/mcp/codemode"
 	"github.com/hurtener/Portico_gateway/internal/mcp/codemode/catalog"
+	"github.com/hurtener/Portico_gateway/internal/mcp/codemode/runtime"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
+	"github.com/hurtener/Portico_gateway/internal/telemetry"
 )
 
 // Code Mode meta-tool names. They live under the reserved `mcp.` namespace and
 // are advertised on tools/list only when the session opted into Code Mode.
 // Registering any other tool under `mcp.` is forbidden (AGENTS.md §13).
 const (
-	metaListToolFiles = "mcp.listToolFiles"
-	metaReadToolFile  = "mcp.readToolFile"
-	metaGetToolDocs   = "mcp.getToolDocs"
+	metaListToolFiles   = "mcp.listToolFiles"
+	metaReadToolFile    = "mcp.readToolFile"
+	metaGetToolDocs     = "mcp.getToolDocs"
+	metaExecuteToolCode = "mcp.executeToolCode"
 )
 
 // defaultCodeModeMaxToolCalls is the per-execution tool-call cap applied when a
@@ -74,7 +81,7 @@ func extractCodeModeOpts(exp map[string]json.RawMessage) *CodeModeOpts {
 // isCodeModeMetaTool reports whether name is one of the Code Mode meta-tools.
 func isCodeModeMetaTool(name string) bool {
 	switch name {
-	case metaListToolFiles, metaReadToolFile, metaGetToolDocs:
+	case metaListToolFiles, metaReadToolFile, metaGetToolDocs, metaExecuteToolCode:
 		return true
 	default:
 		return false
@@ -102,6 +109,11 @@ func codeModeMetaTools() []protocol.Tool {
 			Description: "Fetch full docs (description, JSON Schema, risk class, approval policy) for one or more named tools.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"tools":{"type":"array","items":{"type":"string"},"description":"Namespaced tool names, e.g. github.list_issues"}},"required":["tools"],"additionalProperties":false}`),
 		},
+		{
+			Name:        metaExecuteToolCode,
+			Description: "Run a Starlark snippet that calls tools through their server modules and returns a final `result`. Intermediate values stay in the sandbox; only `result` crosses back.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"code":{"type":"string","description":"Starlark source. Assign the final value to ` + "`result`" + `."}},"required":["code"],"additionalProperties":false}`),
+		},
 	}
 }
 
@@ -128,7 +140,7 @@ func (d *Dispatcher) projectCodeMode(ctx context.Context, sess *Session) (catalo
 	return catalog.Project(snap, level), snap, nil
 }
 
-// handleCodeModeMetaTool dispatches a tools/call to one of the read meta-tools.
+// handleCodeModeMetaTool dispatches a tools/call to one of the meta-tools.
 // Tenant identity comes from the session (never from arguments), so the
 // projection is always the caller's own (acceptance #10).
 func (d *Dispatcher) handleCodeModeMetaTool(ctx context.Context, sess *Session, params protocol.CallToolParams) (json.RawMessage, *protocol.Error) {
@@ -139,9 +151,152 @@ func (d *Dispatcher) handleCodeModeMetaTool(ctx context.Context, sess *Session, 
 		return d.metaReadToolFile(ctx, sess, params.Arguments)
 	case metaGetToolDocs:
 		return d.metaGetToolDocs(ctx, sess, params.Arguments)
+	case metaExecuteToolCode:
+		return d.metaExecuteToolCode(ctx, sess, params.Arguments)
 	default:
 		return nil, protocol.NewError(protocol.ErrToolNotEnabled, "unknown code mode meta-tool", map[string]string{"name": params.Name})
 	}
+}
+
+// sessionToolDispatcher is the runtime.ToolDispatcher seam bound to one session.
+// Its sole job is to forward an in-sandbox tool call to dispatchToolCall — the
+// exact same governed envelope a direct tools/call runs. There is intentionally
+// no other behaviour here: the sandbox cannot reach a tool except through this
+// one hop into the shared dispatch path (acceptance #8). reqID is empty because
+// a sandbox-issued call is not a northbound request and has nothing to cancel.
+type sessionToolDispatcher struct {
+	d    *Dispatcher
+	sess *Session
+}
+
+func (a sessionToolDispatcher) DispatchToolCall(ctx context.Context, name string, args json.RawMessage) (json.RawMessage, *protocol.Error) {
+	return a.d.dispatchToolCall(ctx, a.sess, protocol.CallToolParams{Name: name, Arguments: args}, "")
+}
+
+// metaExecuteToolCode runs an LLM-authored Starlark snippet under the hardened
+// runtime, with every in-sandbox tool call routed through the governed
+// dispatcher. It opens an execution span, emits code_mode.execution_* audit
+// events, and returns the snippet's `result` plus the token-savings estimate.
+func (d *Dispatcher) metaExecuteToolCode(ctx context.Context, sess *Session, args json.RawMessage) (json.RawMessage, *protocol.Error) {
+	var in struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil || in.Code == "" {
+		return nil, protocol.NewError(protocol.ErrInvalidParams, "executeToolCode requires a non-empty 'code' argument", nil)
+	}
+
+	ctx, span := telemetry.StartSpan(ctx, "code_mode.execution",
+		telemetry.String(telemetry.AttrTenantID, sess.TenantID),
+		telemetry.String(telemetry.AttrSessionID, sess.ID),
+		telemetry.String(telemetry.AttrUserID, sess.UserID),
+	)
+	defer span.End()
+
+	proj, snap, perr := d.projectCodeMode(ctx, sess)
+	if perr != nil {
+		return nil, perr
+	}
+
+	budget := runtime.DefaultBudget()
+	if sess.CodeMode != nil && sess.CodeMode.MaxToolCalls > 0 {
+		budget.MaxToolCalls = sess.CodeMode.MaxToolCalls
+	}
+	cfg := runtime.Config{
+		Budget:     budget,
+		Bindings:   toRuntimeBindings(proj.Tools),
+		Dispatcher: sessionToolDispatcher{d: d, sess: sess},
+		Redactor:   d.codeModeRedactor,
+	}
+
+	d.emitCodeMode(ctx, sess, audit.EventCodeModeExecStarted, map[string]any{"code_bytes": len(in.Code)})
+
+	res, runErr := runtime.Execute(ctx, in.Code, cfg)
+	if runErr != nil {
+		_ = telemetry.RecordErr(span, runErr)
+		d.emitCodeMode(ctx, sess, audit.EventCodeModeExecFailed, codeModeErrPayload(runErr))
+		return nil, codeModeErrorToProtocol(runErr)
+	}
+
+	saved := codemode.EstimateTokensSaved(snap, res.ToolCalls, len(in.Code), len(res.Result))
+	span.SetAttributes(
+		telemetry.Int("code_mode.tool_calls", res.ToolCalls),
+		telemetry.Int("code_mode.tokens_saved_est", saved),
+	)
+	d.emitCodeMode(ctx, sess, audit.EventCodeModeExecCompleted, map[string]any{
+		"tool_calls":       res.ToolCalls,
+		"tokens_saved_est": saved,
+		"duration_ms":      res.Duration.Milliseconds(),
+		"output_truncated": res.OutputTruncated,
+	})
+
+	structured, _ := json.Marshal(map[string]any{
+		"result":           res.Result,
+		"output":           res.Output,
+		"output_truncated": res.OutputTruncated,
+		"tool_calls":       res.ToolCalls,
+		"tokens_saved_est": saved,
+		"duration_ms":      res.Duration.Milliseconds(),
+	})
+	return metaResult(structured, res.Output)
+}
+
+// toRuntimeBindings converts catalog ToolRefs into runtime ToolBindings.
+func toRuntimeBindings(refs []catalog.ToolRef) []runtime.ToolBinding {
+	out := make([]runtime.ToolBinding, 0, len(refs))
+	for _, r := range refs {
+		out = append(out, runtime.ToolBinding{Module: r.Module, Func: r.Func, NamespacedName: r.Namespaced})
+	}
+	return out
+}
+
+// codeModeErrorToProtocol maps a runtime *SandboxError onto the JSON-RPC error
+// envelope. The specific code_mode.* reason travels in Data.code; the top-level
+// code groups by class. An approval-required signal maps to the standard
+// approval error (continuation lands in a later unit).
+func codeModeErrorToProtocol(err error) *protocol.Error {
+	var se *runtime.SandboxError
+	if !errors.As(err, &se) {
+		return protocol.NewError(protocol.ErrCodeModeExecution, "code mode execution failed", map[string]any{"error": err.Error()})
+	}
+	data := map[string]any{"code": se.Code}
+	if se.Detail != "" {
+		data["detail"] = se.Detail
+	}
+	switch se.Code {
+	case runtime.CodeUnsafeCall:
+		return protocol.NewError(protocol.ErrCodeModeUnsafe, "code mode: unsafe call", data)
+	case runtime.CodeBudgetExceeded:
+		return protocol.NewError(protocol.ErrCodeModeBudget, "code mode: budget exceeded", data)
+	case runtime.CodeApprovalRequired:
+		return protocol.NewError(protocol.ErrApprovalRequired, "approval_required", data)
+	default:
+		return protocol.NewError(protocol.ErrCodeModeExecution, "code mode: execution error", data)
+	}
+}
+
+// codeModeErrPayload builds a redaction-safe audit payload for a failed run.
+func codeModeErrPayload(err error) map[string]any {
+	var se *runtime.SandboxError
+	if errors.As(err, &se) {
+		return map[string]any{"code": se.Code, "detail": se.Detail}
+	}
+	return map[string]any{"code": "code_mode.runtime_error"}
+}
+
+// emitCodeMode emits a Code Mode audit event through the dispatcher's emitter
+// (nil-safe). Payloads are small and contain no tool arguments or results.
+func (d *Dispatcher) emitCodeMode(ctx context.Context, sess *Session, evType string, payload map[string]any) {
+	if d.emitter == nil {
+		return
+	}
+	d.emitter.Emit(ctx, audit.Event{
+		Type:       evType,
+		TenantID:   sess.TenantID,
+		SessionID:  sess.ID,
+		UserID:     sess.UserID,
+		OccurredAt: time.Now().UTC(),
+		Payload:    payload,
+	})
 }
 
 func (d *Dispatcher) metaListToolFiles(ctx context.Context, sess *Session) (json.RawMessage, *protocol.Error) {

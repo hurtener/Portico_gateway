@@ -13,7 +13,7 @@
 set -euo pipefail
 . "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
-begin_phase "phase-13.5 (mcp code mode — read meta-tools)"
+begin_phase "phase-13.5 (mcp code mode — meta-tools + executeToolCode)"
 
 # 1) Initialize a Code Mode session.
 CM_INIT='{"protocolVersion":"2025-06-18","capabilities":{"experimental":{"portico":{"code_mode":{"enabled":true}}}},"clientInfo":{"name":"preflight","version":"0"}}'
@@ -48,8 +48,8 @@ fi
 say_ok "tools/list advertises mcp.listToolFiles for the code mode session"
 PHASE_OK=$((PHASE_OK + 1))
 
-# All three read meta-tools advertised.
-for tool in mcp.readToolFile mcp.getToolDocs; do
+# All read + execute meta-tools advertised.
+for tool in mcp.readToolFile mcp.getToolDocs mcp.executeToolCode; do
   NAME=$(printf '%s' "$RESPONSE_BODY" | jq -r --arg t "$tool" '.result.tools[]? | select(.name==$t) | .name' 2>/dev/null || true)
   if [ "$NAME" = "$tool" ]; then
     say_ok "tools/list advertises $tool"
@@ -104,7 +104,26 @@ capture_status "tools/call mcp.getToolDocs" \
      -d "$CALL_DOCS"
 assert_json_path '.result.structuredContent.docs[0].found' 'false' "getToolDocs reports unknown tool as not found"
 
-# 7) Acceptance #1: a session WITHOUT the opt-in does not see the meta-tools.
+# 7) executeToolCode happy path: a pure-compute snippet returns its result.
+CALL_EXEC=$(jsonrpc tools/call '{"name":"mcp.executeToolCode","arguments":{"code":"result = 6 * 7"}}' 7)
+capture_status "tools/call mcp.executeToolCode (pure compute)" \
+  -- -X POST "$(mcp_url)" \
+     -H 'Content-Type: application/json' \
+     -H "Mcp-Session-Id: $SESSION_ID" \
+     -d "$CALL_EXEC"
+assert_json_path '.result.structuredContent.result' '42' "executeToolCode returns the computed result"
+assert_json_path '.result.structuredContent.tool_calls' '0' "executeToolCode reports zero tool calls for pure compute"
+
+# 8) Sandbox safety: a load() snippet is rejected with the typed unsafe-call error.
+CALL_UNSAFE=$(jsonrpc tools/call '{"name":"mcp.executeToolCode","arguments":{"code":"load(\"os\", \"system\")\nresult = 1"}}' 8)
+capture_status "tools/call mcp.executeToolCode (unsafe load)" \
+  -- -X POST "$(mcp_url)" \
+     -H 'Content-Type: application/json' \
+     -H "Mcp-Session-Id: $SESSION_ID" \
+     -d "$CALL_UNSAFE"
+assert_json_path '.error.data.code' 'code_mode.unsafe_call' "unsafe snippet returns code_mode.unsafe_call"
+
+# 9) Acceptance #1: a session WITHOUT the opt-in does not see the meta-tools.
 PLAIN_INIT='{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"preflight","version":"0"}}'
 PLAIN_HEADERS=$(curl -s -D - -o /dev/null -X POST "$(mcp_url)" \
   -H 'Content-Type: application/json' \
