@@ -46,6 +46,8 @@
     'nebius'
   ];
   const ALL_DRIVERS = [...NATIVE_DRIVERS, 'custom_openai'];
+  // Select takes an options array ({value,label}), not slotted <option>s.
+  const driverOptions = ALL_DRIVERS.map((d) => ({ value: d, label: d }));
 
   let providers: LLMProvider[] = [];
   let loading = true;
@@ -364,11 +366,7 @@
         {#if inspectorTab === 'settings'}
           <section class="card form">
             <Input label="Name" bind:value={fName} placeholder="my-openai" disabled={!creating} />
-            <Select label="Driver" bind:value={fDriver}>
-              {#each ALL_DRIVERS as d}
-                <option value={d}>{d}</option>
-              {/each}
-            </Select>
+            <Select label="Driver" bind:value={fDriver} options={driverOptions} />
             {#if isCustom(fDriver)}
               <Input
                 label="Base URL"

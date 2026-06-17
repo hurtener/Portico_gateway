@@ -309,6 +309,17 @@ export interface LLMProviderKey {
   created_at?: string;
 }
 
+export interface LLMModel {
+  alias: string;
+  provider_name: string;
+  provider_model: string;
+  default_params?: Record<string, unknown>;
+  capabilities?: string[];
+  enabled: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export const api = {
   health: () => request<{ status: string }>('/healthz'),
   ready: () => request<{ status: string }>('/readyz'),
@@ -641,6 +652,17 @@ export const api = {
       `/api/llm/providers/${encodeURIComponent(name)}/keys/${encodeURIComponent(keyId)}`,
       { method: 'DELETE' }
     ),
+  listLLMModels: () => request<{ models: LLMModel[] }>('/api/llm/models'),
+  getLLMModel: (alias: string) => request<LLMModel>(`/api/llm/models/${encodeURIComponent(alias)}`),
+  createLLMModel: (m: LLMModel) =>
+    request<LLMModel>('/api/llm/models', { method: 'POST', body: JSON.stringify(m) }),
+  updateLLMModel: (alias: string, m: LLMModel) =>
+    request<LLMModel>(`/api/llm/models/${encodeURIComponent(alias)}`, {
+      method: 'PUT',
+      body: JSON.stringify(m)
+    }),
+  deleteLLMModel: (alias: string) =>
+    request<void>(`/api/llm/models/${encodeURIComponent(alias)}`, { method: 'DELETE' }),
 
   // ── Phase 10: Playground ────────────────────────────────────────────
   startPlaygroundSession: (req: PlaygroundStartSessionRequest = {}) =>
