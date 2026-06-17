@@ -8,6 +8,12 @@ set -uo pipefail
 # Login shells reset PATH; ensure all toolchain bins are reachable.
 export PATH="/usr/local/bun/bin:/root/.opencode/bin:/usr/local/go/bin:/go/bin:/usr/local/bin:$PATH"
 
+# Load the repo's opencode config (NIM provider + 64k output limit + permission:allow
+# + instructions). It lives under .devcontainer/, not the repo root, so opencode does
+# NOT pick it up from cwd — point OPENCODE_CONFIG at it explicitly. Without this the
+# loop falls back to opencode's built-in provider catalog with a lower output limit.
+export OPENCODE_CONFIG="/workspace/portico/.devcontainer/opencode.json"
+
 cd /workspace/portico
 
 # Primary + fallback default to the SAME NIM model: NIM has generous limits, so a
