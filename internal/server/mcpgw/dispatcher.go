@@ -37,7 +37,8 @@ type Dispatcher struct {
 
 	snapshots *SnapshotBinder
 
-	codeModeCache *catalog.ProjectionCache
+	codeModeCache    *catalog.ProjectionCache
+	codeModeRedactor *audit.Redactor
 
 	cacheMu          sync.Mutex
 	toolsCache       map[string]toolsCacheEntry // sessionID -> tools
@@ -60,6 +61,7 @@ func NewDispatcher(m *southboundmgr.Manager, log *slog.Logger) *Dispatcher {
 		manager:          m,
 		log:              log,
 		codeModeCache:    catalog.NewProjectionCache(catalog.DefaultProjectionCacheSize),
+		codeModeRedactor: audit.NewDefaultRedactor(),
 		toolsCache:       make(map[string]toolsCacheEntry),
 		cacheTTL:         60 * time.Second,
 		listToolsTimeout: 5 * time.Second,
@@ -346,20 +348,42 @@ func (d *Dispatcher) handleToolsList(ctx context.Context, sess *Session, _ *prot
 	return body, nil
 }
 
-// handleToolsCall is the single hot path that runs the policy →
-// approval → credentials → southbound chain. It carries a gocyclo
-// waiver because each of the seven sequential branches is a real
-// distinct concern (params parse, policy gate, approval gate, manager
-// lookup, southbound acquire, progress wiring, audit emit) — splitting
-// any of them into helpers would obscure the order operators rely on
-// when reading a stack trace.
-//
-//nolint:gocyclo
+// handleToolsCall parses the tools/call request and dispatches it. Code Mode
+// meta-tools are routed to their handlers; every other tool call goes through
+// dispatchToolCall — the single governed envelope shared with in-sandbox Code
+// Mode calls (acceptance #8).
 func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *protocol.Request) (json.RawMessage, *protocol.Error) {
 	var params protocol.CallToolParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
 		return nil, protocol.NewError(protocol.ErrInvalidParams, err.Error(), nil)
 	}
+
+	// Phase 13.5: Code Mode meta-tools (reserved mcp.* namespace). Only routed
+	// when the session opted in; otherwise they fall through to dispatchToolCall
+	// and are rejected as unqualified tool names, so a non-Code-Mode session
+	// cannot reach them.
+	if sess.CodeMode != nil && isCodeModeMetaTool(params.Name) {
+		return d.handleCodeModeMetaTool(ctx, sess, params)
+	}
+
+	return d.dispatchToolCall(ctx, sess, params, string(req.ID))
+}
+
+// dispatchToolCall runs the full governed tools/call envelope for one tool call:
+// span → policy → approval → credentials → southbound → audit. It is the ONE
+// path both a direct tools/call and an in-sandbox Code Mode call take, so an
+// in-sandbox call inherits the identical tenant/scope/policy/approval/vault/
+// audit/telemetry envelope (acceptance #8). reqID is the northbound request id
+// for client-driven cancellation; empty for sandbox-issued calls (there is no
+// northbound request to cancel).
+//
+// It carries a gocyclo waiver because each of the sequential branches is a real
+// distinct concern (params split, policy gate, approval gate, manager lookup,
+// southbound acquire, progress wiring, audit emit) — splitting any of them into
+// helpers would obscure the order operators rely on when reading a stack trace.
+//
+//nolint:gocyclo
+func (d *Dispatcher) dispatchToolCall(ctx context.Context, sess *Session, params protocol.CallToolParams, reqID string) (json.RawMessage, *protocol.Error) {
 	ctx, span := telemetry.StartSpan(ctx, telemetry.SpanMCPToolCall,
 		telemetry.String(telemetry.AttrTool, params.Name),
 		telemetry.String(telemetry.AttrTenantID, sess.TenantID),
@@ -367,13 +391,6 @@ func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *pr
 		telemetry.String(telemetry.AttrUserID, sess.UserID),
 	)
 	defer span.End()
-
-	// Phase 13.5: Code Mode meta-tools (reserved mcp.* namespace). Only routed
-	// when the session opted in; otherwise they fall through and are rejected as
-	// unqualified tool names, so a non-Code-Mode session cannot reach them.
-	if sess.CodeMode != nil && isCodeModeMetaTool(params.Name) {
-		return d.handleCodeModeMetaTool(ctx, sess, params)
-	}
 
 	serverID, toolName, ok := namespace.SplitTool(params.Name)
 	if !ok {
@@ -440,9 +457,9 @@ func (d *Dispatcher) handleToolsCall(ctx context.Context, sess *Session, req *pr
 	// Per-call cancellable context registered on the session for client-driven cancel.
 	callCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	if len(req.ID) > 0 {
-		sess.RegisterCancel(string(req.ID), cancel)
-		defer sess.UnregisterCancel(string(req.ID))
+	if reqID != "" {
+		sess.RegisterCancel(reqID, cancel)
+		defer sess.UnregisterCancel(reqID)
 	}
 	// Attach Phase 5 per-call headers (OAuth Bearer, header_inject, secret_ref)
 	// so the southbound HTTP client picks them up via DefaultHeaderProvider.

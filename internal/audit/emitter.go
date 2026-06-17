@@ -74,6 +74,14 @@ const (
 	EventPolicyRuleChanged      = "policy.rule_changed"
 	EventPolicyRuleDeleted      = "policy.rule_deleted"
 	EventPolicyDryRun           = "policy.dry_run"
+
+	// Phase 13.5 — Code Mode execution lifecycle. Tool calls issued from inside
+	// a sandbox emit the regular tool_call.* events (same envelope); these mark
+	// the enclosing execution. Payloads carry counts only — never code, tool
+	// arguments, or results.
+	EventCodeModeExecStarted   = "code_mode.execution_started"
+	EventCodeModeExecCompleted = "code_mode.execution_completed"
+	EventCodeModeExecFailed    = "code_mode.execution_failed"
 )
 
 // Event is one structured log entry. Payload is an arbitrary JSON-serialisable

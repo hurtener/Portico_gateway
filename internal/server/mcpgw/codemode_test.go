@@ -75,8 +75,8 @@ func TestExtractCodeModeOpts_UnknownBindingLevelFallsBackToServer(t *testing.T) 
 
 func TestCodeModeMetaTools_AreReservedNamespaceWithSchemas(t *testing.T) {
 	tools := codeModeMetaTools()
-	if len(tools) != 3 {
-		t.Fatalf("want 3 meta-tools, got %d", len(tools))
+	if len(tools) != 4 {
+		t.Fatalf("want 4 meta-tools, got %d", len(tools))
 	}
 	for _, tl := range tools {
 		if !strings.HasPrefix(tl.Name, "mcp.") {
@@ -295,6 +295,106 @@ func listFiles(t *testing.T, d *Dispatcher, sess *Session) []string {
 	}
 	mustJSON(t, res.StructuredContent, &sc)
 	return sc.Files
+}
+
+// --- executeToolCode --------------------------------------------------------
+
+func execCode(t *testing.T, d *Dispatcher, sess *Session, code string) (json.RawMessage, *protocol.Error) {
+	t.Helper()
+	args, _ := json.Marshal(map[string]string{"code": code})
+	return d.handleCodeModeMetaTool(context.Background(), sess,
+		protocol.CallToolParams{Name: metaExecuteToolCode, Arguments: args})
+}
+
+func TestExecuteToolCode_PureComputeHappyPath(t *testing.T) {
+	sess := codeModeSession("e1")
+	d := codeModeDispatcher(codeModeSnapshot(), sess.ID)
+	body, perr := execCode(t, d, sess, "result = 1 + 2 + 3")
+	if perr != nil {
+		t.Fatalf("unexpected error: %v", perr)
+	}
+	var res protocol.CallToolResult
+	mustJSON(t, body, &res)
+	var sc struct {
+		Result    json.RawMessage `json:"result"`
+		ToolCalls int             `json:"tool_calls"`
+	}
+	mustJSON(t, res.StructuredContent, &sc)
+	if string(sc.Result) != "6" {
+		t.Errorf("result = %s, want 6", sc.Result)
+	}
+	if sc.ToolCalls != 0 {
+		t.Errorf("tool_calls = %d, want 0", sc.ToolCalls)
+	}
+}
+
+func TestExecuteToolCode_UnsafeSnippetRejected(t *testing.T) {
+	sess := codeModeSession("e2")
+	d := codeModeDispatcher(codeModeSnapshot(), sess.ID)
+	_, perr := execCode(t, d, sess, `load("os", "system")
+result = 1`)
+	if perr == nil || perr.Code != protocol.ErrCodeModeUnsafe {
+		t.Fatalf("want ErrCodeModeUnsafe, got %v", perr)
+	}
+	if !strings.Contains(string(perr.Data), "code_mode.unsafe_call") {
+		t.Errorf("error data should carry the code_mode.* reason: %s", perr.Data)
+	}
+}
+
+func TestExecuteToolCode_StepBudgetMapsToBudgetError(t *testing.T) {
+	sess := codeModeSession("e3")
+	d := codeModeDispatcher(codeModeSnapshot(), sess.ID)
+	_, perr := execCode(t, d, sess, `
+total = 0
+for i in range(100000000):
+    total = total + i
+result = total`)
+	if perr == nil || perr.Code != protocol.ErrCodeModeBudget {
+		t.Fatalf("want ErrCodeModeBudget, got %v", perr)
+	}
+}
+
+// A tool call from inside the sandbox routes through dispatchToolCall — proven
+// here by the fail-closed path: with no southbound manager configured, the
+// shared dispatch path returns upstream-unavailable, surfaced as a tool error.
+// (The happy-path envelope equality is the integration test.)
+func TestExecuteToolCode_ToolCallRoutesThroughDispatcher(t *testing.T) {
+	sess := codeModeSession("e4")
+	d := codeModeDispatcher(codeModeSnapshot(), sess.ID) // NewDispatcher(nil,...) → manager nil
+	_, perr := execCode(t, d, sess, `result = github.list_issues(repo="owner/r")`)
+	if perr == nil || perr.Code != protocol.ErrCodeModeExecution {
+		t.Fatalf("want ErrCodeModeExecution (tool error via dispatcher), got %v", perr)
+	}
+}
+
+func TestExecuteToolCode_EmptyCodeRejected(t *testing.T) {
+	sess := codeModeSession("e5")
+	d := codeModeDispatcher(codeModeSnapshot(), sess.ID)
+	_, perr := execCode(t, d, sess, "")
+	if perr == nil || perr.Code != protocol.ErrInvalidParams {
+		t.Fatalf("want ErrInvalidParams for empty code, got %v", perr)
+	}
+}
+
+func TestExecuteToolCode_ResultRedacted(t *testing.T) {
+	sess := codeModeSession("e6")
+	d := codeModeDispatcher(codeModeSnapshot(), sess.ID)
+	// The default redactor scrubs values under sensitive keys (api_key, token,
+	// …) by key name — a benign value is used here so no real-looking secret is
+	// committed (gitleaks-safe) while still exercising the redaction path.
+	const sentinel = "dummy-value-must-be-redacted"
+	body, perr := execCode(t, d, sess, `result = {"api_key": "`+sentinel+`"}`)
+	if perr != nil {
+		t.Fatalf("unexpected error: %v", perr)
+	}
+	var res protocol.CallToolResult
+	mustJSON(t, body, &res)
+	if strings.Contains(string(res.StructuredContent), sentinel) {
+		t.Errorf("result leaked the sensitive value: %s", res.StructuredContent)
+	}
+	if !strings.Contains(string(res.StructuredContent), "REDACTED") {
+		t.Errorf("expected redaction marker in result: %s", res.StructuredContent)
+	}
 }
 
 // --- helpers ----------------------------------------------------------------

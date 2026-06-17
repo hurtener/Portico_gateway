@@ -25,6 +25,12 @@ const (
 	ErrPolicyDenied        = -32003 // Phase 5
 	ErrToolNotEnabled      = -32004 // tool not visible / wrong namespace
 	ErrTenantInactive      = -32005 // future
+
+	// Code Mode (Phase 13.5). The specific code_mode.* reason travels in the
+	// error's Data.code field; these top-level codes group them by class.
+	ErrCodeModeUnsafe    = -32010 // static safety gate rejected the snippet
+	ErrCodeModeBudget    = -32011 // an execution budget tripped
+	ErrCodeModeExecution = -32012 // compile / runtime / in-sandbox tool error
 )
 
 // NewError builds an *Error with optional structured data.
