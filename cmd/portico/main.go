@@ -49,6 +49,8 @@ func main() {
 		err = runVault(ctx, args)
 	case "inspect-session":
 		err = runInspectSession(ctx, args)
+	case "conformance":
+		err = runConformance(ctx, args)
 	case "version", "--version", "-v":
 		printVersion()
 	case "help", "--help", "-h":
@@ -76,6 +78,8 @@ Commands:
   vault     <subcommand>              Manage the credential vault.
   inspect-session <session_id> [--output json|table] [--since <RFC3339>]
                                        Dump a session's snapshot, audit events, approvals.
+  conformance --suite openai --target <url> [--token <jwt>] [--model <alias>]
+                                       Run OpenAI API conformance checks.
   version                              Print version info.
 
 Run 'portico <command> -h' for command-specific flags.`)
