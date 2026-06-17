@@ -326,6 +326,26 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		_ = backend.Snapshots().CloseSession(context.Background(), sid)
 	})
 
+	// Phase 13.5: Code Mode execution + continuation store. Drives the approval
+	// suspend/resume flow and feeds the savings dashboard. A background sweeper
+	// reaps expired/consumed continuations hourly.
+	codeModeStore := backend.CodeMode()
+	dispatcher.SetCodeModeStore(codeModeStore)
+	go func() {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if _, err := codeModeStore.DeleteExpiredContinuations(context.Background(), time.Now()); err != nil {
+					logger.Warn("code mode continuation sweep failed", "err", err)
+				}
+			}
+		}
+	}()
+
 	driftProbe := newSnapshotsDriftAdapter(snapshotProbe)
 	driftDetector := snapshots.NewDetector(snapshotService, driftProbe,
 		logger.With("component", "snapshots.drift"),

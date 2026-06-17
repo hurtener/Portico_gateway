@@ -39,6 +39,7 @@ type Dispatcher struct {
 
 	codeModeCache    *catalog.ProjectionCache
 	codeModeRedactor *audit.Redactor
+	codeModeStore    ifaces.CodeModeStore
 
 	cacheMu          sync.Mutex
 	toolsCache       map[string]toolsCacheEntry // sessionID -> tools
@@ -89,6 +90,12 @@ func (d *Dispatcher) SetAuditEmitter(e audit.Emitter) {
 	}
 	d.emitter = e
 }
+
+// SetCodeModeStore installs the Code Mode execution + continuation store
+// (Phase 13.5). nil disables continuation persistence: an in-sandbox
+// approval_required then surfaces as a plain approval error instead of a
+// resumable suspension (no token to persist). Executions are still run.
+func (d *Dispatcher) SetCodeModeStore(s ifaces.CodeModeStore) { d.codeModeStore = s }
 
 // SetSnapshotBinder installs the lazy snapshot binder. nil disables stable
 // tools/list mode — the dispatcher falls back to live fan-out on every

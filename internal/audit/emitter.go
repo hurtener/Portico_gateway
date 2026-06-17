@@ -88,6 +88,9 @@ const (
 	EventCodeModeExecStarted   = "code_mode.execution_started"
 	EventCodeModeExecCompleted = "code_mode.execution_completed"
 	EventCodeModeExecFailed    = "code_mode.execution_failed"
+	// EventCodeModeExecSuspended marks an execution that paused on an in-sandbox
+	// approval_required and persisted a continuation (Phase 13.5 acceptance #9).
+	EventCodeModeExecSuspended = "code_mode.execution_suspended"
 )
 
 // Event is one structured log entry. Payload is an arbitrary JSON-serialisable

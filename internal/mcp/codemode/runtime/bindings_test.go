@@ -124,13 +124,26 @@ func TestBindings_PolicyDenyBecomesToolError(t *testing.T) {
 
 // C2/C4: an approval-required result surfaces as the typed approval signal the
 // runtime intercepts to drive the continuation flow.
-func TestBindings_ApprovalRequiredSurfacesTypedSignal(t *testing.T) {
-	disp := &mockDispatcher{perr: protocol.NewError(protocol.ErrApprovalRequired, "approval_required", nil)}
+func TestBindings_ApprovalRequiredSuspendsExecution(t *testing.T) {
+	disp := &mockDispatcher{perr: protocol.NewError(protocol.ErrApprovalRequired, "approval_required",
+		map[string]any{"approval_id": "appr-1"})}
 	_, err := Execute(context.Background(), `result = github.comment_on(repo="x", issue=1, body="hi")`, Config{
 		Bindings:   twoToolBindings(),
 		Dispatcher: disp,
 	})
-	assertSandboxCode(t, err, CodeApprovalRequired)
+	// An in-sandbox approval_required no longer surfaces as a raw SandboxError —
+	// it suspends the whole execution and returns a *Suspension carrying the
+	// continuation payload (the awaited call is the very first one, idx 0).
+	var susp *Suspension
+	if !errors.As(err, &susp) {
+		t.Fatalf("want *Suspension, got %T: %v", err, err)
+	}
+	if susp.CallIndex != 0 || susp.ApprovalID != "appr-1" || susp.Tool != "github.comment_on" {
+		t.Errorf("suspension fields wrong: %+v", susp)
+	}
+	if len(susp.CachedResults) != 0 {
+		t.Errorf("no calls completed before the awaited one; CachedResults should be empty, got %d", len(susp.CachedResults))
+	}
 }
 
 func TestBindings_PositionalArgsRejected(t *testing.T) {

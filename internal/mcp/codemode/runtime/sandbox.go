@@ -97,6 +97,11 @@ type Config struct {
 	// original timestamp so replay stays deterministic — threat model C4). Zero
 	// means "now, coarsened to the second".
 	Clock time.Time
+	// Resume, when non-nil, replays a suspended execution: its CachedResults are
+	// served for the prior calls and its ApprovalID is threaded onto the awaited
+	// call. Nil is a fresh execution. On replay the caller MUST also pass the
+	// original Clock so time.now() reproduces identically.
+	Resume *ResumeState
 }
 
 // Result is a completed execution's output.
@@ -121,6 +126,15 @@ type Result struct {
 // thread, bindings, and budgets and shares no mutable state.
 func Execute(ctx context.Context, code string, cfg Config) (*Result, error) {
 	budget := cfg.Budget.normalized()
+
+	// Resolve the frozen clock ONCE, up front, so both time.now() and any
+	// Suspension report the identical timestamp. A resume passes the original
+	// clock back in, making time.now() replay deterministically (class C4).
+	if cfg.Clock.IsZero() {
+		cfg.Clock = time.Now()
+	}
+	cfg.Clock = cfg.Clock.Truncate(time.Second)
+
 	opts := fileOptions()
 
 	// 1. Parse. Syntax errors are compile errors, surfaced verbatim-but-typed.
@@ -140,6 +154,10 @@ func Execute(ctx context.Context, code string, cfg Config) (*Result, error) {
 	//    modules, and the snapshot's tool modules. The set of names here is
 	//    exactly what isPredeclared admits.
 	state := &callState{maxToolCalls: budget.MaxToolCalls}
+	if cfg.Resume != nil {
+		state.cachedResults = cfg.Resume.CachedResults
+		state.resumeApprovalID = cfg.Resume.ApprovalID
+	}
 	predeclared, toolModuleNames, err := buildPredeclared(ctx, cfg, state)
 	if err != nil {
 		return nil, err
@@ -273,6 +291,26 @@ func runProgram(ctx context.Context, prog *starlark.Program, predeclared starlar
 	globals, execErr := prog.Init(thread, predeclared)
 	close(done)
 	duration := time.Since(started)
+
+	// Approval suspension takes precedence over every other error class: a tool
+	// call returned approval_required, so the run aborted deliberately. Build the
+	// continuation payload (the full prior-call prefix = cached ++ live) the
+	// handler persists. Class C4.
+	if state.suspended != nil {
+		prefix := make([]json.RawMessage, 0, len(state.cachedResults)+len(state.liveResults))
+		prefix = append(prefix, state.cachedResults...)
+		prefix = append(prefix, state.liveResults...)
+		return nil, &Suspension{
+			CallIndex:     state.suspended.callIndex,
+			ApprovalID:    state.suspended.approvalID,
+			Tool:          state.suspended.tool,
+			CachedResults: prefix,
+			PrintBuffer:   out.String(),
+			Clock:         cfg.Clock,
+			Steps:         thread.ExecutionSteps(),
+			ToolCalls:     state.toolCalls,
+		}
+	}
 
 	if execErr != nil {
 		return nil, classifyExecError(execErr, stepsExceeded, wallExceeded, memExceeded, runCtx)

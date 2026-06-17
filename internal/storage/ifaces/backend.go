@@ -56,6 +56,9 @@ type Backend interface {
 	// Playground returns the saved playground cases + runs store (Phase 10).
 	Playground() PlaygroundStore
 
+	// CodeMode returns the Code Mode execution + continuation store (Phase 13.5).
+	CodeMode() CodeModeStore
+
 	// Health pings the underlying connection. Returns error if the backend
 	// is not reachable. Used by /readyz and tests.
 	Health(ctx context.Context) error
