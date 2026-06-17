@@ -122,6 +122,8 @@ func chatCompletionsHandler(d Deps) http.HandlerFunc {
 		recordQuotaUsage(d, id.TenantID, resp.Usage.TotalTokens)
 		recordCost(d, r, id.TenantID, req.Model, prov.Driver, model.ProviderModel,
 			resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
+		recordChatSession(d, r, req.Model, req.Messages,
+			openAIMessage{Role: orDefault(resp.Message.Role, "assistant"), Content: resp.Message.Content})
 
 		writeJSON(w, http.StatusOK, openAIChatResponse{
 			ID:      orDefault(resp.ID, "chatcmpl-portico"),

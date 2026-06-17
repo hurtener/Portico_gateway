@@ -14,6 +14,7 @@ import (
 	"errors"
 
 	"github.com/hurtener/Portico_gateway/internal/apps"
+	"github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
 	"github.com/hurtener/Portico_gateway/internal/auth/scope"
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
@@ -141,6 +142,11 @@ type Deps struct {
 	// Phase 13: LLM chat session store. Optional; when nil, /api/llm/sessions
 	// returns 503.
 	LLMSessions ifaces.LLMSessionStore
+
+	// Phase 13: redactor applied to chat-session message content before it is
+	// persisted. Optional; recordChatSession falls back to a default redactor
+	// when nil so content is never stored unredacted.
+	Redactor *audit.Redactor
 }
 
 // approvalFlow is the slice of internal/policy/approval.Flow the API
