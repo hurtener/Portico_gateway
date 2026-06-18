@@ -76,3 +76,6 @@ web/console/.playwright/
 
 # Code Mode red-team workflow scratch script (orchestrator-run, not source)
 .devcontainer/*.workflow.js
+
+# Root build artifact from `go build ./cmd/portico` (use bin/portico instead)
+/portico
