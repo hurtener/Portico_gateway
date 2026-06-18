@@ -51,6 +51,8 @@ func main() {
 		err = runInspectSession(ctx, args)
 	case "conformance":
 		err = runConformance(ctx, args)
+	case "code-mode":
+		err = runCodeMode(ctx, args)
 	case "version", "--version", "-v":
 		printVersion()
 	case "help", "--help", "-h":
@@ -80,6 +82,10 @@ Commands:
                                        Dump a session's snapshot, audit events, approvals.
   conformance --suite openai --target <url> [--token <jwt>] [--model <alias>]
                                        Run OpenAI API conformance checks.
+  code-mode render --session <id> [--tenant <id>] [--binding-level server|tool] [--file <path>]
+                                       Dump the projected .pyi stubs for a session's snapshot.
+  code-mode exec   --session <id> --code <@file|inline> [--tenant <id>]
+                                       Run a Starlark snippet through the sandbox (offline; tool calls disabled).
   version                              Print version info.
 
 Run 'portico <command> -h' for command-specific flags.`)
