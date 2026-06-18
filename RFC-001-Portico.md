@@ -476,6 +476,42 @@ This means a vanilla MCP client (Claude Desktop with no Portico knowledge) sees 
 
 ---
 
+## 8.5 MCP Code Mode
+
+Code Mode is a *per-session, per-tenant, opt-in* alternative projection of the same MCP catalog. Instead of N literal namespaced tools, a Code Mode session sees four meta-tools and orchestrates work by writing Starlark that calls tools through bindings. Intermediate results stay inside the sandbox; only the final `result` crosses back into the conversation. A 200-tool catalog never lands in the model's context window — only the stubs the model *chose* to load. This cuts token spend on tool definitions by roughly 50% and collapses N round trips into one. It is a presentation layer over the same catalog and the **same governance envelope**, not a parallel universe; the full implementation specification is `docs/plans/phase-13.5-mcp-code-mode.md` and the security analysis is `docs/security/code-mode-threat-model.md`.
+
+### 8.5.1 The four meta-tools
+
+Advertised on `tools/list` only when the session opted in (`capabilities.experimental.portico.code_mode`). They live under the reserved `mcp.*` namespace:
+
+- `mcp.listToolFiles` — enumerate the virtual `.pyi` stub file system for the session's snapshot (deterministic projection; `servers/<server>.pyi` by default, `servers/<server>/<tool>.pyi` at tool binding level, plus `index.md`).
+- `mcp.readToolFile` — read one stub file (compact Python-stub function signatures derived from each tool's JSON Schema).
+- `mcp.getToolDocs` — full docs for named tools (description, JSON Schema, risk class, approval policy).
+- `mcp.executeToolCode` — run a Starlark snippet that calls tools and returns `result`, plus the token-savings estimate and tool-call count.
+
+### 8.5.2 Sandbox guarantees
+
+The runtime (`internal/mcp/codemode/runtime/`) wraps `go.starlark.net` with a hardened, adversarial-input posture:
+
+- **No `load`/`import`, no host I/O.** `thread.Load` is always nil; a static safety gate parses the snippet, rejects any `load` statement, and rejects any identifier the resolver scoped to Starlark's Universe that is not on an explicit allowlist (so `set`/`getattr`/`open`/… can never be reached). The built-in surface is an allowlist — widening it requires a threat-model update.
+- **Deterministic, side-channel-blunted built-ins.** Allowlisted built-ins + `json`/`math` + `time.now()` frozen to a per-execution timestamp (coarsened to the second).
+- **Four enforced budgets**, each defaulting conservative and never "unlimited": Starlark step count, wall-clock (a joined watchdog goroutine cancels the thread), buffered `print()` output bytes, and tool calls per execution. A heap-sampling watchdog (`MaxAllocBytes`) additionally bounds looping allocation bombs; a single catastrophic allocation between samples is a documented residual that out-of-process isolation closes.
+- **One governed tool path.** The sandbox's only way to reach a tool is the `runtime.ToolDispatcher` seam, whose sole production implementation is the dispatcher's existing `tools/call` core. Every in-sandbox call therefore inherits the identical tenant + JWT scope + policy + approval + vault-credential-injection + audit-redaction + telemetry envelope a direct `tools/call` runs — proven by an integration test asserting a byte-identical audit envelope.
+
+Operators tighten the default-open posture with a `code_mode` policy: an execution-size limit, a tool-call ceiling, an allowed-binding-level allowlist, a kill switch, `deny_on_unsafe_starlark`, and `require_approval_on_executeToolCode` (gate every run behind approval).
+
+### 8.5.3 Approval-suspension protocol
+
+When a tool called from inside the sandbox needs approval, the runtime cannot freeze a Starlark frame, so it uses a **structured continuation**:
+
+1. The dispatcher returns `approval_required`; the runtime captures the awaited call index, the approval id, the JSON results of every call that completed *before* it (indexed by ordinal), and the frozen clock, then aborts.
+2. `executeToolCode` persists this as a single-use, tenant-scoped, TTL-bounded continuation row and returns `status: "approval_required"` with a continuation token (the model never sees Starlark state).
+3. After the operator approves, the client re-calls `executeToolCode` with the token. The runtime **deterministically replays**: cached results are served by ordinal without re-dispatching (a prior write never runs twice), and the awaited call re-dispatches live with its granted approval id threaded so the approval gate recognises the prior grant through the identical governed envelope.
+
+Determinism rests on three invariants: the snapshot is immutable for the execution's lifetime, the clock is frozen, and every binding is pure. Resume fails closed on snapshot drift (`code_mode.snapshot_drifted`), a second use (`code_mode.double_resume`), TTL expiry (`code_mode.continuation_expired`), and cross-tenant or unknown tokens (`code_mode.continuation_not_found`). The approval replay window compares a byte-exact hash of the full arguments plus the tool and skill id — hardened across four adversarial red-team rounds (see the threat model). The same continuation mechanism backs `require_approval_on_executeToolCode`, which gates a whole execution behind approval before the snippet runs.
+
+---
+
 ## 9. Observability
 
 Portico emits structured events for the full lifecycle: session created, catalog resolved, server process started/stopped/crashed, tool list changed, Skill enabled/disabled, tool call started/completed/failed, resource read, prompt fetched, token injected, policy allowed/denied/approval-required, UI resource discovered, schema drift detected.
