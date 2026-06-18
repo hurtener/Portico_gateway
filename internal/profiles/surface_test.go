@@ -77,6 +77,33 @@ func TestMaterialize_EmptyToolAllowlist(t *testing.T) {
 	}
 }
 
+// TestIntersection_MostRestrictiveWins documents the canonical V2 rule: when
+// the profile's allowlist meets a (narrower OR wider) live catalog, the
+// effective surface is the intersection — the most-restrictive layer always
+// wins, the profile never broadens what the live catalog offers and the live
+// catalog never broadens what the profile allows.
+func TestIntersection_MostRestrictiveWins(t *testing.T) {
+	// Profile allows a WIDE set; the live catalog is NARROWER → live wins.
+	wide := &Profile{ID: "ap_1", AllowedMCPServers: []string{"github", "jira", "slack"}}
+	got := wide.Materialize(LiveCatalog{Servers: []string{"github"}})
+	if !reflect.DeepEqual(got.Servers, []string{"github"}) {
+		t.Fatalf("a narrower live catalog must win: %v", got.Servers)
+	}
+
+	// Profile allows a NARROW set; the live catalog is WIDER → profile wins.
+	narrow := &Profile{ID: "ap_2", AllowedMCPServers: []string{"github"}}
+	got = narrow.Materialize(LiveCatalog{Servers: []string{"github", "jira", "slack"}})
+	if !reflect.DeepEqual(got.Servers, []string{"github"}) {
+		t.Fatalf("a narrower profile must win: %v", got.Servers)
+	}
+
+	// AllowsServer/AllowsTool are the gate every layer routes through, so a
+	// restrictive profile can only ever subtract.
+	if narrow.AllowsServer("jira") {
+		t.Fatal("profile must not allow a server outside its allowlist (no broadening)")
+	}
+}
+
 func TestMaterialize_DropsToolWhoseServerNotAllowed(t *testing.T) {
 	// A declared tool whose server is not in the allowlist is dropped.
 	p := &Profile{ID: "ap_3", AllowedMCPServers: []string{"github"}, AllowedTools: []string{"github.x", "jira.y"}}
