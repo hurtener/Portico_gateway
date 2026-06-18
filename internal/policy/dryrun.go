@@ -17,6 +17,29 @@ type ToolCallShape struct {
 	Tool     string         `json:"tool"`
 	Args     map[string]any `json:"args,omitempty"`
 	Now      time.Time      `json:"now,omitempty"`
+	// Profile is the caller's resolved Agent Profile (Phase 14), populated by
+	// the dispatcher/dry-run caller. nil means "no profile context" — profile
+	// matchers then never fire and require_profile_membership denies. Kept as a
+	// local view so internal/policy stays decoupled from internal/profiles.
+	Profile *ProfileView `json:"profile,omitempty"`
+}
+
+// ProfileView is the policy-package projection of a resolved Agent Profile —
+// just the fields the profile matchers and require_profile_membership action
+// read. The caller maps a *profiles.Profile + materialised surface onto it.
+type ProfileView struct {
+	ID      string   `json:"id,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	Servers []string `json:"servers,omitempty"` // allowed/materialised server ids
+	Aliases []string `json:"aliases,omitempty"` // allowed model aliases
+}
+
+// isMember reports whether the profile id or name is in the supplied list.
+func (p *ProfileView) isMember(list []string) bool {
+	if p == nil {
+		return false
+	}
+	return contains(list, p.ID) || (p.Name != "" && contains(list, p.Name))
 }
 
 // RuleMatch records why a rule matched (or "lost" on priority). Reason is
@@ -64,6 +87,11 @@ func DryRun(_ context.Context, rs RuleSet, call ToolCallShape) DryRunResult {
 		if len(res.MatchedRules) == 0 {
 			res.MatchedRules = append(res.MatchedRules, match)
 			res.FinalAction = r.Actions
+			// require_profile_membership resolves to a deny when the caller's
+			// profile is not a member; membership-satisfied is allow-like.
+			if len(r.Actions.RequireProfileMembership) > 0 && !call.Profile.isMember(r.Actions.RequireProfileMembership) {
+				res.FinalAction.Deny = true
+			}
 			if r.RiskClass != "" {
 				res.FinalRisk = r.RiskClass
 			}
@@ -145,6 +173,22 @@ func ruleMatches(r Rule, call ToolCallShape) bool {
 			return false
 		}
 	}
+	return profileConditionsMatch(m, call.Profile)
+}
+
+// profileConditionsMatch evaluates the Phase 14 Agent Profile matchers. A
+// profile matcher with no profile in context never fires (the rule simply does
+// not apply to that call).
+func profileConditionsMatch(m Match, p *ProfileView) bool {
+	if len(m.Profiles) > 0 && !p.isMember(m.Profiles) {
+		return false
+	}
+	if m.ProfileIncludesServer != "" && (p == nil || !contains(p.Servers, m.ProfileIncludesServer)) {
+		return false
+	}
+	if m.ProfileIncludesAlias != "" && (p == nil || !contains(p.Aliases, m.ProfileIncludesAlias)) {
+		return false
+	}
 	return true
 }
 
@@ -162,6 +206,15 @@ func matchReason(r Rule, call ToolCallShape) string {
 	}
 	if m.TimeRange.From != "" || m.TimeRange.To != "" {
 		parts = append(parts, "time-range")
+	}
+	if len(m.Profiles) > 0 && call.Profile != nil {
+		parts = append(parts, "profile="+call.Profile.ID)
+	}
+	if m.ProfileIncludesServer != "" {
+		parts = append(parts, "profile-includes-server="+m.ProfileIncludesServer)
+	}
+	if m.ProfileIncludesAlias != "" {
+		parts = append(parts, "profile-includes-alias="+m.ProfileIncludesAlias)
 	}
 	if len(parts) == 0 {
 		return "default match (no conditions)"

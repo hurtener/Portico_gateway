@@ -51,6 +51,13 @@ type Match struct {
 	Tenants   []string  `json:"tenants,omitempty" yaml:"tenants,omitempty"`
 	ArgsExpr  string    `json:"args_expr,omitempty" yaml:"args_expr,omitempty"`
 	TimeRange TimeRange `json:"time_range,omitempty" yaml:"time_range,omitempty"`
+	// Agent Profile matchers (Phase 14). Profiles matches the caller's resolved
+	// profile by id OR name (covers profile.id / profile.name). The
+	// IncludesServer / IncludesAlias matchers fire when the caller's profile
+	// surface includes the named server / model alias.
+	Profiles              []string `json:"profiles,omitempty" yaml:"profiles,omitempty"`
+	ProfileIncludesServer string   `json:"profile_includes_server,omitempty" yaml:"profile_includes_server,omitempty"`
+	ProfileIncludesAlias  string   `json:"profile_includes_alias,omitempty" yaml:"profile_includes_alias,omitempty"`
 }
 
 // TimeRange is an HH:MM..HH:MM window in UTC. Empty fields disable the
@@ -70,6 +77,11 @@ type Actions struct {
 	RequireApproval   bool   `json:"require_approval,omitempty" yaml:"require_approval,omitempty"`
 	LogLevel          string `json:"log_level,omitempty" yaml:"log_level,omitempty"`
 	AnnotateRiskClass string `json:"annotate,omitempty" yaml:"annotate,omitempty"`
+	// RequireProfileMembership (Phase 14) denies the call unless the caller's
+	// resolved profile id (or name) is in this list — the policy-DSL expression
+	// of "only these agent profiles may reach this surface". A verdict action,
+	// mutually exclusive with allow/deny/require_approval.
+	RequireProfileMembership []string `json:"require_profile_membership,omitempty" yaml:"require_profile_membership,omitempty"`
 }
 
 // ErrInvalidRule is the sentinel returned by Validate. Wrapped errors are
@@ -100,8 +112,11 @@ func Validate(r Rule) error {
 	if r.Actions.RequireApproval {
 		count++
 	}
+	if len(r.Actions.RequireProfileMembership) > 0 {
+		count++
+	}
 	if count > 1 {
-		return fmt.Errorf("%w: actions allow/deny/require_approval are mutually exclusive", ErrInvalidRule)
+		return fmt.Errorf("%w: actions allow/deny/require_approval/require_profile_membership are mutually exclusive", ErrInvalidRule)
 	}
 	if r.Conditions.Match.TimeRange.From != "" {
 		if _, err := time.Parse("15:04", r.Conditions.Match.TimeRange.From); err != nil {
