@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -22,6 +23,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/budgets"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
 	dataplanemw "github.com/hurtener/Portico_gateway/internal/dataplane/middleware"
+	cacheifaces "github.com/hurtener/Portico_gateway/internal/llm/cache/ifaces"
 	llmengineifaces "github.com/hurtener/Portico_gateway/internal/llm/engine/ifaces"
 	"github.com/hurtener/Portico_gateway/internal/llm/quota"
 	mcpnb "github.com/hurtener/Portico_gateway/internal/mcp/northbound/http"
@@ -171,6 +173,14 @@ type Deps struct {
 	// Phase 15.5: hierarchical budget enforcer. Optional; nil → no budget
 	// pre-check/reconcile in the LLM gateway (back-compat).
 	BudgetEnforcer *budgets.Enforcer
+
+	// Phase 15.5: semantic cache in front of the LLM gateway. Cache is nil when
+	// the configured driver is "none" (no caching). CacheScope/TTL/Threshold are
+	// the resolved cache config.
+	Cache          cacheifaces.Cache
+	CacheScope     cacheifaces.Scope
+	CacheTTL       time.Duration
+	CacheThreshold float32
 
 	// Phase 13: redactor applied to chat-session message content before it is
 	// persisted. Optional; recordChatSession falls back to a default redactor
@@ -378,6 +388,11 @@ func NewRouter(d Deps) http.Handler {
 			r.Put("/api/llm/models/{alias}", upsertLLMModelHandler(d, true))
 			r.Delete("/api/llm/models/{alias}", deleteLLMModelHandler(d))
 		}
+		// Phase 15.5: semantic cache admin. config/stats are always available
+		// (report "none" when no cache); invalidate requires admin + a live cache.
+		r.Get("/api/llm/cache/config", getCacheConfigHandler(d))
+		r.Get("/api/llm/cache/stats", getCacheStatsHandler(d))
+		r.Post("/api/llm/cache/invalidate", invalidateCacheHandler(d))
 		// Phase 13: per-tenant LLM quota (one row per tenant). GET is
 		// readable by the tenant; PUT requires admin scope.
 		if d.LLMQuotas != nil {

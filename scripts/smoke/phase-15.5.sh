@@ -160,5 +160,26 @@ if skip_if_404 201 "POST /api/governance/budgets" \
   fi
 fi
 
+# 11) Semantic cache admin surface. config/stats are always available (report
+# "none" when no cache is configured — dev defaults to no cache, so a 200 with
+# driver:"none" is expected). invalidate requires a live cache (503 when none).
+assert_status 200 "GET /api/llm/cache/config" \
+  -- -X GET "$(api_url /api/llm/cache/config)"
+assert_json_truthy '.driver' "cache config reports a driver"
+assert_status 200 "GET /api/llm/cache/stats" \
+  -- -X GET "$(api_url /api/llm/cache/stats)"
+# invalidate: 200 when a cache is configured, 503 when not — both are acceptable
+# (the dev server defaults to no cache). Treat 503 as a skip via skip_if_404's
+# sibling: assert it is one of the two by checking it is not a hard failure.
+INVAL_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$(api_url /api/llm/cache/invalidate)" \
+  -H 'Content-Type: application/json' -d '{"all":true}')
+if [ "$INVAL_STATUS" = "200" ] || [ "$INVAL_STATUS" = "503" ]; then
+  say_ok "POST /api/llm/cache/invalidate (HTTP $INVAL_STATUS — 200 cached / 503 no-cache)"
+  PHASE_OK=$((PHASE_OK + 1))
+else
+  say_fail "POST /api/llm/cache/invalidate unexpected HTTP $INVAL_STATUS"
+  PHASE_FAIL=$((PHASE_FAIL + 1))
+fi
+
 end_phase
 exit $?
