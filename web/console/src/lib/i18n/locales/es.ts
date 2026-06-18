@@ -1397,6 +1397,7 @@ export default {
   // Phase 10: Playground
   'nav.playground': 'Playground',
   'nav.code_mode': 'Code Mode',
+  'nav.agents': 'Agent Profiles',
   'playground.title': 'Playground',
   'playground.subtitle':
     'Ejecuta tool calls, prompts y lecturas de recursos contra el catálogo en vivo.',

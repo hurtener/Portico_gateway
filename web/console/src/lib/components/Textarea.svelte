@@ -13,12 +13,22 @@
   export let mono = false;
   export let block = true;
 
+  // Auto-generate an id when a label is present but no id was given, so screen
+  // readers + tests using getByLabel can resolve the textarea (§4.5.1).
+  let _autoId = '';
+  $: if (label && !id) {
+    if (!_autoId) {
+      _autoId = `ta-${Math.random().toString(36).slice(2, 9)}`;
+    }
+  }
+  $: resolvedId = id ?? (label ? _autoId : undefined);
+
   $: hasError = Boolean(error);
 </script>
 
 <div class="field" class:block>
   {#if label}
-    <label for={id} class="label">
+    <label for={resolvedId} class="label">
       {label}
       {#if required}<span class="req" aria-hidden="true">*</span>{/if}
     </label>
@@ -27,7 +37,7 @@
     class="ta"
     class:mono
     class:err={hasError}
-    {id}
+    id={resolvedId}
     {name}
     {placeholder}
     {disabled}
@@ -40,12 +50,12 @@
     on:focus
     on:blur
     aria-invalid={hasError || undefined}
-    aria-describedby={hint || error ? `${id}-msg` : undefined}
+    aria-describedby={hint || error ? `${resolvedId}-msg` : undefined}
   ></textarea>
   {#if error}
-    <p class="msg err-msg" id="{id}-msg">{error}</p>
+    <p class="msg err-msg" id="{resolvedId}-msg">{error}</p>
   {:else if hint}
-    <p class="msg hint" id="{id}-msg">{hint}</p>
+    <p class="msg hint" id="{resolvedId}-msg">{hint}</p>
   {/if}
 </div>
 
