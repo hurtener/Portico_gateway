@@ -358,6 +358,26 @@ export interface LLMUnitPrice {
   output_per_1k: number;
 }
 
+// ── Phase 13.5: Code Mode observability ───────────────────────────────────
+export interface CodeModeExecution {
+  execution_id: string;
+  session_id: string;
+  status: string;
+  started_at: string;
+  finished_at?: string;
+  snippet_sha: string;
+  tool_calls: number;
+  tokens_saved_est: number;
+}
+
+export interface CodeModeSavings {
+  executions: number;
+  tool_calls: number;
+  tokens_saved_est: number;
+  by_status: Record<string, number>;
+  since?: string;
+}
+
 export interface LLMProviderHealth {
   name: string;
   driver: string;
@@ -754,6 +774,19 @@ export const api = {
   listLLMSessions: () => request<LLMSessionSummary[]>('/api/llm/sessions'),
   getLLMSession: (chatId: string) =>
     request<LLMSessionTranscript>(`/api/llm/sessions/${encodeURIComponent(chatId)}`),
+
+  // ── Phase 13.5: Code Mode observability ──────────────────────────────
+  listCodeModeExecutions: (session?: string, limit?: number) => {
+    const qs = new URLSearchParams();
+    if (session) qs.set('session', session);
+    if (limit) qs.set('limit', String(limit));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<CodeModeExecution[]>(`/api/code-mode/executions${suffix}`);
+  },
+  getCodeModeSavings: (since?: string) => {
+    const suffix = since ? `?since=${encodeURIComponent(since)}` : '';
+    return request<CodeModeSavings>(`/api/code-mode/savings${suffix}`);
+  },
 
   // ── Phase 10: Playground ────────────────────────────────────────────
   startPlaygroundSession: (req: PlaygroundStartSessionRequest = {}) =>
