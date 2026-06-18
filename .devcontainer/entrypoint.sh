@@ -28,6 +28,18 @@ else
   echo "[entrypoint] WARN: no nvidia_api_key in /run/secrets — NIM calls will fail"
 fi
 
+# 2b. Hugging Face token — authorizes the HF Router OpenAI-compatible provider
+#     (GLM-5.2 via Fireworks). Same shape as the NIM key.
+if [ -f "$SEC/hf_token" ]; then
+  HF_TOKEN="$(tr -d '[:space:]' < "$SEC/hf_token")"
+  export HF_TOKEN
+  echo "export HF_TOKEN=$HF_TOKEN" > /etc/profile.d/hf.sh
+  chmod 644 /etc/profile.d/hf.sh
+  echo "[entrypoint] Hugging Face token installed (HF_TOKEN set)"
+else
+  echo "[entrypoint] WARN: no hf_token in /run/secrets — HF/GLM calls will fail"
+fi
+
 # 3. GitHub token — gh CLI (PRs) + git over HTTPS.
 if [ -f "$SEC/gh_token" ]; then
   TOKEN="$(tr -d '[:space:]' < "$SEC/gh_token")"
