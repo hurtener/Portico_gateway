@@ -136,6 +136,50 @@ func (s *codeModeStore) ListExecutions(ctx context.Context, tenantID, sessionID 
 	return out, nil
 }
 
+func (s *codeModeStore) SummarizeExecutions(ctx context.Context, tenantID, since string) (*ifaces.CodeModeSummary, error) {
+	if tenantID == "" {
+		return nil, errors.New("sqlite: summarize executions requires tenant_id")
+	}
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	const base = `
+		SELECT status, COUNT(*), COALESCE(SUM(tool_calls), 0), COALESCE(SUM(tokens_saved_est), 0)
+		FROM code_mode_executions
+		WHERE tenant_id = ?`
+	if since == "" {
+		rows, err = s.db.QueryContext(ctx, base+" GROUP BY status", tenantID)
+	} else {
+		rows, err = s.db.QueryContext(ctx, base+" AND started_at >= ? GROUP BY status", tenantID, since)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: summarize code mode executions: %w", err)
+	}
+	defer rows.Close()
+
+	out := &ifaces.CodeModeSummary{ByStatus: map[string]int{}}
+	for rows.Next() {
+		var (
+			status string
+			count  int
+			calls  int
+			saved  int
+		)
+		if err := rows.Scan(&status, &count, &calls, &saved); err != nil {
+			return nil, fmt.Errorf("sqlite: scan code mode summary: %w", err)
+		}
+		out.Executions += count
+		out.ToolCalls += calls
+		out.TokensSavedEst += saved
+		out.ByStatus[status] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: iterate code mode summary: %w", err)
+	}
+	return out, nil
+}
+
 func (s *codeModeStore) PutContinuation(ctx context.Context, c *ifaces.CodeModeContinuation) error {
 	if c == nil {
 		return errors.New("sqlite: nil continuation")

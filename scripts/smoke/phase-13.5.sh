@@ -135,6 +135,19 @@ capture_status "tools/call mcp.executeToolCode (unknown continuation)" \
      -d "$CALL_RESUME"
 assert_json_path '.error.data.code' 'code_mode.continuation_not_found' "unknown continuation token returns code_mode.continuation_not_found"
 
+# 8c) Code Mode observability endpoints (admin scope; dev mode grants it). The
+#     executions list is a (possibly empty) array; the savings rollup carries the
+#     tokens-saved totals. Skips cleanly on builds without the code mode store.
+if skip_if_404 200 "GET /api/code-mode/executions" \
+  -- -X GET "$(api_url /api/code-mode/executions)"; then
+  if printf '%s' "$RESPONSE_BODY" | jq -e 'type=="array"' >/dev/null 2>&1; then
+    assert_json_truthy 'type=="array"' "code mode executions returns a JSON array"
+  fi
+  skip_if_404 200 "GET /api/code-mode/savings" \
+    -- -X GET "$(api_url /api/code-mode/savings)"
+  assert_json_truthy 'has("executions")' "code mode savings rollup has an executions count"
+fi
+
 # 9) Acceptance #1: a session WITHOUT the opt-in does not see the meta-tools.
 PLAIN_INIT='{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"preflight","version":"0"}}'
 PLAIN_HEADERS=$(curl -s -D - -o /dev/null -X POST "$(mcp_url)" \

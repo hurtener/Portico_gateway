@@ -618,6 +618,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		LLMQuota:     llmQuotaEnforcer,
 		LLMCosts:     llmCosts,
 		LLMSessions:  llmSessions,
+		CodeMode:     codeModeStore,
 		Redactor:     auditpkg.NewDefaultRedactor(),
 	}
 
