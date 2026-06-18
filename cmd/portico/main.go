@@ -53,6 +53,8 @@ func main() {
 		err = runConformance(ctx, args)
 	case "code-mode":
 		err = runCodeMode(ctx, args)
+	case "agents":
+		err = runAgents(ctx, args)
 	case "version", "--version", "-v":
 		printVersion()
 	case "help", "--help", "-h":
@@ -83,9 +85,11 @@ Commands:
   conformance --suite openai --target <url> [--token <jwt>] [--model <alias>]
                                        Run OpenAI API conformance checks.
   code-mode render --session <id> [--tenant <id>] [--binding-level server|tool] [--file <path>]
-                                       Dump the projected .pyi stubs for a session's snapshot.
+                                        Dump the projected .pyi stubs for a session's snapshot.
   code-mode exec   --session <id> --code <@file|inline> [--tenant <id>]
-                                       Run a Starlark snippet through the sandbox (offline; tool calls disabled).
+                                        Run a Starlark snippet through the sandbox (offline; tool calls disabled).
+  agents list|get|create|delete|bind|unbind --tenant <id> [flags]
+                                        Manage agent profiles (offline, against the data dir).
   version                              Print version info.
 
 Run 'portico <command> -h' for command-specific flags.`)
