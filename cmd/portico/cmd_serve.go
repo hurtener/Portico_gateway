@@ -41,12 +41,18 @@ import (
 	_ "github.com/hurtener/Portico_gateway/internal/skills/source/git"
 	_ "github.com/hurtener/Portico_gateway/internal/skills/source/http"
 
+	llmcache "github.com/hurtener/Portico_gateway/internal/llm/cache"
+	cacheifaces "github.com/hurtener/Portico_gateway/internal/llm/cache/ifaces"
 	llmengine "github.com/hurtener/Portico_gateway/internal/llm/engine"
 	llmengineifaces "github.com/hurtener/Portico_gateway/internal/llm/engine/ifaces"
 	"github.com/hurtener/Portico_gateway/internal/llm/quota"
 
 	// Side-effect: register the Phase 13 LLM engine driver (Bifrost).
 	_ "github.com/hurtener/Portico_gateway/internal/llm/engine/bifrost"
+	// Side-effect: register the Phase 15.5 semantic-cache drivers (§4.4 seam).
+	_ "github.com/hurtener/Portico_gateway/internal/llm/cache/inmem"
+	_ "github.com/hurtener/Portico_gateway/internal/llm/cache/none"
+	_ "github.com/hurtener/Portico_gateway/internal/llm/cache/redis"
 	"github.com/hurtener/Portico_gateway/internal/storage"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 
@@ -586,6 +592,28 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		}
 	}
 
+	// Phase 15.5: semantic cache (§4.4 seam). driver:"" / "none" → no cache.
+	var llmCache cacheifaces.Cache
+	cacheScope := cacheifaces.Scope(cfg.Cache.Scope)
+	if cacheScope == "" {
+		cacheScope = cacheifaces.ScopeTenant
+	}
+	var cacheTTL time.Duration
+	if cfg.Cache.TTL != "" {
+		if d, perr := time.ParseDuration(cfg.Cache.TTL); perr == nil {
+			cacheTTL = d
+		}
+	}
+	if drv := cfg.Cache.Driver; drv != "" && drv != "none" {
+		c, cerr := llmcache.Open(drv, cfg.Cache.Options, cacheifaces.Deps{})
+		if cerr != nil {
+			logger.Warn("llm cache init failed; caching disabled", "driver", drv, "error", cerr)
+		} else {
+			llmCache = c
+			logger.Info("llm semantic cache enabled", "driver", drv, "scope", string(cacheScope))
+		}
+	}
+
 	deps := api.Deps{
 		Logger:         logger,
 		Validator:      validator,
@@ -648,6 +676,10 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		VKResolver:      vkResolver,
 		Budgets:         budgetStore,
 		BudgetEnforcer:  budgetEnf,
+		Cache:           llmCache,
+		CacheScope:      cacheScope,
+		CacheTTL:        cacheTTL,
+		CacheThreshold:  cfg.Cache.Threshold,
 		ProfileResolver: profileResolver,
 		Redactor:        auditpkg.NewDefaultRedactor(),
 	}

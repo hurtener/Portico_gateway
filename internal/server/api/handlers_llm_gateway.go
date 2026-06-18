@@ -86,6 +86,11 @@ func chatCompletionsHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
+		// Phase 15.5: a cache hit is free — serve it before quota/budget gating.
+		if serveChatFromCache(d, w, r, id.TenantID, req) {
+			return
+		}
+
 		// Quota: enforce per-tenant limits before dispatch (both stream + non-stream).
 		if !checkQuota(d, w, r, id.TenantID, req.Model) {
 			return
@@ -120,7 +125,7 @@ func chatCompletionsHandler(d Deps) http.HandlerFunc {
 		recordChatSession(d, r, req.Model, req.Messages,
 			openAIMessage{Role: orDefault(resp.Message.Role, "assistant"), Content: resp.Message.Content})
 
-		writeJSON(w, http.StatusOK, openAIChatResponse{
+		out := openAIChatResponse{
 			ID:      orDefault(resp.ID, "chatcmpl-portico"),
 			Object:  "chat.completion",
 			Created: time.Now().UTC().Unix(),
@@ -135,7 +140,12 @@ func chatCompletionsHandler(d Deps) http.HandlerFunc {
 				CompletionTokens: resp.Usage.CompletionTokens,
 				TotalTokens:      resp.Usage.TotalTokens,
 			},
-		})
+		}
+		// Phase 15.5: store the fresh result for future cache hits (best-effort;
+		// skipped on no-store / streaming / tool-use).
+		storeChatInCache(d, r, id.TenantID, req, out,
+			unitCostUSD(d, r.Context(), prov.Driver, model.ProviderModel, resp.Usage.PromptTokens, resp.Usage.CompletionTokens))
+		writeJSON(w, http.StatusOK, out)
 	}
 }
 

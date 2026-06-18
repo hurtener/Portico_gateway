@@ -25,6 +25,27 @@ type Config struct {
 	// Absent block => no profiles configured => every request gets the default
 	// (full-surface) profile => V1/V1.5 behaviour unchanged.
 	AgentProfiles []AgentProfileConfig `yaml:"agent_profiles,omitempty"`
+	// Cache configures the Phase 15.5 semantic cache in front of the LLM gateway.
+	// Absent / driver:"" => "none" (no caching; behaviour unchanged).
+	Cache CacheConfig `yaml:"cache,omitempty"`
+}
+
+// CacheConfig configures the semantic-cache layer (Phase 15.5). The driver is
+// resolved through the §4.4 cache seam (internal/llm/cache). Options is the
+// driver-specific block (e.g. redis addr/password/db, weaviate endpoint).
+type CacheConfig struct {
+	// Driver: none|inmem|redis|weaviate|qdrant. Empty => none.
+	Driver string `yaml:"driver,omitempty"`
+	// Scope partitions cache keys within a tenant: tenant|customer|team|vk.
+	// Empty => tenant (shared across the whole tenant). Cross-tenant sharing is
+	// never possible (tenant_id always leads the key).
+	Scope string `yaml:"scope,omitempty"`
+	// TTL is the default entry lifetime (e.g. "5m"). Empty => driver default.
+	TTL string `yaml:"ttl,omitempty"`
+	// Threshold is the semantic-similarity floor (0–1) for semantic drivers.
+	Threshold float32 `yaml:"threshold,omitempty"`
+	// Options is the driver-specific config block.
+	Options map[string]any `yaml:"options,omitempty"`
 }
 
 // AgentProfileConfig declares one Agent Profile (Phase 14) for cold-start
