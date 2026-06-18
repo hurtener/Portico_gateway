@@ -441,6 +441,8 @@ These will cause the PR to be rejected on sight.
 - ❌ Registering a tool whose namespaced name begins with `mcp.` from anywhere except `internal/mcp/codemode/` and its dispatcher wiring (`internal/server/mcpgw/codemode.go`). The `mcp.*` namespace is reserved for the Code Mode meta-tools (Phase 13.5).
 - ❌ Exposing host-side I/O (file, network, subprocess, `os`) to Starlark from inside the Code Mode runtime, or constructing a `*starlark.Thread` whose `Load` is non-nil. The sandbox built-in surface is an allowlist; widening it requires a threat-model update (`docs/security/code-mode-threat-model.md`).
 - ❌ Adding a second path for a Code Mode in-sandbox tool call to reach a downstream tool. The only path is the `runtime.ToolDispatcher` seam → `dispatchToolCall`; an in-sandbox call must traverse the identical governed envelope as a direct `tools/call` (Phase 13.5 acceptance #8).
+- ❌ Adding a per-consumer allowlist on any surface (server, tool, skill, model, A2A task) outside the Agent Profile schema. The Agent Profile is the single source of truth for consumer entitlement; gates read it via `profiles.FromContext(ctx)` and the `Profile.Allows*` methods — never a parallel allowlist (Phase 14).
+- ❌ Returning the synthesised default Profile from `GET /api/agent-profiles` or any other read path that lists profiles. The default is a code construct (`profiles.DefaultProfile`), never a stored row (Phase 14).
 
 ---
 

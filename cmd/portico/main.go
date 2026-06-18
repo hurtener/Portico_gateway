@@ -90,6 +90,8 @@ Commands:
                                         Run a Starlark snippet through the sandbox (offline; tool calls disabled).
   agents list|get|create|delete|bind|unbind --tenant <id> [flags]
                                         Manage agent profiles (offline, against the data dir).
+  agents test --tenant <id> --id <profile> (--tool <ns.tool>|--alias <a>|--skill <id>)
+                                        Check allow/deny for a (profile, target) pair (offline; matches the dispatcher).
   version                              Print version info.
 
 Run 'portico <command> -h' for command-specific flags.`)

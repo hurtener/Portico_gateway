@@ -321,6 +321,16 @@ When a tool call hits a policy that requires approval — either from the Skill 
 
 Async approvals (Slack, email, ticketing) are post-V1 — they require durable workflow state that fights the local-binary V1.
 
+### 6.7 Agent Profiles (V2)
+
+An **Agent Profile** is the tenant-scoped, first-class object that binds a logical consumer ("Agent A") to the surface it may operate over: a subset of MCP servers, an optional finer-grain tool allowlist, a subset of Skill Packs, a subset of LLM model aliases, and a scope set. It is the single source of truth for consumer entitlement — the composition that V1 spread across §6.4 catalog resolution, §7 scopes, Skill enablement, and (in V2) Virtual-Key allowlists collapses into one CRUD surface (`/api/agent-profiles`, Console `/agents`, `portico agents`). Phase plan: `docs/plans/phase-14-agent-profiles.md`.
+
+A principal (a JWT subject; in Phase 15.5, a Virtual Key) is mapped to a Profile by a binding. The **resolver** (in-memory LRU, fail-closed on store error) writes the resolved Profile into the request context once, after authentication and before policy; every downstream gate — MCP `tools/list`/`tools/call`, the prompt/resource/skill surface, the LLM `/v1` handler — reads it via one helper and calls the Profile's `Allows{Server,Tool,Skill,Alias}` decision methods. There is no parallel allowlist on any surface.
+
+**Back-compatibility by construction.** A principal with no Profile bound resolves to a synthesised **default Profile** that allows the tenant's full surface. A deployment that configures no Profiles behaves exactly as V1/V1.5. The default Profile is a code construct, never a stored row, and is never returned from the Profile list API.
+
+**Intersection semantics — most-restrictive wins.** When multiple allowlist layers apply, the effective surface is their intersection. A Profile narrows; it never broadens. A Profile carrying `scopes: [mcp:call]` for a principal whose JWT carries `[mcp:call, llm:invoke]` yields an effective `[mcp:call]` — the Profile cannot grant a scope the JWT did not carry. In V2, a Virtual Key's own MCP/model allowlist intersects with the bound Profile's (most-restrictive wins). This is the cross-cutting V2 rule the later phases (15.5 VKs, 16 A2A, 17 tool-poisoning policy, 18 GitOps) all build on.
+
 ---
 
 ## 7. Security model

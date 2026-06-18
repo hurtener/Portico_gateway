@@ -139,6 +139,63 @@ func TestAgents_BindUnbind(t *testing.T) {
 	}
 }
 
+func TestAgents_Test_AllowDeny(t *testing.T) {
+	dsn := seedAgentsDB(t)
+	// Create a restrictive profile: only github + github.list_issues, skill-1, gpt-4o.
+	createOut, err := captureStdout(t, func() error {
+		return runAgentsCreate(context.Background(), []string{"--tenant", "acme", "--name", "ag", "--servers", "github", "--tools", "github.list_issues", "--skills", "skill-1", "--models", "gpt-4o", "--dsn", dsn})
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	var created ifaces.AgentProfile
+	if err := json.Unmarshal([]byte(createOut), &created); err != nil {
+		t.Fatal(err)
+	}
+
+	type verdict struct {
+		Allowed bool   `json:"allowed"`
+		Reason  string `json:"reason"`
+		Kind    string `json:"kind"`
+	}
+	check := func(flagName, target string, want bool) {
+		t.Helper()
+		out, err := captureStdout(t, func() error {
+			return runAgentsTest(context.Background(), []string{"--tenant", "acme", "--id", created.ID, flagName, target, "--dsn", dsn})
+		})
+		if err != nil {
+			t.Fatalf("test %s %s: %v", flagName, target, err)
+		}
+		var v verdict
+		if err := json.Unmarshal([]byte(out), &v); err != nil {
+			t.Fatalf("unmarshal: %v (%s)", err, out)
+		}
+		if v.Allowed != want {
+			t.Errorf("%s %s: allowed=%v, want %v (reason=%s)", flagName, target, v.Allowed, want, v.Reason)
+		}
+	}
+
+	check("--tool", "github.list_issues", true)  // in surface
+	check("--tool", "github.delete_repo", false) // server allowed, tool not
+	check("--tool", "jira.create", false)        // server not allowed
+	check("--alias", "gpt-4o", true)
+	check("--alias", "claude-3-5-sonnet", false)
+	check("--skill", "skill-1", true)
+	check("--skill", "skill-2", false)
+}
+
+func TestAgents_Test_RequiresExactlyOneTarget(t *testing.T) {
+	dsn := seedAgentsDB(t)
+	// No target.
+	if err := runAgentsTest(context.Background(), []string{"--tenant", "acme", "--id", "ap_x", "--dsn", dsn}); err == nil {
+		t.Fatal("expected error without a target")
+	}
+	// Two targets.
+	if err := runAgentsTest(context.Background(), []string{"--tenant", "acme", "--id", "ap_x", "--tool", "a.b", "--alias", "c", "--dsn", dsn}); err == nil {
+		t.Fatal("expected error with two targets")
+	}
+}
+
 func TestAgents_RequiresTenant(t *testing.T) {
 	err := runAgents(context.Background(), []string{"list"})
 	if err == nil {

@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/hurtener/Portico_gateway/internal/config"
+	"github.com/hurtener/Portico_gateway/internal/profiles"
 	"github.com/hurtener/Portico_gateway/internal/storage"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
@@ -36,8 +37,10 @@ func runAgents(ctx context.Context, args []string) error {
 		return runAgentsBind(ctx, rest)
 	case "unbind":
 		return runAgentsUnbind(ctx, rest)
+	case "test":
+		return runAgentsTest(ctx, rest)
 	default:
-		return fmt.Errorf("agents: unknown subcommand %q (want list|get|create|delete|bind|unbind)", sub)
+		return fmt.Errorf("agents: unknown subcommand %q (want list|get|create|delete|bind|unbind|test)", sub)
 	}
 }
 
@@ -259,6 +262,98 @@ func runAgentsBind(ctx context.Context, args []string) error {
 
 	fmt.Fprintf(os.Stdout, "bound %s -> %s\n", *sub, *id)
 	return nil
+}
+
+// runAgentsTest answers "would this profile allow <target>?" offline, using the
+// same Profile.Allows* decision methods the live dispatcher routes through — so
+// the verdict matches production (Phase 14 #13, analogous to `kubectl auth
+// can-i`). Exactly one of --tool / --alias / --skill must be supplied.
+// selectTestTarget resolves the single (kind, target) under test, erroring
+// unless exactly one of tool/alias/skill is supplied.
+func selectTestTarget(tool, alias, skill string) (kind, target string, err error) {
+	set := 0
+	if tool != "" {
+		set, kind, target = set+1, "tool", tool
+	}
+	if alias != "" {
+		set, kind, target = set+1, "alias", alias
+	}
+	if skill != "" {
+		set, kind, target = set+1, "skill", skill
+	}
+	if set != 1 {
+		return "", "", errors.New("agents test: pass exactly one of --tool / --alias / --skill")
+	}
+	return kind, target, nil
+}
+
+// profileAllows routes to the Profile decision method for the target kind —
+// the same methods the live dispatcher uses, so the verdict matches production.
+func profileAllows(prof *profiles.Profile, kind, target string) bool {
+	switch kind {
+	case "tool":
+		return prof.AllowsTool(target)
+	case "alias":
+		return prof.AllowsAlias(target)
+	case "skill":
+		return prof.AllowsSkill(target)
+	default:
+		return false
+	}
+}
+
+func runAgentsTest(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("agents test", flag.ContinueOnError)
+	tenant := fs.String("tenant", "", "tenant id (required)")
+	id := fs.String("id", "", "profile id (required)")
+	tool := fs.String("tool", "", "namespaced tool to test (server.tool)")
+	alias := fs.String("alias", "", "LLM model alias to test")
+	skill := fs.String("skill", "", "skill pack id to test")
+	dsn := fs.String("dsn", "file:./data/portico.db", "SQLite DSN")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *tenant == "" {
+		return errors.New("agents test: --tenant is required")
+	}
+	if *id == "" {
+		return errors.New("agents test: --id is required")
+	}
+	kind, target, err := selectTestTarget(*tool, *alias, *skill)
+	if err != nil {
+		return err
+	}
+
+	closeFn, store, err := openAgentStore(*dsn)
+	if err != nil {
+		return err
+	}
+	defer closeFn()
+
+	ap, err := store.Get(ctx, *tenant, *id)
+	if err != nil {
+		if errors.Is(err, ifaces.ErrAgentProfileNotFound) {
+			return errors.New("agent profile not found")
+		}
+		return fmt.Errorf("get: %w", err)
+	}
+	prof := profiles.FromStore(ap)
+
+	allowed := profileAllows(prof, kind, target)
+	reason := kind + "_in_profile"
+	if !allowed {
+		reason = kind + "_outside_profile"
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(map[string]any{
+		"profile_id": prof.ID,
+		"tenant":     *tenant,
+		"kind":       kind,
+		"target":     target,
+		"allowed":    allowed,
+		"reason":     reason,
+	})
 }
 
 func runAgentsUnbind(ctx context.Context, args []string) error {
