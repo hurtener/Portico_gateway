@@ -170,6 +170,15 @@ func (d *DB) AgentProfiles() ifaces.AgentProfileStore {
 	return &agentProfileStore{db: d.sql}
 }
 
+// Governance returns a GovernanceStore backed by this DB (Phase 15.5).
+func (d *DB) Governance() ifaces.GovernanceStore { return &governanceStore{db: d.sql} }
+
+// Budgets returns a BudgetStore backed by this DB (Phase 15.5).
+func (d *DB) Budgets() ifaces.BudgetStore { return &budgetStore{db: d.sql} }
+
+// CacheEntries returns a CacheEntryStore backed by this DB (Phase 15.5).
+func (d *DB) CacheEntries() ifaces.CacheEntryStore { return &cacheEntryStore{db: d.sql} }
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {
