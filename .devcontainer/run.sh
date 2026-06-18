@@ -18,7 +18,10 @@ NAME="portico-builder"
 COMMAND="${1:-portico-build}"
 # PRIMARY model = NVIDIA NIM Nemotron-3 Ultra 550B (free, no usage cap, capable).
 # The loop backs off / retries on a rate-limit signal. Override MODEL/VARIANT to change it.
-MODEL="${MODEL:-nvidia/nvidia/nemotron-3-ultra-550b-a55b}"
+# PRIMARY model defaults to GLM-5.2 via the Hugging Face Router (Fireworks) — a
+# SOTA model, free for a limited window. Override MODEL to route elsewhere
+# (e.g. MODEL=nvidia/nvidia/nemotron-3-ultra-550b-a55b for the NIM fallback).
+MODEL="${MODEL:-huggingface/zai-org/GLM-5.2:fireworks-ai}"
 VARIANT="${VARIANT-}"
 
 echo "[run] preparing secrets..."
@@ -29,6 +32,9 @@ chmod 600 "$DC/secrets/gh_token" "$DC/secrets/auth.json"
 # NIM key: env override wins; otherwise keep the existing gitignored secret file. Never hardcode it.
 if [ -n "${NVIDIA_API_KEY:-}" ]; then printf '%s' "$NVIDIA_API_KEY" > "$DC/secrets/nvidia_api_key"; fi
 if [ -f "$DC/secrets/nvidia_api_key" ]; then chmod 600 "$DC/secrets/nvidia_api_key"; else echo "[run] WARN: no secrets/nvidia_api_key — NIM calls will fail"; fi
+# HF token: env override wins; otherwise keep the existing gitignored secret file. Never hardcode it.
+if [ -n "${HF_TOKEN:-}" ]; then printf '%s' "$HF_TOKEN" > "$DC/secrets/hf_token"; fi
+if [ -f "$DC/secrets/hf_token" ]; then chmod 600 "$DC/secrets/hf_token"; else echo "[run] WARN: no secrets/hf_token — HF/GLM calls will fail"; fi
 chmod +x "$DC/loop.sh" "$DC/entrypoint.sh"
 
 echo "[run] building image (first build pulls Go 1.25 + Node 22 + opencode + tooling)..."

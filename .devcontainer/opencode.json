@@ -1,7 +1,21 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "nvidia/nvidia/nemotron-3-ultra-550b-a55b",
+  "model": "huggingface/zai-org/GLM-5.2:fireworks-ai",
   "provider": {
+    "huggingface": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Hugging Face Router",
+      "options": {
+        "baseURL": "https://router.huggingface.co/v1",
+        "apiKey": "{env:HF_TOKEN}"
+      },
+      "models": {
+        "zai-org/GLM-5.2:fireworks-ai": {
+          "name": "GLM-5.2 (Fireworks via HF)",
+          "limit": { "context": 500000, "output": 65536 }
+        }
+      }
+    },
     "nvidia": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "NVIDIA NIM",
