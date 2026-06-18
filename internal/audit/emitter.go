@@ -34,9 +34,12 @@ const (
 	// EventAgentProfileViolation marks a tool/alias/skill request rejected
 	// because it fell outside the caller's agent profile surface (Phase 14).
 	EventAgentProfileViolation = "agent_profile.violation"
-	EventApprovalPending       = "approval.pending"
-	EventApprovalDecided       = "approval.decided"
-	EventApprovalExpired       = "approval.expired"
+	// EventVKScopeViolation marks an MCP tool call rejected because its server
+	// fell outside the Virtual Key's MCP-server allowlist (Phase 15.5).
+	EventVKScopeViolation = "vk.scope_violation"
+	EventApprovalPending  = "approval.pending"
+	EventApprovalDecided  = "approval.decided"
+	EventApprovalExpired  = "approval.expired"
 	// EventApprovalReplayed marks a tool call that reused a prior-granted
 	// approval within the replay window (same tenant + tool + args) instead of
 	// re-prompting (CLAUDE.md §7.4). The Code Mode continuation flow drives this
