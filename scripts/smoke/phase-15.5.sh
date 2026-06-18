@@ -90,5 +90,75 @@ if skip_if_404 201 "POST /api/governance/virtual-keys" \
   fi
 fi
 
+# 8) Governance Customer CRUD (admin scope; dev mode grants it).
+CUST_BODY='{"name":"smoke-cust","description":"smoke customer","webhook_url":"https://smoke.example/hook"}'
+if skip_if_404 201 "POST /api/governance/customers" \
+  -- -X POST "$(api_url /api/governance/customers)" \
+     -H 'Content-Type: application/json' -d "$CUST_BODY"; then
+  CUST_ID=$(printf '%s' "$RESPONSE_BODY" | jq -r '.id' 2>/dev/null || true)
+  if [ -z "${CUST_ID:-}" ] || [ "$CUST_ID" = "null" ]; then
+    say_fail "customer create did not return an id"
+    PHASE_FAIL=$((PHASE_FAIL + 1))
+  else
+    say_ok "customer create returned an id ($CUST_ID)"
+    PHASE_OK=$((PHASE_OK + 1))
+    assert_status 200 "GET /api/governance/customers/{id}" \
+      -- -X GET "$(api_url "/api/governance/customers/$CUST_ID")"
+    assert_json_path '.name' 'smoke-cust' "get returns the created customer"
+    assert_status 200 "GET /api/governance/customers (list)" \
+      -- -X GET "$(api_url /api/governance/customers)"
+    assert_json_truthy "map(.id) | index(\"$CUST_ID\")" "list includes the created customer"
+    assert_status 204 "DELETE /api/governance/customers/{id}" \
+      -- -X DELETE "$(api_url "/api/governance/customers/$CUST_ID")"
+  fi
+fi
+
+# 9) Governance Team CRUD. Standalone team (no customer link) so the customer
+# delete above does not break the team FK (linkage is covered by unit tests).
+TEAM_BODY='{"name":"smoke-team","description":"smoke team"}'
+if skip_if_404 201 "POST /api/governance/teams" \
+  -- -X POST "$(api_url /api/governance/teams)" \
+     -H 'Content-Type: application/json' -d "$TEAM_BODY"; then
+  TEAM_ID=$(printf '%s' "$RESPONSE_BODY" | jq -r '.id' 2>/dev/null || true)
+  if [ -z "${TEAM_ID:-}" ] || [ "$TEAM_ID" = "null" ]; then
+    say_fail "team create did not return an id"
+    PHASE_FAIL=$((PHASE_FAIL + 1))
+  else
+    say_ok "team create returned an id ($TEAM_ID)"
+    PHASE_OK=$((PHASE_OK + 1))
+    assert_status 200 "GET /api/governance/teams/{id}" \
+      -- -X GET "$(api_url "/api/governance/teams/$TEAM_ID")"
+    assert_json_path '.name' 'smoke-team' "get returns the created team"
+    assert_status 200 "GET /api/governance/teams (list)" \
+      -- -X GET "$(api_url /api/governance/teams)"
+    assert_json_truthy "map(.id) | index(\"$TEAM_ID\")" "list includes the created team"
+    assert_status 204 "DELETE /api/governance/teams/{id}" \
+      -- -X DELETE "$(api_url "/api/governance/teams/$TEAM_ID")"
+  fi
+fi
+
+# 10) Governance Budget CRUD. scope_kind=tenant, scope_id=dev tenant.
+BUDGET_BODY='{"scope_kind":"tenant","scope_id":"dev","metric":"cost_usd","period":"1d","limit_val":5.0,"enabled":true}'
+if skip_if_404 201 "POST /api/governance/budgets" \
+  -- -X POST "$(api_url /api/governance/budgets)" \
+     -H 'Content-Type: application/json' -d "$BUDGET_BODY"; then
+  BUDGET_ID=$(printf '%s' "$RESPONSE_BODY" | jq -r '.id' 2>/dev/null || true)
+  if [ -z "${BUDGET_ID:-}" ] || [ "$BUDGET_ID" = "null" ]; then
+    say_fail "budget create did not return an id"
+    PHASE_FAIL=$((PHASE_FAIL + 1))
+  else
+    say_ok "budget create returned an id ($BUDGET_ID)"
+    PHASE_OK=$((PHASE_OK + 1))
+    assert_status 200 "GET /api/governance/budgets/{id}" \
+      -- -X GET "$(api_url "/api/governance/budgets/$BUDGET_ID")"
+    assert_json_path '.metric' 'cost_usd' "get returns the created budget"
+    assert_status 200 "GET /api/governance/budgets (list)" \
+      -- -X GET "$(api_url /api/governance/budgets)"
+    assert_json_truthy "map(.id) | index(\"$BUDGET_ID\")" "list includes the created budget"
+    assert_status 204 "DELETE /api/governance/budgets/{id}" \
+      -- -X DELETE "$(api_url "/api/governance/budgets/$BUDGET_ID")"
+  fi
+fi
+
 end_phase
 exit $?
