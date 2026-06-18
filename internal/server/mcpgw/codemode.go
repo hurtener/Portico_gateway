@@ -156,6 +156,21 @@ func (d *Dispatcher) handleCodeModeMetaTool(ctx context.Context, sess *Session, 
 	}
 }
 
+// NewConsoleCodeModeOpts returns the default Code Mode opt-in for a synthetic,
+// Console-driven session (server binding level, default tool-call cap). The REST
+// layer sets it on a throwaway session to drive the meta-tools on the operator's
+// behalf without a live MCP connection.
+func NewConsoleCodeModeOpts() *CodeModeOpts {
+	return &CodeModeOpts{BindingLevel: catalog.BindingServer, MaxToolCalls: defaultCodeModeMaxToolCalls}
+}
+
+// RunCodeModeMetaTool dispatches one Code Mode meta-tool call for a session. It
+// is the exported seam the Console REST handlers call; behaviour is identical to
+// an MCP tools/call of the same meta-tool (same projection, governance, audit).
+func (d *Dispatcher) RunCodeModeMetaTool(ctx context.Context, sess *Session, params protocol.CallToolParams) (json.RawMessage, *protocol.Error) {
+	return d.handleCodeModeMetaTool(ctx, sess, params)
+}
+
 // sessionToolDispatcher is the runtime.ToolDispatcher seam bound to one session.
 // Its sole job is to forward an in-sandbox tool call to dispatchToolCall — the
 // exact same governed envelope a direct tools/call runs. There is intentionally

@@ -540,6 +540,7 @@
 
 <PageHeader title={$t('playground.title')}>
   <svelte:fragment slot="actions">
+    <a class="cm-link" href="/playground/code-mode">Code Mode →</a>
     {#if session}
       <IdBadge value={session.id} label={$t('playground.session.id')} />
       <Button variant="secondary" on:click={endSession}>{$t('playground.session.end')}</Button>
@@ -951,6 +952,18 @@
 <Toaster />
 
 <style>
+  .cm-link {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+  .cm-link:hover {
+    color: var(--color-text-primary);
+    background: var(--color-surface-raised);
+  }
   .grid {
     display: grid;
     grid-template-columns: 280px 1fr 360px;

@@ -281,10 +281,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    const err = (
-      body && typeof body === 'object' ? (body as Record<string, unknown>).error : undefined
-    ) as { code?: string; message?: string; detail?: string } | undefined;
-    throw new HTTPError(res.status, err?.message ?? `HTTP ${res.status}`, err?.code, err?.detail);
+    // Server error shape is flat: { error: <code>, message, details? }. (An
+    // earlier parser read `body.error` as an object, so every error surfaced as
+    // a generic "HTTP <status>"; read the real fields here.)
+    const obj = body && typeof body === 'object' ? (body as Record<string, unknown>) : undefined;
+    const details = obj?.details as Record<string, unknown> | undefined;
+    const message = (obj?.message as string) ?? `HTTP ${res.status}`;
+    const code = obj?.error as string | undefined;
+    const detail = (details?.code as string) ?? (details?.detail as string) ?? undefined;
+    throw new HTTPError(res.status, message, code, detail);
   }
   return body as T;
 }
@@ -376,6 +381,19 @@ export interface CodeModeSavings {
   tokens_saved_est: number;
   by_status: Record<string, number>;
   since?: string;
+}
+
+export interface CodeModeRunResult {
+  result?: unknown;
+  output?: string;
+  output_truncated?: boolean;
+  tool_calls?: number;
+  tokens_saved_est?: number;
+  duration_ms?: number;
+  // Present when an in-sandbox call suspended for approval.
+  status?: string;
+  approval_id?: string;
+  continuation_token?: string;
 }
 
 export interface LLMProviderHealth {
@@ -787,6 +805,16 @@ export const api = {
     const suffix = since ? `?since=${encodeURIComponent(since)}` : '';
     return request<CodeModeSavings>(`/api/code-mode/savings${suffix}`);
   },
+  listCodeModeFiles: () => request<{ files: string[] }>('/api/code-mode/files'),
+  readCodeModeFile: (path: string) =>
+    request<{ path: string; content: string }>(
+      `/api/code-mode/files/read?path=${encodeURIComponent(path)}`
+    ),
+  runCodeMode: (code: string) =>
+    request<CodeModeRunResult>('/api/code-mode/run', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    }),
 
   // ── Phase 10: Playground ────────────────────────────────────────────
   startPlaygroundSession: (req: PlaygroundStartSessionRequest = {}) =>
