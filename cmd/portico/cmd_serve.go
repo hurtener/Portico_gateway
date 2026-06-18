@@ -15,6 +15,7 @@ import (
 	auditpkg "github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
 	virtualkeys "github.com/hurtener/Portico_gateway/internal/auth/virtual_keys"
+	"github.com/hurtener/Portico_gateway/internal/budgets"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
 	"github.com/hurtener/Portico_gateway/internal/config"
 	"github.com/hurtener/Portico_gateway/internal/mcp/codemode"
@@ -559,6 +560,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		vkService   *virtualkeys.Service
 		vkResolver  *virtualkeys.Resolver
 		budgetStore ifaces.BudgetStore
+		budgetEnf   *budgets.Enforcer
 	)
 	llmQuotaEnforcer := quota.NewEnforcer()
 	if sqliteBackend, ok := backend.(*sqlitestorage.DB); ok {
@@ -571,6 +573,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		vkService = virtualkeys.NewService(govStore)
 		vkResolver = virtualkeys.NewResolver(govStore, 0)
 		budgetStore = sqliteBackend.Budgets()
+		budgetEnf = budgets.NewEnforcer(budgetStore)
 		eng, err := llmengine.Open("bifrost", nil, llmengineifaces.Deps{
 			Logger:    logger.With("component", "llm.engine"),
 			Providers: llmProviders,
@@ -644,6 +647,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		VKService:       vkService,
 		VKResolver:      vkResolver,
 		Budgets:         budgetStore,
+		BudgetEnforcer:  budgetEnf,
 		ProfileResolver: profileResolver,
 		Redactor:        auditpkg.NewDefaultRedactor(),
 	}
