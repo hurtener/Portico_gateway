@@ -259,3 +259,68 @@ func deleteAgentProfileHandler(d Deps) http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+// putAgentProfileBindingHandler handles PUT /api/agent-profiles/{id}/bindings/{sub}
+// — binds a JWT subject to a profile. The profile must exist. Idempotent.
+func putAgentProfileBindingHandler(d Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d.AgentProfiles == nil {
+			writeJSONError(w, http.StatusServiceUnavailable, "agent_profiles_not_configured", "agent profile store not configured", nil)
+			return
+		}
+		id := tenant.MustFrom(r.Context())
+		if !requireAgentProfileAdmin(w, id) {
+			return
+		}
+		profileID := chi.URLParam(r, "id")
+		sub := chi.URLParam(r, "sub")
+		if sub == "" {
+			writeJSONError(w, http.StatusBadRequest, "invalid_request", "subject is required", nil)
+			return
+		}
+		// The profile must exist (tenant-scoped).
+		if _, err := d.AgentProfiles.Get(r.Context(), id.TenantID, profileID); err != nil {
+			if errors.Is(err, ifaces.ErrAgentProfileNotFound) {
+				writeJSONError(w, http.StatusNotFound, "not_found", "agent profile not found", nil)
+				return
+			}
+			writeJSONError(w, http.StatusInternalServerError, "get_failed", err.Error(), nil)
+			return
+		}
+		if err := d.AgentProfiles.PutJWTBinding(r.Context(), id.TenantID, sub, profileID); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "bind_failed", err.Error(), nil)
+			return
+		}
+		// A binding change affects which profile a subject resolves to; flush the
+		// tenant's resolver cache so it takes effect immediately.
+		if d.ProfileResolver != nil {
+			d.ProfileResolver.Invalidate(id.TenantID, "")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// deleteAgentProfileBindingHandler handles DELETE /api/agent-profiles/{id}/bindings/{sub}
+// — removes a JWT subject's binding (the subject then resolves to the default
+// profile). Idempotent (204 even if absent).
+func deleteAgentProfileBindingHandler(d Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d.AgentProfiles == nil {
+			writeJSONError(w, http.StatusServiceUnavailable, "agent_profiles_not_configured", "agent profile store not configured", nil)
+			return
+		}
+		id := tenant.MustFrom(r.Context())
+		if !requireAgentProfileAdmin(w, id) {
+			return
+		}
+		sub := chi.URLParam(r, "sub")
+		if err := d.AgentProfiles.DeleteJWTBinding(r.Context(), id.TenantID, sub); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "unbind_failed", err.Error(), nil)
+			return
+		}
+		if d.ProfileResolver != nil {
+			d.ProfileResolver.Invalidate(id.TenantID, "")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

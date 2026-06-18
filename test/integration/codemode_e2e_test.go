@@ -16,6 +16,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/policy"
+	"github.com/hurtener/Portico_gateway/internal/profiles"
 	"github.com/hurtener/Portico_gateway/internal/registry"
 	"github.com/hurtener/Portico_gateway/internal/runtime/process"
 	"github.com/hurtener/Portico_gateway/internal/server/api"
@@ -141,16 +142,18 @@ func startCodeModeServer(t *testing.T, specs []config.ServerSpec) (*httptest.Ser
 	})
 
 	handler := api.NewRouter(api.Deps{
-		Logger:     logger,
-		DevMode:    true,
-		DevTenant:  "dev",
-		Tenants:    backend.Tenants(),
-		Audit:      backend.Audit(),
-		Sessions:   sess,
-		Dispatcher: disp,
-		Manager:    mgr,
-		Registry:   reg,
-		Apps:       appsReg,
+		Logger:          logger,
+		DevMode:         true,
+		DevTenant:       "dev",
+		Tenants:         backend.Tenants(),
+		Audit:           backend.Audit(),
+		Sessions:        sess,
+		Dispatcher:      disp,
+		Manager:         mgr,
+		Registry:        reg,
+		Apps:            appsReg,
+		AgentProfiles:   backend.AgentProfiles(),
+		ProfileResolver: profiles.NewResolver(backend.AgentProfiles(), 0, 0),
 	})
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
