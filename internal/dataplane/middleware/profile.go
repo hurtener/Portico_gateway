@@ -48,7 +48,36 @@ func ProfileMiddleware(resolver profiles.Resolver, log *slog.Logger) func(http.H
 				http.Error(w, `{"error":"profile_unavailable","message":"could not resolve agent profile"}`, http.StatusServiceUnavailable)
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(profiles.WithProfile(r.Context(), prof)))
+			ctx := profiles.WithProfile(r.Context(), prof)
+
+			// Scope intersection (Phase 14, acceptance #11): a non-default profile
+			// that carries its own scope set narrows the principal's effective
+			// scopes to (profile.Scopes ∩ identity.Scopes). The profile may
+			// restrict but never broaden — a scope the JWT did not carry is never
+			// granted. An empty profile.Scopes means "the profile does not constrain
+			// scopes", so the JWT set passes through unchanged.
+			if !prof.IsDefault && len(prof.Scopes) > 0 {
+				id.Scopes = intersectScopes(id.Scopes, prof.Scopes)
+				ctx = tenant.With(ctx, id)
+			}
+
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// intersectScopes returns the scopes present in BOTH have and allow, preserving
+// the order of have (the principal's JWT scopes). Most-restrictive wins.
+func intersectScopes(have, allow []string) []string {
+	allowed := make(map[string]struct{}, len(allow))
+	for _, s := range allow {
+		allowed[s] = struct{}{}
+	}
+	out := make([]string, 0, len(have))
+	for _, s := range have {
+		if _, ok := allowed[s]; ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }

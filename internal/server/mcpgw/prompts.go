@@ -12,6 +12,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	"github.com/hurtener/Portico_gateway/internal/mcp/southbound"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
+	"github.com/hurtener/Portico_gateway/internal/profiles"
 	"github.com/hurtener/Portico_gateway/internal/registry"
 )
 
@@ -129,6 +130,8 @@ func (a *PromptAggregator) ListAll(ctx context.Context, sess *Session, cursor st
 		if err != nil {
 			a.log.Warn("skills/prompts partial failure", "err", err)
 		} else {
+			// Phase 14: drop skill prompts outside the request profile's surface.
+			skillPrompts = filterSkillPromptsByProfile(ctx, skillPrompts)
 			combined = append(combined, skillPrompts...)
 			sort.Slice(combined, func(i, j int) bool { return combined[i].Name < combined[j].Name })
 		}
@@ -155,6 +158,13 @@ func (a *PromptAggregator) Get(ctx context.Context, sess *Session, name string, 
 	// skill case.
 	if a.cache != nil && a.cache.skills != nil {
 		if res, err := a.cache.skills.GetPrompt(ctx, sess.TenantID, sess.ID, name, args); err == nil {
+			// Phase 14: the skills runtime owns this prompt — enforce the profile
+			// surface before returning it.
+			if id, ok := skillIDFromPromptName(name); ok {
+				if prof := profiles.FromContext(ctx); prof != nil && !prof.AllowsSkill(id) {
+					return nil, skillPromptViolation(prof.ID, id, name)
+				}
+			}
 			return res, nil
 		}
 	}

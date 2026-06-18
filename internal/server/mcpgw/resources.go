@@ -17,6 +17,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	"github.com/hurtener/Portico_gateway/internal/mcp/southbound"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
+	"github.com/hurtener/Portico_gateway/internal/profiles"
 	"github.com/hurtener/Portico_gateway/internal/registry"
 )
 
@@ -224,6 +225,8 @@ func (a *ResourceAggregator) ListAll(ctx context.Context, sess *Session, cursor 
 		if err != nil {
 			a.log.Warn("skills/list partial failure", "err", err, "event_type", "skill_list_partial_failure")
 		} else {
+			// Phase 14: drop skill:// resources outside the request profile's surface.
+			skillRes = filterSkillResourcesByProfile(ctx, skillRes)
 			combined = append(combined, skillRes...)
 			sort.Slice(combined, func(i, j int) bool { return combined[i].URI < combined[j].URI })
 		}
@@ -325,9 +328,24 @@ func (a *ResourceAggregator) Read(ctx context.Context, sess *Session, uri string
 		if a.skills == nil {
 			return nil, protocol.NewError(protocol.ErrInvalidParams, "skills runtime not configured", map[string]string{"uri": uri})
 		}
+		// Phase 14: a skill:// read outside the profile surface is a typed
+		// violation. skill://_index has no owning skill; its body is filtered
+		// to the allowed skills instead.
+		if id, ok := skillIDFromResourceURI(uri); ok {
+			if prof := profiles.FromContext(ctx); prof != nil && !prof.AllowsSkill(id) {
+				return nil, skillResourceViolation(prof.ID, id, uri)
+			}
+		}
 		res, err := a.skills.ReadResource(ctx, sess.TenantID, sess.ID, uri)
 		if err != nil {
 			return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, err.Error(), map[string]string{"uri": uri})
+		}
+		if uri == "skill://_index" {
+			for i := range res.Contents {
+				if res.Contents[i].Text != "" {
+					res.Contents[i].Text = string(filterSkillIndexBody(ctx, []byte(res.Contents[i].Text)))
+				}
+			}
 		}
 		return res, nil
 	}

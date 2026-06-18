@@ -52,6 +52,81 @@ func TestProfileMiddleware_SetsProfileInContext(t *testing.T) {
 	}
 }
 
+func TestProfileMiddleware_NonDefaultProfile_NarrowsScopes(t *testing.T) {
+	// Profile carries [mcp:call]; JWT carries [mcp:call, llm:invoke].
+	// Effective = intersection = [mcp:call] (acceptance #11).
+	prof := &profiles.Profile{TenantID: "t1", ID: "ap_1", Scopes: []string{"mcp:call"}}
+	res := &fakeResolver{profile: prof}
+	var gotScopes []string
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		id, _ := tenant.From(r.Context())
+		gotScopes = id.Scopes
+	})
+	r := httptest.NewRequest("GET", "/", nil).WithContext(
+		tenant.With(context.Background(), tenant.Identity{
+			TenantID: "t1", Subject: "sub-1", Scopes: []string{"mcp:call", "llm:invoke"},
+		}))
+	ProfileMiddleware(res, nil)(next).ServeHTTP(httptest.NewRecorder(), r)
+	if len(gotScopes) != 1 || gotScopes[0] != "mcp:call" {
+		t.Fatalf("scopes not narrowed to the intersection: %v", gotScopes)
+	}
+}
+
+func TestProfileMiddleware_ProfileNeverBroadensScopes(t *testing.T) {
+	// Profile lists a scope the JWT never carried — it must NOT be granted.
+	prof := &profiles.Profile{TenantID: "t1", ID: "ap_1", Scopes: []string{"mcp:call", "admin"}}
+	res := &fakeResolver{profile: prof}
+	var gotScopes []string
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		id, _ := tenant.From(r.Context())
+		gotScopes = id.Scopes
+	})
+	r := httptest.NewRequest("GET", "/", nil).WithContext(
+		tenant.With(context.Background(), tenant.Identity{
+			TenantID: "t1", Subject: "sub-1", Scopes: []string{"mcp:call"},
+		}))
+	ProfileMiddleware(res, nil)(next).ServeHTTP(httptest.NewRecorder(), r)
+	if len(gotScopes) != 1 || gotScopes[0] != "mcp:call" {
+		t.Fatalf("profile must narrow, never broaden: %v", gotScopes)
+	}
+}
+
+func TestProfileMiddleware_EmptyProfileScopes_PassThrough(t *testing.T) {
+	// A profile with no scope set does not constrain scopes.
+	prof := &profiles.Profile{TenantID: "t1", ID: "ap_1"}
+	res := &fakeResolver{profile: prof}
+	var gotScopes []string
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		id, _ := tenant.From(r.Context())
+		gotScopes = id.Scopes
+	})
+	r := httptest.NewRequest("GET", "/", nil).WithContext(
+		tenant.With(context.Background(), tenant.Identity{
+			TenantID: "t1", Subject: "sub-1", Scopes: []string{"mcp:call", "llm:invoke"},
+		}))
+	ProfileMiddleware(res, nil)(next).ServeHTTP(httptest.NewRecorder(), r)
+	if len(gotScopes) != 2 {
+		t.Fatalf("empty profile.Scopes must not constrain the JWT scopes: %v", gotScopes)
+	}
+}
+
+func TestProfileMiddleware_DefaultProfile_DoesNotTouchScopes(t *testing.T) {
+	res := &fakeResolver{profile: profiles.DefaultProfile("t1")}
+	var gotScopes []string
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		id, _ := tenant.From(r.Context())
+		gotScopes = id.Scopes
+	})
+	r := httptest.NewRequest("GET", "/", nil).WithContext(
+		tenant.With(context.Background(), tenant.Identity{
+			TenantID: "t1", Subject: "sub-1", Scopes: []string{"mcp:call", "llm:invoke"},
+		}))
+	ProfileMiddleware(res, nil)(next).ServeHTTP(httptest.NewRecorder(), r)
+	if len(gotScopes) != 2 {
+		t.Fatalf("default profile must leave scopes untouched (back-compat): %v", gotScopes)
+	}
+}
+
 func TestProfileMiddleware_ResolverError_FailsClosed503(t *testing.T) {
 	res := &fakeResolver{err: errors.New("db down")}
 	called := false
