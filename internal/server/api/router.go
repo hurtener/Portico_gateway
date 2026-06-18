@@ -18,6 +18,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
 	"github.com/hurtener/Portico_gateway/internal/auth/scope"
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
+	virtualkeys "github.com/hurtener/Portico_gateway/internal/auth/virtual_keys"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
 	dataplanemw "github.com/hurtener/Portico_gateway/internal/dataplane/middleware"
 	llmengineifaces "github.com/hurtener/Portico_gateway/internal/llm/engine/ifaces"
@@ -157,6 +158,12 @@ type Deps struct {
 	// Phase 14: agent profile store. Optional; nil → /api/agent-profiles is 503.
 	AgentProfiles ifaces.AgentProfileStore
 
+	// Phase 15.5: governance — customers/teams/virtual-keys store + VK lifecycle
+	// service + resolver. All optional; nil → /api/governance/* is 503.
+	Governance ifaces.GovernanceStore
+	VKService  *virtualkeys.Service
+	VKResolver *virtualkeys.Resolver
+
 	// Phase 13: redactor applied to chat-session message content before it is
 	// persisted. Optional; recordChatSession falls back to a default redactor
 	// when nil so content is never stored unredacted.
@@ -220,13 +227,20 @@ func NewRouter(d Deps) http.Handler {
 
 	// Auth applies to everything below.
 	r.Group(func(r chi.Router) {
-		r.Use(tenant.Middleware(tenant.MiddlewareConfig{
+		authCfg := tenant.MiddlewareConfig{
 			Validator:   d.Validator,
 			DevMode:     d.DevMode,
 			DevTenant:   d.DevTenant,
 			TenantStore: d.Tenants,
 			Logger:      d.Logger,
-		}))
+		}
+		// Phase 15.5: enable VK bearer auth only when a resolver is wired. Assign
+		// conditionally so a nil *Resolver never becomes a non-nil interface
+		// (which would make the middleware call Resolve on nil).
+		if d.VKResolver != nil {
+			authCfg.VKResolver = d.VKResolver
+		}
+		r.Use(tenant.Middleware(authCfg))
 
 		// Phase 14: resolve the caller's agent profile into ctx, right after
 		// auth and before any gating. Optional — when no resolver is wired, no
@@ -392,6 +406,15 @@ func NewRouter(d Deps) http.Handler {
 			r.Delete("/api/agent-profiles/{id}", deleteAgentProfileHandler(d))
 			r.Put("/api/agent-profiles/{id}/bindings/{sub}", putAgentProfileBindingHandler(d))
 			r.Delete("/api/agent-profiles/{id}/bindings/{sub}", deleteAgentProfileBindingHandler(d))
+		}
+		// Phase 15.5: governance Virtual Key CRUD (admin scope). Create/rotate
+		// return the secret once; the store never persists it.
+		if d.VKService != nil && d.Governance != nil {
+			r.Get("/api/governance/virtual-keys", listVirtualKeysHandler(d))
+			r.Post("/api/governance/virtual-keys", createVirtualKeyHandler(d))
+			r.Get("/api/governance/virtual-keys/{id}", getVirtualKeyHandler(d))
+			r.Post("/api/governance/virtual-keys/{id}/rotate", rotateVirtualKeyHandler(d))
+			r.Delete("/api/governance/virtual-keys/{id}", deleteVirtualKeyHandler(d))
 		}
 		// Phase 13.5: Code Mode interactive playground (admin scope). Drives the
 		// meta-tools through a synthetic Console session — list stub files, read

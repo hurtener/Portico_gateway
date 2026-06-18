@@ -14,6 +14,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/apps"
 	auditpkg "github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
+	virtualkeys "github.com/hurtener/Portico_gateway/internal/auth/virtual_keys"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
 	"github.com/hurtener/Portico_gateway/internal/config"
 	"github.com/hurtener/Portico_gateway/internal/mcp/codemode"
@@ -553,6 +554,10 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		llmCosts     ifaces.LLMCostStore
 		llmSessions  ifaces.LLMSessionStore
 		llmEngine    llmengineifaces.Engine
+		// Phase 15.5: governance store + VK lifecycle service + resolver.
+		govStore   ifaces.GovernanceStore
+		vkService  *virtualkeys.Service
+		vkResolver *virtualkeys.Resolver
 	)
 	llmQuotaEnforcer := quota.NewEnforcer()
 	if sqliteBackend, ok := backend.(*sqlitestorage.DB); ok {
@@ -561,6 +566,9 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		llmQuotas = sqliteBackend.LLMQuotas()
 		llmCosts = sqliteBackend.LLMCosts()
 		llmSessions = sqliteBackend.LLMSessions()
+		govStore = sqliteBackend.Governance()
+		vkService = virtualkeys.NewService(govStore)
+		vkResolver = virtualkeys.NewResolver(govStore, 0)
 		eng, err := llmengine.Open("bifrost", nil, llmengineifaces.Deps{
 			Logger:    logger.With("component", "llm.engine"),
 			Providers: llmProviders,
@@ -630,6 +638,9 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		LLMSessions:     llmSessions,
 		CodeMode:        codeModeStore,
 		AgentProfiles:   backend.AgentProfiles(),
+		Governance:      govStore,
+		VKService:       vkService,
+		VKResolver:      vkResolver,
 		ProfileResolver: profileResolver,
 		Redactor:        auditpkg.NewDefaultRedactor(),
 	}

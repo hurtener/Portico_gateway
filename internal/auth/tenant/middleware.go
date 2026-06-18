@@ -3,6 +3,7 @@ package tenant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -10,8 +11,16 @@ import (
 	"time"
 
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
+	virtualkeys "github.com/hurtener/Portico_gateway/internal/auth/virtual_keys"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
+
+// VKResolver verifies a "pk-portico-…" bearer and returns its hydrated state.
+// Satisfied by *internal/auth/virtual_keys.Resolver; an interface here so the
+// middleware can be tested without the concrete resolver.
+type VKResolver interface {
+	Resolve(ctx context.Context, token string) (*virtualkeys.Resolved, error)
+}
 
 // pathsAlwaysAllowed bypass auth (health, console assets).
 var pathsAlwaysAllowed = []string{
@@ -50,6 +59,10 @@ type MiddlewareConfig struct {
 	DevTenant   string // tenant id to inject in dev mode
 	TenantStore ifaces.TenantStore
 	Logger      *slog.Logger
+	// VKResolver, when set, lets the middleware authenticate "pk-portico-…"
+	// bearer tokens as Virtual Keys (Phase 15.5). Nil → VK auth is disabled and
+	// such a bearer falls through to the JWT validator (which rejects it).
+	VKResolver VKResolver
 }
 
 // Middleware authenticates incoming requests.
@@ -71,6 +84,39 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 			if isAlwaysAllowed(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
+			}
+
+			// Virtual Key auth (Phase 15.5): a "pk-portico-…" bearer resolves to a
+			// tenant + scopes + allowlists, independent of dev/JWT mode. Checked
+			// before dev bypass so VK semantics apply even in dev.
+			if cfg.VKResolver != nil {
+				if authz := r.Header.Get("Authorization"); strings.HasPrefix(authz, "Bearer ") {
+					raw := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
+					if virtualkeys.LooksLikeVK(raw) {
+						resolved, err := cfg.VKResolver.Resolve(r.Context(), raw)
+						if err != nil {
+							code, msg := "vk_unknown", "invalid virtual key"
+							if errors.Is(err, virtualkeys.ErrRevoked) {
+								code, msg = "vk_revoked", "virtual key revoked"
+							}
+							w.Header().Set("WWW-Authenticate", `Bearer realm="portico"`)
+							writeJSON(w, http.StatusUnauthorized, errorBody{Error: code, Message: msg})
+							return
+						}
+						id := Identity{
+							TenantID: resolved.TenantID,
+							UserID:   "vk:" + resolved.VKID,
+							Subject:  "vk:" + resolved.VKID,
+							Scopes:   resolved.Scopes,
+							// RawToken intentionally left empty: a VK secret must not
+							// be reused as a downstream token or risk being logged.
+						}
+						ctx := With(r.Context(), id)
+						ctx = virtualkeys.WithResolved(ctx, resolved)
+						next.ServeHTTP(w, r.WithContext(ctx))
+						return
+					}
+				}
 			}
 
 			if cfg.DevMode {

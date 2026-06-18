@@ -104,6 +104,10 @@ func embeddingsHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "provider_missing", "provider not found for alias", nil)
 			return
 		}
+		// Phase 15.5: a Virtual Key caller must pass its provider + model allowlist.
+		if !vkAllowsLLM(w, r, req.Model, prov.Driver) {
+			return
+		}
 
 		// Quota: enforce per-tenant limits before dispatch.
 		if !checkQuota(d, w, r, id.TenantID, req.Model) {
