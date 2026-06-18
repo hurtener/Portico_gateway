@@ -164,6 +164,9 @@ type Deps struct {
 	VKService  *virtualkeys.Service
 	VKResolver *virtualkeys.Resolver
 
+	// Phase 15.5: budget store for governance budget CRUD. Optional; nil → 503.
+	Budgets ifaces.BudgetStore
+
 	// Phase 13: redactor applied to chat-session message content before it is
 	// persisted. Optional; recordChatSession falls back to a default redactor
 	// when nil so content is never stored unredacted.
@@ -415,6 +418,29 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/api/governance/virtual-keys/{id}", getVirtualKeyHandler(d))
 			r.Post("/api/governance/virtual-keys/{id}/rotate", rotateVirtualKeyHandler(d))
 			r.Delete("/api/governance/virtual-keys/{id}", deleteVirtualKeyHandler(d))
+		}
+		// Phase 15.5: governance Customer + Team CRUD (admin scope). Mounted when
+		// the governance store is wired; handlers gate on nil for 503 back-compat.
+		if d.Governance != nil {
+			r.Get("/api/governance/customers", listCustomersHandler(d))
+			r.Post("/api/governance/customers", createCustomerHandler(d))
+			r.Get("/api/governance/customers/{id}", getCustomerHandler(d))
+			r.Put("/api/governance/customers/{id}", updateCustomerHandler(d))
+			r.Delete("/api/governance/customers/{id}", deleteCustomerHandler(d))
+			r.Get("/api/governance/teams", listTeamsHandler(d))
+			r.Post("/api/governance/teams", createTeamsHandler(d))
+			r.Get("/api/governance/teams/{id}", getTeamHandler(d))
+			r.Put("/api/governance/teams/{id}", updateTeamHandler(d))
+			r.Delete("/api/governance/teams/{id}", deleteTeamHandler(d))
+		}
+		// Phase 15.5: governance Budget CRUD (admin scope). Mounted when the
+		// budget store is wired; handlers gate on nil for 503 back-compat.
+		if d.Budgets != nil {
+			r.Get("/api/governance/budgets", listBudgetsHandler(d))
+			r.Post("/api/governance/budgets", createBudgetHandler(d))
+			r.Get("/api/governance/budgets/{id}", getBudgetHandler(d))
+			r.Put("/api/governance/budgets/{id}", updateBudgetHandler(d))
+			r.Delete("/api/governance/budgets/{id}", deleteBudgetHandler(d))
 		}
 		// Phase 13.5: Code Mode interactive playground (admin scope). Drives the
 		// meta-tools through a synthetic Console session — list stub files, read

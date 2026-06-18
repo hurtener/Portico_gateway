@@ -555,9 +555,10 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		llmSessions  ifaces.LLMSessionStore
 		llmEngine    llmengineifaces.Engine
 		// Phase 15.5: governance store + VK lifecycle service + resolver.
-		govStore   ifaces.GovernanceStore
-		vkService  *virtualkeys.Service
-		vkResolver *virtualkeys.Resolver
+		govStore    ifaces.GovernanceStore
+		vkService   *virtualkeys.Service
+		vkResolver  *virtualkeys.Resolver
+		budgetStore ifaces.BudgetStore
 	)
 	llmQuotaEnforcer := quota.NewEnforcer()
 	if sqliteBackend, ok := backend.(*sqlitestorage.DB); ok {
@@ -569,6 +570,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		govStore = sqliteBackend.Governance()
 		vkService = virtualkeys.NewService(govStore)
 		vkResolver = virtualkeys.NewResolver(govStore, 0)
+		budgetStore = sqliteBackend.Budgets()
 		eng, err := llmengine.Open("bifrost", nil, llmengineifaces.Deps{
 			Logger:    logger.With("component", "llm.engine"),
 			Providers: llmProviders,
@@ -641,6 +643,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		Governance:      govStore,
 		VKService:       vkService,
 		VKResolver:      vkResolver,
+		Budgets:         budgetStore,
 		ProfileResolver: profileResolver,
 		Redactor:        auditpkg.NewDefaultRedactor(),
 	}
