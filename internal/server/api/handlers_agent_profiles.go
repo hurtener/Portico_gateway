@@ -163,7 +163,17 @@ func createAgentProfileHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "get_after_create_failed", err.Error(), nil)
 			return
 		}
+		invalidateProfile(d, id.TenantID, profileID)
 		writeJSON(w, http.StatusCreated, toAgentProfileDTO(created))
+	}
+}
+
+// invalidateProfile drops the resolver's cached entries for the tenant after a
+// CRUD write so a profile change takes effect immediately (the 60s TTL is the
+// backstop). No-op when no resolver is wired.
+func invalidateProfile(d Deps, tenantID, profileID string) {
+	if d.ProfileResolver != nil {
+		d.ProfileResolver.Invalidate(tenantID, profileID)
 	}
 }
 
@@ -219,6 +229,7 @@ func updateAgentProfileHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "get_after_update_failed", err.Error(), nil)
 			return
 		}
+		invalidateProfile(d, id.TenantID, profileID)
 		writeJSON(w, http.StatusOK, toAgentProfileDTO(updated))
 	}
 }
@@ -244,6 +255,7 @@ func deleteAgentProfileHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "delete_failed", err.Error(), nil)
 			return
 		}
+		invalidateProfile(d, id.TenantID, profileID)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

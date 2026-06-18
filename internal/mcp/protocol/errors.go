@@ -20,11 +20,12 @@ const (
 	ErrCancelled = -32800
 
 	// Portico-defined (-32000..-32099)
-	ErrApprovalRequired    = -32001 // Phase 5
-	ErrUpstreamUnavailable = -32002 // downstream transport error
-	ErrPolicyDenied        = -32003 // Phase 5
-	ErrToolNotEnabled      = -32004 // tool not visible / wrong namespace
-	ErrTenantInactive      = -32005 // future
+	ErrApprovalRequired      = -32001 // Phase 5
+	ErrUpstreamUnavailable   = -32002 // downstream transport error
+	ErrPolicyDenied          = -32003 // Phase 5
+	ErrToolNotEnabled        = -32004 // tool not visible / wrong namespace
+	ErrTenantInactive        = -32005 // future
+	ErrAgentProfileViolation = -32006 // Phase 14: tool/alias/skill outside the agent profile's surface
 
 	// Code Mode (Phase 13.5). The specific code_mode.* reason travels in the
 	// error's Data.code field; these top-level codes group them by class.

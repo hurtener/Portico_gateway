@@ -31,9 +31,12 @@ const (
 	EventToolCallFailed   = "tool_call.failed"
 	EventPolicyAllowed    = "policy.allowed"
 	EventPolicyDenied     = "policy.denied"
-	EventApprovalPending  = "approval.pending"
-	EventApprovalDecided  = "approval.decided"
-	EventApprovalExpired  = "approval.expired"
+	// EventAgentProfileViolation marks a tool/alias/skill request rejected
+	// because it fell outside the caller's agent profile surface (Phase 14).
+	EventAgentProfileViolation = "agent_profile.violation"
+	EventApprovalPending       = "approval.pending"
+	EventApprovalDecided       = "approval.decided"
+	EventApprovalExpired       = "approval.expired"
 	// EventApprovalReplayed marks a tool call that reused a prior-granted
 	// approval within the replay window (same tenant + tool + args) instead of
 	// re-prompting (CLAUDE.md §7.4). The Code Mode continuation flow drives this

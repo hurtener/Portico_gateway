@@ -19,11 +19,13 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/auth/scope"
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
+	dataplanemw "github.com/hurtener/Portico_gateway/internal/dataplane/middleware"
 	llmengineifaces "github.com/hurtener/Portico_gateway/internal/llm/engine/ifaces"
 	"github.com/hurtener/Portico_gateway/internal/llm/quota"
 	mcpnb "github.com/hurtener/Portico_gateway/internal/mcp/northbound/http"
 	southboundmgr "github.com/hurtener/Portico_gateway/internal/mcp/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/policy/approval"
+	"github.com/hurtener/Portico_gateway/internal/profiles"
 	"github.com/hurtener/Portico_gateway/internal/registry"
 	apimw "github.com/hurtener/Portico_gateway/internal/server/api/middleware"
 	"github.com/hurtener/Portico_gateway/internal/server/mcpgw"
@@ -147,6 +149,11 @@ type Deps struct {
 	// /api/code-mode/* observability endpoints return 503.
 	CodeMode ifaces.CodeModeStore
 
+	// Phase 14: agent profile resolver. Optional — drives the profile middleware
+	// and is invalidated on CRUD writes. Nil → no profile enforcement
+	// (back-compat). The store itself is the AgentProfiles field above.
+	ProfileResolver profiles.Resolver
+
 	// Phase 14: agent profile store. Optional; nil → /api/agent-profiles is 503.
 	AgentProfiles ifaces.AgentProfileStore
 
@@ -220,6 +227,13 @@ func NewRouter(d Deps) http.Handler {
 			TenantStore: d.Tenants,
 			Logger:      d.Logger,
 		}))
+
+		// Phase 14: resolve the caller's agent profile into ctx, right after
+		// auth and before any gating. Optional — when no resolver is wired, no
+		// profile is set and every Allows* check is a no-op (back-compat).
+		if d.ProfileResolver != nil {
+			r.Use(dataplanemw.ProfileMiddleware(d.ProfileResolver, d.Logger))
+		}
 
 		// REST: tenant-scoped audit (Phase 5 fills the body)
 		r.Get("/v1/audit/events", auditQueryHandler(d))
