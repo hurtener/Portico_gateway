@@ -11,6 +11,7 @@ import (
 
 	"github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/catalog/namespace"
+	"github.com/hurtener/Portico_gateway/internal/mcp/codemode"
 	"github.com/hurtener/Portico_gateway/internal/mcp/codemode/catalog"
 	"github.com/hurtener/Portico_gateway/internal/mcp/protocol"
 	"github.com/hurtener/Portico_gateway/internal/mcp/southbound"
@@ -40,6 +41,7 @@ type Dispatcher struct {
 	codeModeCache    *catalog.ProjectionCache
 	codeModeRedactor *audit.Redactor
 	codeModeStore    ifaces.CodeModeStore
+	codeModePolicy   codemode.Policy
 
 	cacheMu          sync.Mutex
 	toolsCache       map[string]toolsCacheEntry // sessionID -> tools
@@ -96,6 +98,12 @@ func (d *Dispatcher) SetAuditEmitter(e audit.Emitter) {
 // approval_required then surfaces as a plain approval error instead of a
 // resumable suspension (no token to persist). Executions are still run.
 func (d *Dispatcher) SetCodeModeStore(s ifaces.CodeModeStore) { d.codeModeStore = s }
+
+// SetCodeModePolicy installs the operator-tunable Code Mode posture (Phase
+// 13.5): execution-size / binding-level / tool-call limits, a kill switch, and
+// the optional whole-execution approval gate. The zero Policy is fully
+// permissive (code mode open within a tenant).
+func (d *Dispatcher) SetCodeModePolicy(p codemode.Policy) { d.codeModePolicy = p }
 
 // SetSnapshotBinder installs the lazy snapshot binder. nil disables stable
 // tools/list mode — the dispatcher falls back to live fan-out on every

@@ -313,6 +313,30 @@ func approvalRequiredError(dec policy.Decision, a *approval.Approval) *protocol.
 	return protocol.NewError(protocol.ErrApprovalRequired, "approval_required", data)
 }
 
+// ApproveExecution runs the approval flow for a whole Code Mode execution (the
+// require_approval_on_executeToolCode posture), keyed on the synthetic
+// `mcp.executeToolCode` tool with the snippet digest as arguments. It reuses the
+// identical approval flow (and its replay window) a tool call uses, so the
+// resume recognises the grant. A nil flow means approval cannot be granted —
+// the caller must fail closed. approvalID is empty on the first request and the
+// granted id on resume (so the replay window short-circuits).
+func (p *PolicyPipeline) ApproveExecution(ctx context.Context, sess *Session, args json.RawMessage, approvalID string) (approval.Outcome, error) {
+	if p == nil || p.approvals == nil {
+		return approval.Outcome{}, errors.New("approval flow not configured")
+	}
+	dec := policy.Decision{
+		Tool:             metaExecuteToolCode,
+		RiskClass:        policy.RiskExternalSideEffect,
+		RequiresApproval: true,
+	}
+	return p.approvals.Run(ctx, sess.TenantID, sess.ID, sess.UserID, dec, approval.CallContext{
+		Tool:       metaExecuteToolCode,
+		Arguments:  args,
+		RiskClass:  dec.RiskClass,
+		ApprovalID: approvalID,
+	})
+}
+
 // AsCallToolParams parses a tools/call request body.
 func AsCallToolParams(raw json.RawMessage) (protocol.CallToolParams, error) {
 	var p protocol.CallToolParams
