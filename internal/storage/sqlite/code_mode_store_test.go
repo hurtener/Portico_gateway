@@ -73,6 +73,44 @@ func TestCodeModeStore_ExecutionRoundTrip(t *testing.T) {
 	}
 }
 
+func TestCodeModeStore_SummarizeExecutions(t *testing.T) {
+	db := open(t)
+	store := db.CodeMode()
+	ctx := context.Background()
+
+	// Two completed + one failed for tenant-a; one for tenant-b (must not leak).
+	for _, e := range []*ifaces.CodeModeExecution{
+		{TenantID: "tenant-a", ExecutionID: "e1", SessionID: "s1", Status: ifaces.CodeModeStatusCompleted, StartedAt: "2026-06-17T10:00:00Z", ToolCalls: 2, TokensSavedEst: 100, SpanID: "x"},
+		{TenantID: "tenant-a", ExecutionID: "e2", SessionID: "s1", Status: ifaces.CodeModeStatusCompleted, StartedAt: "2026-06-17T11:00:00Z", ToolCalls: 3, TokensSavedEst: 200, SpanID: "x"},
+		{TenantID: "tenant-a", ExecutionID: "e3", SessionID: "s2", Status: ifaces.CodeModeStatusFailed, StartedAt: "2026-06-17T12:00:00Z", ToolCalls: 0, TokensSavedEst: 0, SpanID: "x"},
+		{TenantID: "tenant-b", ExecutionID: "e4", SessionID: "s9", Status: ifaces.CodeModeStatusCompleted, StartedAt: "2026-06-17T10:00:00Z", ToolCalls: 9, TokensSavedEst: 999, SpanID: "x"},
+	} {
+		if err := store.PutExecution(ctx, e); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+
+	sum, err := store.SummarizeExecutions(ctx, "tenant-a", "")
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if sum.Executions != 3 || sum.ToolCalls != 5 || sum.TokensSavedEst != 300 {
+		t.Errorf("summary totals wrong: %+v", sum)
+	}
+	if sum.ByStatus[ifaces.CodeModeStatusCompleted] != 2 || sum.ByStatus[ifaces.CodeModeStatusFailed] != 1 {
+		t.Errorf("by-status wrong: %+v", sum.ByStatus)
+	}
+
+	// since filter excludes the 10:00 row.
+	windowed, err := store.SummarizeExecutions(ctx, "tenant-a", "2026-06-17T10:30:00Z")
+	if err != nil {
+		t.Fatalf("windowed summarize: %v", err)
+	}
+	if windowed.Executions != 2 {
+		t.Errorf("since filter wrong: got %d, want 2", windowed.Executions)
+	}
+}
+
 func TestCodeModeStore_ListExecutions_TenantIsolated(t *testing.T) {
 	db := open(t)
 	store := db.CodeMode()

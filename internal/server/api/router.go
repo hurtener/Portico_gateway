@@ -143,6 +143,10 @@ type Deps struct {
 	// returns 503.
 	LLMSessions ifaces.LLMSessionStore
 
+	// Phase 13.5: Code Mode execution store. Optional; when nil, the
+	// /api/code-mode/* observability endpoints return 503.
+	CodeMode ifaces.CodeModeStore
+
 	// Phase 13: redactor applied to chat-session message content before it is
 	// persisted. Optional; recordChatSession falls back to a default redactor
 	// when nil so content is never stored unredacted.
@@ -352,6 +356,13 @@ func NewRouter(d Deps) http.Handler {
 		if d.LLMSessions != nil {
 			r.Get("/api/llm/sessions", listLLMSessionsHandler(d))
 			r.Get("/api/llm/sessions/{chat_id}", getLLMSessionHandler(d))
+		}
+
+		// Phase 13.5: Code Mode observability (admin scope). Execution history +
+		// the tokens-saved ROI rollup.
+		if d.CodeMode != nil {
+			r.Get("/api/code-mode/executions", listCodeModeExecutionsHandler(d))
+			r.Get("/api/code-mode/savings", codeModeSavingsHandler(d))
 		}
 
 		// Phase 4: skills runtime APIs.

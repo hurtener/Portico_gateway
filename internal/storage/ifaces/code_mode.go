@@ -68,6 +68,19 @@ var (
 	ErrContinuationExpired = errors.New("storage: code mode continuation expired")
 )
 
+// CodeModeSummary is the rolled-up Code Mode activity for a tenant over a time
+// window — the ROI numbers the /observability/code-mode dashboard renders.
+type CodeModeSummary struct {
+	// Executions is the total number of executeToolCode runs in the window.
+	Executions int
+	// ToolCalls is the total tool calls those runs issued.
+	ToolCalls int
+	// TokensSavedEst is the summed tokens-saved-vs-catalog estimate.
+	TokensSavedEst int
+	// ByStatus counts executions per terminal status (completed/failed/…).
+	ByStatus map[string]int
+}
+
 // CodeModeStore persists Code Mode execution records and approval-suspension
 // continuations. Every method is tenant-scoped (§6); the factory lives on the
 // SQLite *DB and the dispatcher depends only on this interface (§4.4).
@@ -81,6 +94,9 @@ type CodeModeStore interface {
 	// ListExecutions returns a session's executions, most-recent first. sessionID
 	// empty lists across the tenant. limit <= 0 means a sane default cap.
 	ListExecutions(ctx context.Context, tenantID, sessionID string, limit int) ([]*CodeModeExecution, error)
+	// SummarizeExecutions rolls up a tenant's executions started at or after
+	// since (RFC3339 UTC; empty = all-time) into the dashboard ROI numbers.
+	SummarizeExecutions(ctx context.Context, tenantID, since string) (*CodeModeSummary, error)
 
 	// PutContinuation inserts a suspended-execution row.
 	PutContinuation(ctx context.Context, c *CodeModeContinuation) error
