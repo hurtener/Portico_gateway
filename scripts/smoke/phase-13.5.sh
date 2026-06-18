@@ -148,6 +148,19 @@ if skip_if_404 200 "GET /api/code-mode/executions" \
   assert_json_truthy 'has("executions")' "code mode savings rollup has an executions count"
 fi
 
+# 8d) Code Mode interactive playground REST (synthetic Console session): list the
+#     virtual stub files and run a pure-compute snippet. Skips cleanly on builds
+#     without the dispatcher wiring.
+if skip_if_404 200 "GET /api/code-mode/files" \
+  -- -X GET "$(api_url /api/code-mode/files)"; then
+  assert_json_truthy '.files | index("index.md")' "code mode files lists index.md"
+  skip_if_404 200 "POST /api/code-mode/run (pure compute)" \
+    -- -X POST "$(api_url /api/code-mode/run)" \
+       -H 'Content-Type: application/json' \
+       -d '{"code":"result = 6 * 7"}'
+  assert_json_path '.result' '42' "code mode run returns the computed result"
+fi
+
 # 9) Acceptance #1: a session WITHOUT the opt-in does not see the meta-tools.
 PLAIN_INIT='{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"preflight","version":"0"}}'
 PLAIN_HEADERS=$(curl -s -D - -o /dev/null -X POST "$(mcp_url)" \

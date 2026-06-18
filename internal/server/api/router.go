@@ -364,6 +364,14 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/api/code-mode/executions", listCodeModeExecutionsHandler(d))
 			r.Get("/api/code-mode/savings", codeModeSavingsHandler(d))
 		}
+		// Phase 13.5: Code Mode interactive playground (admin scope). Drives the
+		// meta-tools through a synthetic Console session — list stub files, read
+		// one, run a snippet. Needs the dispatcher + session registry.
+		if d.Dispatcher != nil && d.Sessions != nil {
+			r.Get("/api/code-mode/files", listCodeModeFilesHandler(d))
+			r.Get("/api/code-mode/files/read", readCodeModeFileHandler(d))
+			r.Post("/api/code-mode/run", runCodeModeSnippetHandler(d))
+		}
 
 		// Phase 4: skills runtime APIs.
 		if d.Skills != nil {
