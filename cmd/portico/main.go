@@ -55,6 +55,8 @@ func main() {
 		err = runCodeMode(ctx, args)
 	case "agents":
 		err = runAgents(ctx, args)
+	case "governance":
+		err = runGovernance(ctx, args)
 	case "version", "--version", "-v":
 		printVersion()
 	case "help", "--help", "-h":
@@ -92,6 +94,10 @@ Commands:
                                         Manage agent profiles (offline, against the data dir).
   agents test --tenant <id> --id <profile> (--tool <ns.tool>|--alias <a>|--skill <id>)
                                         Check allow/deny for a (profile, target) pair (offline; matches the dispatcher).
+  governance customers list|get|create|update|delete --tenant <id> [flags]
+                                        Manage governance customers (offline, against the data dir).
+  governance teams list|get|create|update|delete --tenant <id> [flags]
+                                        Manage governance teams (offline, against the data dir).
   version                              Print version info.
 
 Run 'portico <command> -h' for command-specific flags.`)
