@@ -117,6 +117,43 @@ func TestCheckBudget_FiresAtVKLevel(t *testing.T) {
 	}
 }
 
+func TestVirtualKeyBudgetHandler(t *testing.T) {
+	d, bs, gs := budgetTestDeps(t)
+	ctx := context.Background()
+	// A VK + a vk-level budget under tenant t1 (newReq uses tenant t1).
+	if err := gs.PutVirtualKey(ctx, &ifaces.VirtualKey{
+		TenantID: "t1", ID: "vk1", Name: "k", Salt: []byte{1}, HMAC: []byte{2}, Enabled: true,
+	}); err != nil {
+		t.Fatalf("put vk: %v", err)
+	}
+	if err := bs.PutBudget(ctx, &ifaces.Budget{
+		TenantID: "t1", ID: "b1", ScopeKind: "vk", ScopeID: "vk1",
+		Metric: budgets.MetricCostUSD, Period: "1h", Alignment: "rolling", LimitVal: 5, Enabled: true,
+	}); err != nil {
+		t.Fatalf("put budget: %v", err)
+	}
+
+	r := withChiURLParam(newReq("GET", "/api/governance/virtual-keys/vk1/budget", nil), "id", "vk1")
+	w := runHandler(virtualKeyBudgetHandler(d), r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", w.Code, w.Body.String())
+	}
+	var body struct {
+		VKID   string                `json:"vk_id"`
+		Levels []budgets.LevelStatus `json:"levels"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &body)
+	if body.VKID != "vk1" || len(body.Levels) != 1 || body.Levels[0].Level != "vk" {
+		t.Fatalf("budget read wrong: %s", w.Body.String())
+	}
+
+	// Missing VK → 404.
+	r404 := withChiURLParam(newReq("GET", "/x/nope/budget", nil), "id", "nope")
+	if w := runHandler(virtualKeyBudgetHandler(d), r404); w.Code != http.StatusNotFound {
+		t.Fatalf("missing VK: want 404, got %d", w.Code)
+	}
+}
+
 func TestCheckBudget_NoEnforcerAllows(t *testing.T) {
 	w := httptest.NewRecorder()
 	if !checkBudget(Deps{}, w, reqWithVK(nil), "t", "anthropic", "claude", 0) {

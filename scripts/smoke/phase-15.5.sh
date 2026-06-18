@@ -58,6 +58,12 @@ if skip_if_404 201 "POST /api/governance/virtual-keys" \
       -- -X GET "$(api_url /api/governance/virtual-keys)"
     assert_json_truthy "map(.id) | index(\"$VK_ID\")" "list includes the created VK"
 
+    # 3b) Hierarchical budget read for the VK (200 with a levels array; empty
+    # when no budgets are attached — still a valid response shape).
+    assert_status 200 "GET /api/governance/virtual-keys/{id}/budget" \
+      -- -X GET "$(api_url "/api/governance/virtual-keys/$VK_ID/budget")"
+    assert_json_truthy '.levels | type == "array"' "budget read returns a levels array"
+
     # 4) Authenticate WITH the VK bearer (admin scope → governance allowed).
     assert_status 200 "VK bearer authenticates (list via pk-portico-)" \
       -- -X GET "$(api_url /api/governance/virtual-keys)" \

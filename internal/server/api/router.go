@@ -438,6 +438,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/api/governance/virtual-keys/{id}", getVirtualKeyHandler(d))
 			r.Post("/api/governance/virtual-keys/{id}/rotate", rotateVirtualKeyHandler(d))
 			r.Delete("/api/governance/virtual-keys/{id}", deleteVirtualKeyHandler(d))
+			r.Get("/api/governance/virtual-keys/{id}/budget", virtualKeyBudgetHandler(d))
 		}
 		// Phase 15.5: governance Customer + Team CRUD (admin scope). Mounted when
 		// the governance store is wired; handlers gate on nil for 503 back-compat.
