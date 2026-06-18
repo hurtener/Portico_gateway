@@ -69,6 +69,10 @@ func embeddingsHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusBadRequest, "invalid_request", "model is required", nil)
 			return
 		}
+		// Phase 14: the agent profile must allow this model alias.
+		if !aliasAllowedByProfile(w, r, req.Model) {
+			return
+		}
 
 		// Parse input: string or []string
 		inputStrings, err := parseEmbeddingInput(req.Input)
@@ -171,6 +175,8 @@ func listModelsHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "list_failed", err.Error(), nil)
 			return
 		}
+		// Phase 14: only aliases the agent profile allows.
+		models = filterAliasesByProfile(r, models, func(m *storageifaces.LLMModel) string { return m.Alias })
 
 		data := make([]openAIModelSummary, 0, len(models))
 		for _, m := range models {

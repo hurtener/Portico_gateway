@@ -77,6 +77,10 @@ func chatCompletionsHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusBadRequest, "invalid_request", "model and messages are required", nil)
 			return
 		}
+		// Phase 14: the agent profile must allow this model alias.
+		if !aliasAllowedByProfile(w, r, req.Model) {
+			return
+		}
 		// Resolve the alias to a provider + upstream model (tenant-scoped) for BOTH stream and non-stream paths.
 		model, err := d.LLMModels.GetModel(r.Context(), id.TenantID, req.Model)
 		if err != nil {
