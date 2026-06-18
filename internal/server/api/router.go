@@ -389,6 +389,8 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/api/agent-profiles/{id}", getAgentProfileHandler(d))
 			r.Put("/api/agent-profiles/{id}", updateAgentProfileHandler(d))
 			r.Delete("/api/agent-profiles/{id}", deleteAgentProfileHandler(d))
+			r.Put("/api/agent-profiles/{id}/bindings/{sub}", putAgentProfileBindingHandler(d))
+			r.Delete("/api/agent-profiles/{id}/bindings/{sub}", deleteAgentProfileBindingHandler(d))
 		}
 		// Phase 13.5: Code Mode interactive playground (admin scope). Drives the
 		// meta-tools through a synthetic Console session — list stub files, read

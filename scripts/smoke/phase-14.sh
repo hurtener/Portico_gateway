@@ -39,6 +39,12 @@ if skip_if_404 201 "POST /api/agent-profiles" \
       -- -X GET "$(api_url /api/agent-profiles)"
     assert_json_truthy "map(.id) | index(\"$PROFILE_ID\")" "list includes the created profile"
 
+    # 3b) JWT binding round-trip: bind a subject, then unbind (both 204).
+    assert_status 204 "PUT /api/agent-profiles/{id}/bindings/{sub}" \
+      -- -X PUT "$(api_url "/api/agent-profiles/$PROFILE_ID/bindings/smoke-subject")"
+    assert_status 204 "DELETE /api/agent-profiles/{id}/bindings/{sub}" \
+      -- -X DELETE "$(api_url "/api/agent-profiles/$PROFILE_ID/bindings/smoke-subject")"
+
     # 4) Delete → 204, then GET → 404.
     assert_status 204 "DELETE /api/agent-profiles/{id}" \
       -- -X DELETE "$(api_url "/api/agent-profiles/$PROFILE_ID")"
