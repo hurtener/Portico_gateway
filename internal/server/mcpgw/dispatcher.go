@@ -420,6 +420,11 @@ func (d *Dispatcher) dispatchToolCall(ctx context.Context, sess *Session, params
 	if perr := d.checkToolAllowedByProfile(ctx, sess, params.Name); perr != nil {
 		return nil, perr
 	}
+	// Phase 15.5: Virtual Key MCP-server allowlist. A VK constrained to a set of
+	// servers cannot reach others — including via Code Mode (shared path).
+	if perr := d.checkServerAllowedByVK(ctx, sess, serverID); perr != nil {
+		return nil, perr
+	}
 	if d.manager == nil {
 		return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, "manager not configured", nil)
 	}

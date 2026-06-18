@@ -26,6 +26,7 @@ const (
 	ErrToolNotEnabled        = -32004 // tool not visible / wrong namespace
 	ErrTenantInactive        = -32005 // future
 	ErrAgentProfileViolation = -32006 // Phase 14: tool/alias/skill outside the agent profile's surface
+	ErrVKScopeViolation      = -32007 // Phase 15.5: server/tool outside the Virtual Key's allowlist
 
 	// Code Mode (Phase 13.5). The specific code_mode.* reason travels in the
 	// error's Data.code field; these top-level codes group them by class.
