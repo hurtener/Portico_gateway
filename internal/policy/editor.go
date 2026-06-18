@@ -58,6 +58,21 @@ type Match struct {
 	Profiles              []string `json:"profiles,omitempty" yaml:"profiles,omitempty"`
 	ProfileIncludesServer string   `json:"profile_includes_server,omitempty" yaml:"profile_includes_server,omitempty"`
 	ProfileIncludesAlias  string   `json:"profile_includes_alias,omitempty" yaml:"profile_includes_alias,omitempty"`
+	// Virtual Key matchers (Phase 15.5). VKs matches the caller's VK by id;
+	// VKScopes fires when the VK carries one of the listed scopes; VKTeam /
+	// VKCustomer match the VK's budget parent. All require a VK on the call
+	// (a JWT caller never matches these). Authoring/dry-run tier — runtime VK
+	// enforcement lives in the auth middleware + dispatcher.
+	VKs        []string `json:"vk_ids,omitempty" yaml:"vk_ids,omitempty"`
+	VKScopes   []string `json:"vk_scopes,omitempty" yaml:"vk_scopes,omitempty"`
+	VKTeam     string   `json:"vk_team,omitempty" yaml:"vk_team,omitempty"`
+	VKCustomer string   `json:"vk_customer,omitempty" yaml:"vk_customer,omitempty"`
+	// CacheWouldHit, when set, fires when the request would (true) / would not
+	// (false) hit the semantic cache. nil = don't match on cache state.
+	CacheWouldHit *bool `json:"cache_would_hit,omitempty" yaml:"cache_would_hit,omitempty"`
+	// BudgetHeadroomBelowPct fires when the lowest applicable budget's remaining
+	// headroom is below this percentage (0–100). nil = don't match on budget.
+	BudgetHeadroomBelowPct *float64 `json:"budget_headroom_below_pct,omitempty" yaml:"budget_headroom_below_pct,omitempty"`
 }
 
 // TimeRange is an HH:MM..HH:MM window in UTC. Empty fields disable the
@@ -82,6 +97,16 @@ type Actions struct {
 	// of "only these agent profiles may reach this surface". A verdict action,
 	// mutually exclusive with allow/deny/require_approval.
 	RequireProfileMembership []string `json:"require_profile_membership,omitempty" yaml:"require_profile_membership,omitempty"`
+	// Phase 15.5 modifier actions (NOT verdicts — they compose with allow/deny
+	// like log_level/annotate). The runtime reads them off the matched rule:
+	//   - DenyOnCacheMiss: deny the call when it would miss the cache (force
+	//     cache-only operation for a route).
+	//   - ForceCacheBypass: skip the cache for this call (always go upstream).
+	//   - ClampToCustomerBudget: cap the effective budget headroom to the
+	//     customer level (ignore a looser VK/team allowance).
+	DenyOnCacheMiss       bool `json:"deny_on_cache_miss,omitempty" yaml:"deny_on_cache_miss,omitempty"`
+	ForceCacheBypass      bool `json:"force_cache_bypass,omitempty" yaml:"force_cache_bypass,omitempty"`
+	ClampToCustomerBudget bool `json:"clamp_to_customer_budget,omitempty" yaml:"clamp_to_customer_budget,omitempty"`
 }
 
 // ErrInvalidRule is the sentinel returned by Validate. Wrapped errors are
