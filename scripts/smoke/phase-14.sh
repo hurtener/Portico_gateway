@@ -39,6 +39,14 @@ if skip_if_404 201 "POST /api/agent-profiles" \
       -- -X GET "$(api_url /api/agent-profiles)"
     assert_json_truthy "map(.id) | index(\"$PROFILE_ID\")" "list includes the created profile"
 
+    # 3a) Live materialised surface (Phase 14 #12). The dev server has no
+    # registered servers/models, so the intersected lists are empty — the check
+    # asserts the endpoint is wired and reports the profile id + shape.
+    assert_status 200 "GET /api/agent-profiles/{id}/surface" \
+      -- -X GET "$(api_url "/api/agent-profiles/$PROFILE_ID/surface")"
+    assert_json_path '.profile_id' "$PROFILE_ID" "surface reports the profile id"
+    assert_json_path '.is_default' 'false' "surface is not the default profile"
+
     # 3b) JWT binding round-trip: bind a subject, then unbind (both 204).
     assert_status 204 "PUT /api/agent-profiles/{id}/bindings/{sub}" \
       -- -X PUT "$(api_url "/api/agent-profiles/$PROFILE_ID/bindings/smoke-subject")"
