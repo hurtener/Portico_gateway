@@ -32,6 +32,9 @@ func (f *fakeCodeModeStore) UpdateExecutionStatus(_ context.Context, _ *ifaces.C
 func (f *fakeCodeModeStore) ListExecutions(_ context.Context, _, _ string, _ int) ([]*ifaces.CodeModeExecution, error) {
 	return f.executions, nil
 }
+func (f *fakeCodeModeStore) SummarizeExecutions(_ context.Context, _, _ string) (*ifaces.CodeModeSummary, error) {
+	return &ifaces.CodeModeSummary{ByStatus: map[string]int{}}, nil
+}
 func (f *fakeCodeModeStore) PutContinuation(_ context.Context, c *ifaces.CodeModeContinuation) error {
 	f.cont = c
 	return f.putContErr
