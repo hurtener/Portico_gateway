@@ -522,6 +522,45 @@ Microbenchmark: `internal/profiles/bench_test.go::BenchmarkResolver_HotPath` ass
 - A2A integration (Phase 16 plugs in; Profile-side machinery is reused).
 - Federation-wide Profile sharing (Profiles are tenant-scoped, never cross trust boundaries).
 
+## Status (2026-06-18) — DONE
+
+Phase 14 is complete and merged. Acceptance #1–#8, #10–#19 are implemented and
+covered by unit + integration + smoke tests; `make preflight` is green
+(211 OK / 0 FAIL). The Console `/agents` screen ships as a list + sectioned
+Inspector (the "5-step wizard" surface rendered as the Console idiom — a §4.3
+deviation noted in #16's implementation).
+
+### Acceptance #9 (snapshot-drift scoping) — §4.3 deferral
+
+**What #9 asks:** tools added to a server *not* in a Profile's allowlist must
+not raise drift events for that Profile's sessions.
+
+**Why it is deferred (not faked):** the snapshot **drift detector**
+(`internal/catalog/snapshots/drift.go`) is a background sweep with no request
+context, so it has no resolved Profile. Its only per-session handle,
+`snapshots.ActiveSession`, carries `{SessionID, TenantID, SnapshotID, StartedAt}`
+— **no principal subject** — so it cannot resolve the session's Profile without:
+(a) extending the Phase 6 active-sessions storage projection to carry the
+principal subject, AND (b) injecting a `profiles.Resolver` into a background
+component. Filtering the snapshot *contents* at creation instead would corrupt
+the per-server schema fingerprint the detector compares against the live tool
+list (stored-filtered ≠ live-full ⇒ false drift), so that path is wrong.
+
+Drift is **operator-facing observability**, not an agent-facing surface: the
+agent-facing projection (`tools/list`, `tools/call`, prompts, resources,
+`skill://`, `/v1` aliases) is already fully Profile-enforced (#4–#8). A drift
+event for an out-of-profile *server* is therefore at most a minor observability
+imprecision, never a security or correctness gap.
+
+**Clean future fix (when warranted):** add the principal subject to
+`ActiveSession` (and the `ActiveSessions` query), inject the `profiles.Resolver`
+into the `Detector`, resolve each active session's Profile in the sweep, and
+skip any `snap.Servers` entry the Profile disallows via `AllowsServer`. This
+scopes drift at emit time at the **server** granularity (the granularity #9
+specifies) without changing the snapshot contract or the fingerprint baseline.
+Tool-level drift scoping stays out of scope — it would corrupt the per-server
+fingerprint and #9 is specifically about servers not in the allowlist.
+
 ## Done definition
 
 1. All acceptance criteria pass.
