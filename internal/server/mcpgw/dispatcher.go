@@ -296,7 +296,7 @@ func (d *Dispatcher) handleToolsList(ctx context.Context, sess *Session, _ *prot
 					Annotations: ti.Annotations,
 				})
 			}
-			body, _ := json.Marshal(protocol.ListToolsResult{Tools: tools})
+			body, _ := json.Marshal(protocol.ListToolsResult{Tools: filterToolsByProfile(ctx, tools)})
 			return body, nil
 		}
 	}
@@ -305,7 +305,7 @@ func (d *Dispatcher) handleToolsList(ctx context.Context, sess *Session, _ *prot
 	d.cacheMu.Lock()
 	if e, ok := d.toolsCache[sess.ID]; ok && time.Now().Before(e.expiresAt) {
 		d.cacheMu.Unlock()
-		body, _ := json.Marshal(protocol.ListToolsResult{Tools: e.tools})
+		body, _ := json.Marshal(protocol.ListToolsResult{Tools: filterToolsByProfile(ctx, e.tools)})
 		return body, nil
 	}
 	d.cacheMu.Unlock()
@@ -356,7 +356,9 @@ func (d *Dispatcher) handleToolsList(ctx context.Context, sess *Session, _ *prot
 	d.toolsCache[sess.ID] = toolsCacheEntry{tools: combined, expiresAt: time.Now().Add(d.cacheTTL)}
 	d.cacheMu.Unlock()
 
-	body, err := json.Marshal(protocol.ListToolsResult{Tools: combined})
+	// Cache the raw catalog; apply the agent-profile filter as a per-request view
+	// (Phase 14) so the cache stays profile-agnostic.
+	body, err := json.Marshal(protocol.ListToolsResult{Tools: filterToolsByProfile(ctx, combined)})
 	if err != nil {
 		return nil, protocol.NewError(protocol.ErrInternalError, err.Error(), nil)
 	}
@@ -410,6 +412,13 @@ func (d *Dispatcher) dispatchToolCall(ctx context.Context, sess *Session, params
 	serverID, toolName, ok := namespace.SplitTool(params.Name)
 	if !ok {
 		return nil, protocol.NewError(protocol.ErrToolNotEnabled, "tool name must be qualified as <server>.<tool>", map[string]string{"name": params.Name})
+	}
+	// Phase 14: agent-profile surface check — reject a tool outside the caller's
+	// profile before any policy/approval/dispatch work. A nil/default profile
+	// allows everything (back-compat). This is also reached by in-sandbox Code
+	// Mode calls (they share dispatchToolCall), so Code Mode inherits the gate.
+	if perr := d.checkToolAllowedByProfile(ctx, sess, params.Name); perr != nil {
+		return nil, perr
 	}
 	if d.manager == nil {
 		return nil, protocol.NewError(protocol.ErrUpstreamUnavailable, "manager not configured", nil)

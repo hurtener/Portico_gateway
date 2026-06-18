@@ -23,6 +23,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/playground"
 	"github.com/hurtener/Portico_gateway/internal/policy"
 	"github.com/hurtener/Portico_gateway/internal/policy/approval"
+	"github.com/hurtener/Portico_gateway/internal/profiles"
 	"github.com/hurtener/Portico_gateway/internal/registry"
 	"github.com/hurtener/Portico_gateway/internal/runtime/process"
 	"github.com/hurtener/Portico_gateway/internal/secrets"
@@ -330,6 +331,10 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	// Phase 13.5: Code Mode execution + continuation store. Drives the approval
 	// suspend/resume flow and feeds the savings dashboard. A background sweeper
 	// reaps expired/consumed continuations hourly.
+	// Phase 14: agent profile resolver — backs the profile middleware and the
+	// CRUD invalidation. Conservative defaults (60s TTL, 1024-entry LRU).
+	profileResolver := profiles.NewResolver(backend.AgentProfiles(), 0, 0)
+
 	codeModeStore := backend.CodeMode()
 	dispatcher.SetCodeModeStore(codeModeStore)
 	dispatcher.SetCodeModePolicy(codemode.Policy{
@@ -611,16 +616,17 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		AuditSearch:    auditStore,
 
 		// Phase 13: LLM gateway.
-		LLMProviders:  llmProviders,
-		LLMModels:     llmModels,
-		LLMEngine:     llmEngine,
-		LLMQuotas:     llmQuotas,
-		LLMQuota:      llmQuotaEnforcer,
-		LLMCosts:      llmCosts,
-		LLMSessions:   llmSessions,
-		CodeMode:      codeModeStore,
-		AgentProfiles: backend.AgentProfiles(),
-		Redactor:      auditpkg.NewDefaultRedactor(),
+		LLMProviders:    llmProviders,
+		LLMModels:       llmModels,
+		LLMEngine:       llmEngine,
+		LLMQuotas:       llmQuotas,
+		LLMQuota:        llmQuotaEnforcer,
+		LLMCosts:        llmCosts,
+		LLMSessions:     llmSessions,
+		CodeMode:        codeModeStore,
+		AgentProfiles:   backend.AgentProfiles(),
+		ProfileResolver: profileResolver,
+		Redactor:        auditpkg.NewDefaultRedactor(),
 	}
 
 	handler := api.NewRouter(deps)
