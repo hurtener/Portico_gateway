@@ -1398,6 +1398,7 @@ export default {
 
   // Phase 10: Playground
   'nav.playground': 'Playground',
+  'nav.code_mode': 'Code Mode',
   'playground.title': 'Playground',
   'playground.subtitle': 'Run tool calls, prompts, and resource reads against the live catalog.',
   'playground.session.start': 'Start session',

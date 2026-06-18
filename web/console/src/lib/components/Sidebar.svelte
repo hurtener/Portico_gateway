@@ -24,6 +24,7 @@
   import IconUsers from 'lucide-svelte/icons/users';
   import IconScale from 'lucide-svelte/icons/scale';
   import IconPlay from 'lucide-svelte/icons/play';
+  import IconBraces from 'lucide-svelte/icons/braces';
   import IconPlug from 'lucide-svelte/icons/plug';
   import IconCloud from 'lucide-svelte/icons/cloud';
   import IconChevronLeft from 'lucide-svelte/icons/chevron-left';
@@ -75,7 +76,8 @@
         { labelKey: 'nav.policy', href: '/policy', Icon: IconScale },
         { labelKey: 'nav.audit', href: '/audit', Icon: IconHistory },
         { labelKey: 'nav.snapshots', href: '/snapshots', Icon: IconDatabase },
-        { labelKey: 'nav.playground', href: '/playground', Icon: IconPlay }
+        { labelKey: 'nav.playground', href: '/playground', Icon: IconPlay },
+        { labelKey: 'nav.code_mode', href: '/observability/code-mode', Icon: IconBraces }
       ]
     },
     {
