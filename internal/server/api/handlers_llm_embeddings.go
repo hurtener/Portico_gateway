@@ -85,23 +85,10 @@ func embeddingsHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
-		// Resolve the alias to a provider + upstream model (tenant-scoped).
-		model, err := d.LLMModels.GetModel(r.Context(), id.TenantID, req.Model)
-		if err != nil {
-			if errors.Is(err, storageifaces.ErrLLMModelNotFound) {
-				writeJSONError(w, http.StatusNotFound, "model_not_found", "unknown model: "+req.Model, nil)
-				return
-			}
-			writeJSONError(w, http.StatusInternalServerError, "resolve_failed", err.Error(), nil)
-			return
-		}
-		if !model.Enabled {
-			writeJSONError(w, http.StatusForbidden, "model_disabled", "model is disabled: "+req.Model, nil)
-			return
-		}
-		prov, err := d.LLMProviders.GetProvider(r.Context(), id.TenantID, model.ProviderName)
-		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "provider_missing", "provider not found for alias", nil)
+		// Resolve the alias to a provider + upstream model (tenant-scoped),
+		// enforcing model-enabled + the VK provider/model allowlist.
+		prov, model, ok := resolveLLMTarget(d, w, r, id.TenantID, req.Model)
+		if !ok {
 			return
 		}
 

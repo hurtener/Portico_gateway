@@ -101,6 +101,11 @@ func chatCompletionsHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
+		// Phase 15.5: a Virtual Key caller must pass its provider + model allowlist.
+		if !vkAllowsLLM(w, r, req.Model, prov.Driver) {
+			return
+		}
+
 		// Quota: enforce per-tenant limits before dispatch (both stream + non-stream).
 		if !checkQuota(d, w, r, id.TenantID, req.Model) {
 			return
