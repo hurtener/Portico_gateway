@@ -147,6 +147,9 @@ type Deps struct {
 	// /api/code-mode/* observability endpoints return 503.
 	CodeMode ifaces.CodeModeStore
 
+	// Phase 14: agent profile store. Optional; nil → /api/agent-profiles is 503.
+	AgentProfiles ifaces.AgentProfileStore
+
 	// Phase 13: redactor applied to chat-session message content before it is
 	// persisted. Optional; recordChatSession falls back to a default redactor
 	// when nil so content is never stored unredacted.
@@ -363,6 +366,15 @@ func NewRouter(d Deps) http.Handler {
 		if d.CodeMode != nil {
 			r.Get("/api/code-mode/executions", listCodeModeExecutionsHandler(d))
 			r.Get("/api/code-mode/savings", codeModeSavingsHandler(d))
+		}
+
+		// Phase 14: agent profile CRUD (admin scope).
+		if d.AgentProfiles != nil {
+			r.Get("/api/agent-profiles", listAgentProfilesHandler(d))
+			r.Post("/api/agent-profiles", createAgentProfileHandler(d))
+			r.Get("/api/agent-profiles/{id}", getAgentProfileHandler(d))
+			r.Put("/api/agent-profiles/{id}", updateAgentProfileHandler(d))
+			r.Delete("/api/agent-profiles/{id}", deleteAgentProfileHandler(d))
 		}
 		// Phase 13.5: Code Mode interactive playground (admin scope). Drives the
 		// meta-tools through a synthetic Console session — list stub files, read

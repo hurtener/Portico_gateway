@@ -611,15 +611,16 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		AuditSearch:    auditStore,
 
 		// Phase 13: LLM gateway.
-		LLMProviders: llmProviders,
-		LLMModels:    llmModels,
-		LLMEngine:    llmEngine,
-		LLMQuotas:    llmQuotas,
-		LLMQuota:     llmQuotaEnforcer,
-		LLMCosts:     llmCosts,
-		LLMSessions:  llmSessions,
-		CodeMode:     codeModeStore,
-		Redactor:     auditpkg.NewDefaultRedactor(),
+		LLMProviders:  llmProviders,
+		LLMModels:     llmModels,
+		LLMEngine:     llmEngine,
+		LLMQuotas:     llmQuotas,
+		LLMQuota:      llmQuotaEnforcer,
+		LLMCosts:      llmCosts,
+		LLMSessions:   llmSessions,
+		CodeMode:      codeModeStore,
+		AgentProfiles: backend.AgentProfiles(),
+		Redactor:      auditpkg.NewDefaultRedactor(),
 	}
 
 	handler := api.NewRouter(deps)
