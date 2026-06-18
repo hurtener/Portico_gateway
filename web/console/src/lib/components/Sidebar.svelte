@@ -70,6 +70,16 @@
       ]
     },
     {
+      labelKey: 'nav.section.governance',
+      items: [
+        { labelKey: 'nav.gov_customers', href: '/governance/customers', Icon: IconUsers },
+        { labelKey: 'nav.gov_teams', href: '/governance/teams', Icon: IconBoxes },
+        { labelKey: 'nav.gov_virtual_keys', href: '/governance/virtual-keys', Icon: IconKey },
+        { labelKey: 'nav.gov_budgets', href: '/governance/budgets', Icon: IconScale },
+        { labelKey: 'nav.gov_cache', href: '/governance/cache', Icon: IconDatabase }
+      ]
+    },
+    {
       labelKey: 'nav.section.operations',
       items: [
         { labelKey: 'nav.agents', href: '/agents', Icon: IconBot },

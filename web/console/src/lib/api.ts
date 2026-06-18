@@ -449,6 +449,85 @@ export interface LLMSessionTranscript {
   messages: LLMSessionMessage[];
 }
 
+// ── Phase 15.5: Governance (Customers, Teams, Virtual Keys, Budgets, Cache) ──
+export interface Customer {
+  id: string;
+  name: string;
+  description?: string;
+  webhook_url?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Team {
+  id: string;
+  customer_id?: string;
+  name: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface VirtualKey {
+  id: string;
+  name: string;
+  parent_kind: string; // none|team|customer
+  parent_id?: string;
+  profile_id?: string;
+  scopes: string[];
+  provider_allowlist: string[];
+  model_allowlist: string[];
+  mcp_server_allowlist: string[];
+  enabled: boolean;
+  created_at?: string;
+  rotated_at?: string;
+  revoked_at?: string;
+}
+
+// VirtualKeyCreated wraps the new VK plus the one-time secret token.
+export interface VirtualKeyCreated {
+  virtual_key: VirtualKey;
+  token: string;
+}
+
+export interface Budget {
+  id: string;
+  scope_kind: string; // vk|team|customer|tenant
+  scope_id: string;
+  metric: string; // requests|tokens|cost_usd
+  period: string; // 1m|1h|1d|1w|1M|1Y
+  alignment: string; // rolling|calendar
+  limit_val: number;
+  enabled: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BudgetLevelStatus {
+  level: string;
+  metric: string;
+  budget_id: string;
+  period: string;
+  used: number;
+  limit: number;
+  resets_at: string;
+  headroom_pct: number;
+}
+
+export interface CacheConfig {
+  driver: string;
+  scope: string;
+  ttl_seconds: number;
+  threshold: number;
+  enabled: boolean;
+}
+
+export interface CacheStats {
+  entries: number;
+  hit_rate: number;
+  driver: string;
+}
+
 export const api = {
   health: () => request<{ status: string }>('/healthz'),
   ready: () => request<{ status: string }>('/readyz'),
@@ -1003,7 +1082,72 @@ export const api = {
     request<ReplayCallResult>(
       `/api/sessions/${encodeURIComponent(sid)}/calls/${encodeURIComponent(cid)}/replay`,
       { method: 'POST', body: JSON.stringify(body) }
-    )
+    ),
+
+  // ── Phase 15.5: Governance ──────────────────────────────────────────────
+  listCustomers: () => request<Customer[]>('/api/governance/customers'),
+  getCustomer: (id: string) =>
+    request<Customer>(`/api/governance/customers/${encodeURIComponent(id)}`),
+  createCustomer: (c: Partial<Customer>) =>
+    request<Customer>('/api/governance/customers', { method: 'POST', body: JSON.stringify(c) }),
+  updateCustomer: (id: string, c: Partial<Customer>) =>
+    request<Customer>(`/api/governance/customers/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(c)
+    }),
+  deleteCustomer: (id: string) =>
+    request<void>(`/api/governance/customers/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  listTeams: () => request<Team[]>('/api/governance/teams'),
+  getTeam: (id: string) => request<Team>(`/api/governance/teams/${encodeURIComponent(id)}`),
+  createTeam: (t: Partial<Team>) =>
+    request<Team>('/api/governance/teams', { method: 'POST', body: JSON.stringify(t) }),
+  updateTeam: (id: string, t: Partial<Team>) =>
+    request<Team>(`/api/governance/teams/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(t)
+    }),
+  deleteTeam: (id: string) =>
+    request<void>(`/api/governance/teams/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  listVirtualKeys: () => request<VirtualKey[]>('/api/governance/virtual-keys'),
+  getVirtualKey: (id: string) =>
+    request<VirtualKey>(`/api/governance/virtual-keys/${encodeURIComponent(id)}`),
+  createVirtualKey: (vk: Partial<VirtualKey>) =>
+    request<VirtualKeyCreated>('/api/governance/virtual-keys', {
+      method: 'POST',
+      body: JSON.stringify(vk)
+    }),
+  rotateVirtualKey: (id: string) =>
+    request<VirtualKeyCreated>(`/api/governance/virtual-keys/${encodeURIComponent(id)}/rotate`, {
+      method: 'POST'
+    }),
+  revokeVirtualKey: (id: string) =>
+    request<void>(`/api/governance/virtual-keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  getVirtualKeyBudget: (id: string) =>
+    request<{ vk_id: string; levels: BudgetLevelStatus[] }>(
+      `/api/governance/virtual-keys/${encodeURIComponent(id)}/budget`
+    ),
+
+  listBudgets: () => request<Budget[]>('/api/governance/budgets'),
+  getBudget: (id: string) => request<Budget>(`/api/governance/budgets/${encodeURIComponent(id)}`),
+  createBudget: (b: Partial<Budget>) =>
+    request<Budget>('/api/governance/budgets', { method: 'POST', body: JSON.stringify(b) }),
+  updateBudget: (id: string, b: Partial<Budget>) =>
+    request<Budget>(`/api/governance/budgets/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(b)
+    }),
+  deleteBudget: (id: string) =>
+    request<void>(`/api/governance/budgets/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  getCacheConfig: () => request<CacheConfig>('/api/llm/cache/config'),
+  getCacheStats: () => request<CacheStats>('/api/llm/cache/stats'),
+  invalidateCache: (body: { alias?: string; scope_id?: string; all?: boolean }) =>
+    request<{ removed: number }>('/api/llm/cache/invalidate', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    })
 };
 
 // ── Phase 10: Playground types ──────────────────────────────────────
