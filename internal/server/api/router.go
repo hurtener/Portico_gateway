@@ -19,6 +19,7 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/auth/scope"
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
 	virtualkeys "github.com/hurtener/Portico_gateway/internal/auth/virtual_keys"
+	"github.com/hurtener/Portico_gateway/internal/budgets"
 	"github.com/hurtener/Portico_gateway/internal/catalog/snapshots"
 	dataplanemw "github.com/hurtener/Portico_gateway/internal/dataplane/middleware"
 	llmengineifaces "github.com/hurtener/Portico_gateway/internal/llm/engine/ifaces"
@@ -166,6 +167,10 @@ type Deps struct {
 
 	// Phase 15.5: budget store for governance budget CRUD. Optional; nil → 503.
 	Budgets ifaces.BudgetStore
+
+	// Phase 15.5: hierarchical budget enforcer. Optional; nil → no budget
+	// pre-check/reconcile in the LLM gateway (back-compat).
+	BudgetEnforcer *budgets.Enforcer
 
 	// Phase 13: redactor applied to chat-session message content before it is
 	// persisted. Optional; recordChatSession falls back to a default redactor

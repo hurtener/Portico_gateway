@@ -2,14 +2,12 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 
 	"github.com/hurtener/Portico_gateway/internal/auth/scope"
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
 	engineifaces "github.com/hurtener/Portico_gateway/internal/llm/engine/ifaces"
-	storageifaces "github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
 
 // ScopeLLMInvoke is required to call the OpenAI-compatible chat surface.
@@ -81,33 +79,19 @@ func chatCompletionsHandler(d Deps) http.HandlerFunc {
 		if !aliasAllowedByProfile(w, r, req.Model) {
 			return
 		}
-		// Resolve the alias to a provider + upstream model (tenant-scoped) for BOTH stream and non-stream paths.
-		model, err := d.LLMModels.GetModel(r.Context(), id.TenantID, req.Model)
-		if err != nil {
-			if errors.Is(err, storageifaces.ErrLLMModelNotFound) {
-				writeJSONError(w, http.StatusNotFound, "model_not_found", "unknown model: "+req.Model, nil)
-				return
-			}
-			writeJSONError(w, http.StatusInternalServerError, "resolve_failed", err.Error(), nil)
-			return
-		}
-		if !model.Enabled {
-			writeJSONError(w, http.StatusForbidden, "model_disabled", "model is disabled: "+req.Model, nil)
-			return
-		}
-		prov, err := d.LLMProviders.GetProvider(r.Context(), id.TenantID, model.ProviderName)
-		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "provider_missing", "provider not found for alias", nil)
-			return
-		}
-
-		// Phase 15.5: a Virtual Key caller must pass its provider + model allowlist.
-		if !vkAllowsLLM(w, r, req.Model, prov.Driver) {
+		// Resolve alias → provider + model (tenant-scoped), enforcing model-enabled
+		// + the VK provider/model allowlist. Shared with the embeddings handler.
+		prov, model, ok := resolveLLMTarget(d, w, r, id.TenantID, req.Model)
+		if !ok {
 			return
 		}
 
 		// Quota: enforce per-tenant limits before dispatch (both stream + non-stream).
 		if !checkQuota(d, w, r, id.TenantID, req.Model) {
+			return
+		}
+		// Phase 15.5: hierarchical budget pre-check (vk → team → customer → tenant).
+		if !checkBudget(d, w, r, id.TenantID, prov.Driver, model.ProviderModel, maxTokensOrZero(req.MaxTokens)) {
 			return
 		}
 
@@ -130,6 +114,8 @@ func chatCompletionsHandler(d Deps) http.HandlerFunc {
 		}
 		recordQuotaUsage(d, id.TenantID, resp.Usage.TotalTokens)
 		recordCost(d, r, id.TenantID, req.Model, prov.Driver, model.ProviderModel,
+			resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
+		recordBudgetUsage(d, r, id.TenantID, prov.Driver, model.ProviderModel,
 			resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
 		recordChatSession(d, r, req.Model, req.Messages,
 			openAIMessage{Role: orDefault(resp.Message.Role, "assistant"), Content: resp.Message.Content})
