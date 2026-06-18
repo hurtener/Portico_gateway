@@ -363,6 +363,23 @@ export interface LLMUnitPrice {
   output_per_1k: number;
 }
 
+// ── Phase 14: Agent Profiles ──────────────────────────────────────────────
+export interface AgentProfile {
+  id: string;
+  name: string;
+  description?: string;
+  allowed_mcp_servers: string[];
+  allowed_tools: string[];
+  allowed_skills: string[];
+  allowed_model_aliases: string[];
+  scopes: string[];
+  policy_bundle_ref?: string;
+  parent_profile_id?: string;
+  enabled: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // ── Phase 13.5: Code Mode observability ───────────────────────────────────
 export interface CodeModeExecution {
   execution_id: string;
@@ -805,6 +822,30 @@ export const api = {
     const suffix = since ? `?since=${encodeURIComponent(since)}` : '';
     return request<CodeModeSavings>(`/api/code-mode/savings${suffix}`);
   },
+  // ── Phase 14: Agent Profiles ────────────────────────────────────────
+  listAgentProfiles: () => request<AgentProfile[]>('/api/agent-profiles'),
+  getAgentProfile: (id: string) =>
+    request<AgentProfile>(`/api/agent-profiles/${encodeURIComponent(id)}`),
+  createAgentProfile: (p: Partial<AgentProfile>) =>
+    request<AgentProfile>('/api/agent-profiles', { method: 'POST', body: JSON.stringify(p) }),
+  updateAgentProfile: (id: string, p: Partial<AgentProfile>) =>
+    request<AgentProfile>(`/api/agent-profiles/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(p)
+    }),
+  deleteAgentProfile: (id: string) =>
+    request<void>(`/api/agent-profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  bindAgentProfile: (id: string, sub: string) =>
+    request<void>(
+      `/api/agent-profiles/${encodeURIComponent(id)}/bindings/${encodeURIComponent(sub)}`,
+      { method: 'PUT' }
+    ),
+  unbindAgentProfile: (id: string, sub: string) =>
+    request<void>(
+      `/api/agent-profiles/${encodeURIComponent(id)}/bindings/${encodeURIComponent(sub)}`,
+      { method: 'DELETE' }
+    ),
+
   listCodeModeFiles: () => request<{ files: string[] }>('/api/code-mode/files'),
   readCodeModeFile: (path: string) =>
     request<{ path: string; content: string }>(

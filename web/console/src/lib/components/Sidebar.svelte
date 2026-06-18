@@ -25,6 +25,7 @@
   import IconScale from 'lucide-svelte/icons/scale';
   import IconPlay from 'lucide-svelte/icons/play';
   import IconBraces from 'lucide-svelte/icons/braces';
+  import IconBot from 'lucide-svelte/icons/bot';
   import IconPlug from 'lucide-svelte/icons/plug';
   import IconCloud from 'lucide-svelte/icons/cloud';
   import IconChevronLeft from 'lucide-svelte/icons/chevron-left';
@@ -71,6 +72,7 @@
     {
       labelKey: 'nav.section.operations',
       items: [
+        { labelKey: 'nav.agents', href: '/agents', Icon: IconBot },
         { labelKey: 'nav.sessions', href: '/sessions', Icon: IconActivity },
         { labelKey: 'nav.approvals', href: '/approvals', Icon: IconShieldCheck },
         { labelKey: 'nav.policy', href: '/policy', Icon: IconScale },
