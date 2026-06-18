@@ -69,6 +69,70 @@ tenants:
 	}
 }
 
+func TestValidate_AgentProfile_RequiresName(t *testing.T) {
+	yaml := []byte(`
+server:
+  bind: 127.0.0.1:8080
+tenants:
+  - id: acme
+agent_profiles:
+  - allowed_mcp_servers: [github]
+`)
+	if _, err := config.Parse(yaml); err == nil {
+		t.Fatal("expected error for agent profile without a name")
+	}
+}
+
+func TestValidate_AgentProfile_TenantRequiredWhenMany(t *testing.T) {
+	yaml := []byte(`
+server:
+  bind: 127.0.0.1:8080
+tenants:
+  - id: acme
+  - id: globex
+agent_profiles:
+  - name: support
+`)
+	if _, err := config.Parse(yaml); err == nil {
+		t.Fatal("expected error: tenant required when multiple tenants configured")
+	}
+}
+
+func TestValidate_AgentProfile_UnknownTenant(t *testing.T) {
+	yaml := []byte(`
+server:
+  bind: 127.0.0.1:8080
+tenants:
+  - id: acme
+agent_profiles:
+  - name: support
+    tenant: nope
+`)
+	if _, err := config.Parse(yaml); err == nil {
+		t.Fatal("expected error for unknown tenant reference")
+	}
+}
+
+func TestValidate_AgentProfile_DefaultsToSoleTenant(t *testing.T) {
+	yaml := []byte(`
+server:
+  bind: 127.0.0.1:8080
+tenants:
+  - id: acme
+agent_profiles:
+  - name: support
+    allowed_mcp_servers: [zendesk]
+    bindings: [agent-1]
+`)
+	cfg, err := config.Parse(yaml)
+	if err != nil {
+		t.Fatalf("valid single-tenant profile should parse: %v", err)
+	}
+	if len(cfg.AgentProfiles) != 1 || cfg.AgentProfiles[0].Name != "support" {
+		t.Fatalf("agent profile not parsed: %+v", cfg.AgentProfiles)
+	}
+}
+
 func TestValidate_AuthRequiredOutsideDev(t *testing.T) {
 	yaml := []byte(`
 server:

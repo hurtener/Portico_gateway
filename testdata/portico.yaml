@@ -46,3 +46,25 @@ code_mode:
   allowed_binding_levels: []       # restrict to e.g. ["server"]; empty = any
   require_approval_on_execute: false  # gate every run behind the approval flow
   deny_unsafe_starlark: false      # audit static-gate rejections as policy denials
+
+# Agent Profiles (Phase 14) — cold-start declaration of consumer entitlement.
+# A profile is the single source of truth for which MCP servers/tools, Skill
+# Packs, and LLM aliases a logical agent may use; the scope set narrows (never
+# broadens) the principal's JWT scopes. Seeding is idempotent by (tenant, name),
+# so a restart reuses the same id. Omit the whole block for V1/V1.5 behaviour:
+# every authenticated request then gets the default (full-surface) profile.
+# `tenant` may be omitted when exactly one tenant is configured. `bindings`
+# lists the JWT subjects bound to the profile at boot.
+agent_profiles:
+  - name: customer-support-eu
+    tenant: acme
+    description: "EU customer support agent — read-only data, GDPR model set"
+    allowed_mcp_servers: [zendesk, intercom-eu]
+    allowed_tools:
+      - zendesk.search_tickets
+      - zendesk.get_ticket
+    allowed_skills: [customer-support-triage]
+    allowed_model_aliases: [fast-summary]
+    scopes: [mcp:call, llm:invoke]
+    bindings: [support-agent-eu@acme]
+    enabled: true

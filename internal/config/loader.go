@@ -141,6 +141,34 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// Agent Profiles (Phase 14) — each needs a name and a resolvable tenant.
+	// The tenant defaults to the sole configured tenant; with zero or many
+	// tenants it must be named explicitly.
+	apNames := make(map[string]struct{})
+	for i, p := range c.AgentProfiles {
+		if p.Name == "" {
+			return fieldErr(fmt.Sprintf("agent_profiles[%d].name", i), "is required")
+		}
+		tid := p.Tenant
+		if tid == "" {
+			if len(c.Tenants) == 1 {
+				tid = c.Tenants[0].ID
+			} else {
+				return fieldErr(fmt.Sprintf("agent_profiles[%d].tenant", i),
+					"is required when zero or multiple tenants are configured")
+			}
+		} else if _, ok := seen[tid]; !ok {
+			return fieldErr(fmt.Sprintf("agent_profiles[%d].tenant", i),
+				fmt.Sprintf("unknown tenant %q (not declared under tenants)", tid))
+		}
+		nameKey := tid + "|" + p.Name
+		if _, dup := apNames[nameKey]; dup {
+			return fieldErr(fmt.Sprintf("agent_profiles[%d].name", i),
+				fmt.Sprintf("duplicate profile name %q for tenant %q", p.Name, tid))
+		}
+		apNames[nameKey] = struct{}{}
+	}
+
 	// Logging
 	if c.Logging.Level == "" {
 		c.Logging.Level = "info"

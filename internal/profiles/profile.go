@@ -33,6 +33,12 @@ type Profile struct {
 	IsDefault bool
 }
 
+// FromStore converts a stored profile into the resolved domain type. It is the
+// exported seam offline callers (the CLI, the surface handler) use to obtain a
+// *Profile with the Allows* decision methods without going through the resolver.
+// A stored profile is never the synthesised default (IsDefault stays false).
+func FromStore(p *ifaces.AgentProfile) *Profile { return fromStore(p) }
+
 // fromStore converts a stored profile into the resolved domain type.
 func fromStore(p *ifaces.AgentProfile) *Profile {
 	if p == nil {

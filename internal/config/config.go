@@ -20,6 +20,33 @@ type Config struct {
 	// CodeMode is the Phase 13.5 Code Mode posture. Zero value = fully permissive
 	// (open within a tenant); operators tighten it.
 	CodeMode CodeModeConfig `yaml:"code_mode,omitempty"`
+	// AgentProfiles declares Agent Profiles (Phase 14) for cold-start. Each is
+	// seeded into the tenant-scoped store at boot (idempotent by tenant+name).
+	// Absent block => no profiles configured => every request gets the default
+	// (full-surface) profile => V1/V1.5 behaviour unchanged.
+	AgentProfiles []AgentProfileConfig `yaml:"agent_profiles,omitempty"`
+}
+
+// AgentProfileConfig declares one Agent Profile (Phase 14) for cold-start
+// seeding. The profile is the single source of truth for consumer entitlement;
+// see docs/concepts/agent-profiles.md. Seeding is idempotent: a profile is
+// matched to an existing row by (tenant, name) and updated in place, so a
+// restart never duplicates it.
+type AgentProfileConfig struct {
+	// Tenant is the owning tenant id. Optional when exactly one tenant is
+	// configured (it defaults to that tenant); required otherwise.
+	Tenant              string   `yaml:"tenant,omitempty"`
+	Name                string   `yaml:"name"`
+	Description         string   `yaml:"description,omitempty"`
+	AllowedMCPServers   []string `yaml:"allowed_mcp_servers,omitempty"`
+	AllowedTools        []string `yaml:"allowed_tools,omitempty"`
+	AllowedSkills       []string `yaml:"allowed_skills,omitempty"`
+	AllowedModelAliases []string `yaml:"allowed_model_aliases,omitempty"`
+	Scopes              []string `yaml:"scopes,omitempty"`
+	// Bindings are JWT subjects bound to this profile at boot (idempotent).
+	Bindings []string `yaml:"bindings,omitempty"`
+	// Enabled defaults to true when omitted.
+	Enabled *bool `yaml:"enabled,omitempty"`
 }
 
 // CodeModeConfig is the operator-tunable Code Mode policy (Phase 13.5). It gates

@@ -130,6 +130,11 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		}
 	}
 
+	// Phase 14: seed Agent Profiles from config (idempotent by tenant+name).
+	if err := seedAgentProfilesFromConfig(ctx, backend.AgentProfiles(), cfg, logger); err != nil {
+		return err
+	}
+
 	var validator *jwt.Validator
 	if !cfg.IsDevMode() {
 		validator, err = jwt.NewValidator(ctx, cfg.Auth.JWT)
@@ -795,6 +800,72 @@ func seedRegistryFromConfig(ctx context.Context, reg *registry.Registry, cfg *co
 			}
 		}
 	}
+}
+
+// seedAgentProfilesFromConfig materialises every config-declared Agent Profile
+// (Phase 14) into the tenant-scoped store. Seeding is idempotent: a profile is
+// matched to an existing row by (tenant, name) and updated in place — so a
+// restart reuses the same id rather than minting a duplicate (the store's
+// UNIQUE(tenant_id, name) constraint would otherwise reject it). JWT-subject
+// bindings are applied after the profile exists.
+func seedAgentProfilesFromConfig(ctx context.Context, store ifaces.AgentProfileStore, cfg *config.Config, log *slog.Logger) error {
+	if len(cfg.AgentProfiles) == 0 {
+		return nil
+	}
+	for _, pc := range cfg.AgentProfiles {
+		tid := pc.Tenant
+		if tid == "" && len(cfg.Tenants) == 1 {
+			tid = cfg.Tenants[0].ID
+		}
+		if tid == "" {
+			return fmt.Errorf("agent profile %q: tenant is required (zero or multiple tenants configured)", pc.Name)
+		}
+
+		// Match an existing profile by name to keep the id stable across restarts.
+		id := ""
+		existing, err := store.List(ctx, tid)
+		if err != nil {
+			return fmt.Errorf("list agent profiles for tenant %q: %w", tid, err)
+		}
+		for _, e := range existing {
+			if e.Name == pc.Name {
+				id = e.ID
+				break
+			}
+		}
+		if id == "" {
+			id = "ap_" + randHex16()
+		}
+
+		enabled := true
+		if pc.Enabled != nil {
+			enabled = *pc.Enabled
+		}
+		if err := store.Put(ctx, &ifaces.AgentProfile{
+			TenantID:            tid,
+			ID:                  id,
+			Name:                pc.Name,
+			Description:         pc.Description,
+			AllowedMCPServers:   pc.AllowedMCPServers,
+			AllowedTools:        pc.AllowedTools,
+			AllowedSkills:       pc.AllowedSkills,
+			AllowedModelAliases: pc.AllowedModelAliases,
+			Scopes:              pc.Scopes,
+			Enabled:             enabled,
+		}); err != nil {
+			return fmt.Errorf("seed agent profile %q (tenant %q): %w", pc.Name, tid, err)
+		}
+		for _, sub := range pc.Bindings {
+			if sub == "" {
+				continue
+			}
+			if err := store.PutJWTBinding(ctx, tid, sub, id); err != nil {
+				return fmt.Errorf("bind subject %q to agent profile %q (tenant %q): %w", sub, pc.Name, tid, err)
+			}
+		}
+		log.Info("seeded agent profile", "tenant_id", tid, "profile_id", id, "name", pc.Name, "bindings", len(pc.Bindings))
+	}
+	return nil
 }
 
 func configServerSpecToRegistry(c config.ServerSpec) *registry.ServerSpec {
