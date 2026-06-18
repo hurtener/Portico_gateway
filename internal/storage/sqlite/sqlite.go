@@ -165,6 +165,11 @@ func (d *DB) CodeMode() ifaces.CodeModeStore {
 	return &codeModeStore{db: d.sql}
 }
 
+// AgentProfiles returns an AgentProfileStore backed by this DB (Phase 14).
+func (d *DB) AgentProfiles() ifaces.AgentProfileStore {
+	return &agentProfileStore{db: d.sql}
+}
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {

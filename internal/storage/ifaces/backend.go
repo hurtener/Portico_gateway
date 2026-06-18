@@ -59,6 +59,9 @@ type Backend interface {
 	// CodeMode returns the Code Mode execution + continuation store (Phase 13.5).
 	CodeMode() CodeModeStore
 
+	// AgentProfiles returns the agent-profile store (Phase 14).
+	AgentProfiles() AgentProfileStore
+
 	// Health pings the underlying connection. Returns error if the backend
 	// is not reachable. Used by /readyz and tests.
 	Health(ctx context.Context) error
