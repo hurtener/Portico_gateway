@@ -22,6 +22,31 @@ type ToolCallShape struct {
 	// matchers then never fire and require_profile_membership denies. Kept as a
 	// local view so internal/policy stays decoupled from internal/profiles.
 	Profile *ProfileView `json:"profile,omitempty"`
+	// Phase 15.5 governance views (local projections so internal/policy stays
+	// decoupled from internal/auth/virtual_keys, llm/cache, budgets). nil means
+	// "no context" — the corresponding matchers never fire.
+	VK     *VKView     `json:"vk,omitempty"`
+	Cache  *CacheView  `json:"cache,omitempty"`
+	Budget *BudgetView `json:"budget,omitempty"`
+}
+
+// VKView is the policy-package projection of a resolved Virtual Key.
+type VKView struct {
+	ID       string   `json:"id,omitempty"`
+	Scopes   []string `json:"scopes,omitempty"`
+	Team     string   `json:"team,omitempty"`     // budget parent (team id) when parent_kind=team
+	Customer string   `json:"customer,omitempty"` // budget parent (customer id) when parent_kind=customer
+}
+
+// CacheView projects whether the request would hit the semantic cache.
+type CacheView struct {
+	WouldHit bool `json:"would_hit"`
+}
+
+// BudgetView projects the lowest remaining headroom across the call's budget
+// hierarchy (0–100).
+type BudgetView struct {
+	LowestHeadroomPct float64 `json:"lowest_headroom_pct"`
 }
 
 // ProfileView is the policy-package projection of a resolved Agent Profile —
@@ -173,7 +198,56 @@ func ruleMatches(r Rule, call ToolCallShape) bool {
 			return false
 		}
 	}
-	return profileConditionsMatch(m, call.Profile)
+	if !profileConditionsMatch(m, call.Profile) {
+		return false
+	}
+	return governanceConditionsMatch(m, call)
+}
+
+// governanceConditionsMatch evaluates the Phase 15.5 VK / cache / budget
+// matchers. Split into vk / cache+budget helpers to keep each bounded.
+func governanceConditionsMatch(m Match, call ToolCallShape) bool {
+	return vkConditionsMatch(m, call.VK) && cacheBudgetConditionsMatch(m, call)
+}
+
+// vkConditionsMatch evaluates the VK matchers. A VK matcher with no VK in
+// context never fires (the rule does not apply to that call).
+func vkConditionsMatch(m Match, vk *VKView) bool {
+	if len(m.VKs) > 0 && (vk == nil || !contains(m.VKs, vk.ID)) {
+		return false
+	}
+	if len(m.VKScopes) > 0 && (vk == nil || !anyContains(vk.Scopes, m.VKScopes)) {
+		return false
+	}
+	if m.VKTeam != "" && (vk == nil || vk.Team != m.VKTeam) {
+		return false
+	}
+	if m.VKCustomer != "" && (vk == nil || vk.Customer != m.VKCustomer) {
+		return false
+	}
+	return true
+}
+
+// cacheBudgetConditionsMatch evaluates the cache + budget matchers.
+func cacheBudgetConditionsMatch(m Match, call ToolCallShape) bool {
+	if m.CacheWouldHit != nil && (call.Cache == nil || call.Cache.WouldHit != *m.CacheWouldHit) {
+		return false
+	}
+	if m.BudgetHeadroomBelowPct != nil &&
+		(call.Budget == nil || call.Budget.LowestHeadroomPct >= *m.BudgetHeadroomBelowPct) {
+		return false
+	}
+	return true
+}
+
+// anyContains reports whether any element of have is present in want.
+func anyContains(have, want []string) bool {
+	for _, h := range have {
+		if contains(want, h) {
+			return true
+		}
+	}
+	return false
 }
 
 // profileConditionsMatch evaluates the Phase 14 Agent Profile matchers. A
