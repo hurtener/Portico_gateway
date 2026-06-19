@@ -16,12 +16,11 @@ DC="$REPO/.devcontainer"
 IMAGE="portico-builder"
 NAME="portico-builder"
 COMMAND="${1:-portico-build}"
-# PRIMARY model = NVIDIA NIM Nemotron-3 Ultra 550B (free, no usage cap, capable).
-# The loop backs off / retries on a rate-limit signal. Override MODEL/VARIANT to change it.
-# PRIMARY model defaults to GLM-5.2 via the Hugging Face Router (Fireworks) — a
-# SOTA model, free for a limited window. Override MODEL to route elsewhere
-# (e.g. MODEL=nvidia/nvidia/nemotron-3-ultra-550b-a55b for the NIM fallback).
-MODEL="${MODEL:-huggingface/zai-org/GLM-5.2:fireworks-ai}"
+# PRIMARY model = NVIDIA NIM Nemotron-3 Ultra 550B (free, no usage cap). The
+# GLM-5.2 free window (via the HF Router) has ended; the HF provider block stays
+# in opencode.json so MODEL=huggingface/zai-org/GLM-5.2:fireworks-ai can re-select
+# it if the offer returns. The loop backs off / retries on a rate-limit signal.
+MODEL="${MODEL:-nvidia/nvidia/nemotron-3-ultra-550b-a55b}"
 VARIANT="${VARIANT-}"
 
 echo "[run] preparing secrets..."
