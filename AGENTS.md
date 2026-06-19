@@ -418,6 +418,7 @@ These will cause the PR to be rejected on sight.
 - ❌ HS\* / `none` JWT algorithms.
 - ❌ Storing tenant identity in package-level state.
 - ❌ Adding a third place to define MCP message types (single source: `internal/mcp/protocol`).
+- ❌ Adding a second place to define A2A message types (single source: `internal/a2a/protocol`).
 - ❌ Using `panic` for control flow.
 - ❌ Adding CGo dependencies. Build is `CGO_ENABLED=0`.
 - ❌ Pulling in heavy frameworks (web frameworks, ORM libraries, RPC frameworks). Stdlib + the libraries in RFC §11.2 are the allowed surface; additions require RFC update.
