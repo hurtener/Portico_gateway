@@ -11,6 +11,8 @@
 package profiles
 
 import (
+	"strings"
+
 	"github.com/hurtener/Portico_gateway/internal/catalog/namespace"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
@@ -27,6 +29,8 @@ type Profile struct {
 	AllowedTools        []string // namespaced "server.tool"; empty = all tools in the allowed servers
 	AllowedSkills       []string
 	AllowedModelAliases []string
+	AllowedA2APeers     []string
+	AllowedA2ATasks     []string // namespaced "peer.task"; empty = all tasks of allowed peers
 	Scopes              []string
 	// IsDefault marks the synthesised default profile (no restriction). All
 	// Allows* methods short-circuit to true for it.
@@ -52,6 +56,8 @@ func fromStore(p *ifaces.AgentProfile) *Profile {
 		AllowedTools:        p.AllowedTools,
 		AllowedSkills:       p.AllowedSkills,
 		AllowedModelAliases: p.AllowedModelAliases,
+		AllowedA2APeers:     p.AllowedA2APeers,
+		AllowedA2ATasks:     p.AllowedA2ATasks,
 		Scopes:              p.Scopes,
 	}
 }
@@ -100,6 +106,36 @@ func (p *Profile) AllowsAlias(alias string) bool {
 		return true
 	}
 	return contains(p.AllowedModelAliases, alias)
+}
+
+// AllowsA2APeer reports whether the profile permits reaching the named A2A
+// peer. A nil/default profile allows everything (back-compat).
+func (p *Profile) AllowsA2APeer(peerName string) bool {
+	if p == nil || p.IsDefault {
+		return true
+	}
+	return contains(p.AllowedA2APeers, peerName)
+}
+
+// AllowsA2ATask reports whether the profile permits a namespaced A2A task
+// ("peer.task"). The task's peer must be allowed, AND — when AllowedA2ATasks
+// is non-empty — the task itself must be listed. Empty AllowedA2ATasks means
+// "all tasks of allowed peers". A nil/default profile allows everything.
+func (p *Profile) AllowsA2ATask(namespacedTask string) bool {
+	if p == nil || p.IsDefault {
+		return true
+	}
+	peer, _, ok := strings.Cut(namespacedTask, ".")
+	if !ok {
+		return false
+	}
+	if !contains(p.AllowedA2APeers, peer) {
+		return false
+	}
+	if len(p.AllowedA2ATasks) == 0 {
+		return true
+	}
+	return contains(p.AllowedA2ATasks, namespacedTask)
 }
 
 func contains(ss []string, want string) bool {

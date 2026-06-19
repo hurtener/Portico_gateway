@@ -23,6 +23,8 @@ type AgentProfileDTO struct {
 	AllowedTools        []string `json:"allowed_tools"`
 	AllowedSkills       []string `json:"allowed_skills"`
 	AllowedModelAliases []string `json:"allowed_model_aliases"`
+	AllowedA2APeers     []string `json:"allowed_a2a_peers"`
+	AllowedA2ATasks     []string `json:"allowed_a2a_tasks"`
 	Scopes              []string `json:"scopes"`
 	PolicyBundleRef     string   `json:"policy_bundle_ref,omitempty"`
 	ParentProfileID     string   `json:"parent_profile_id,omitempty"`
@@ -41,6 +43,8 @@ func toAgentProfileDTO(p *ifaces.AgentProfile) AgentProfileDTO {
 		AllowedTools:        p.AllowedTools,
 		AllowedSkills:       p.AllowedSkills,
 		AllowedModelAliases: p.AllowedModelAliases,
+		AllowedA2APeers:     p.AllowedA2APeers,
+		AllowedA2ATasks:     p.AllowedA2ATasks,
 		Scopes:              p.Scopes,
 		PolicyBundleRef:     p.PolicyBundleRef,
 		ParentProfileID:     p.ParentProfileID,
@@ -148,6 +152,8 @@ func createAgentProfileHandler(d Deps) http.HandlerFunc {
 			AllowedTools:        dto.AllowedTools,
 			AllowedSkills:       dto.AllowedSkills,
 			AllowedModelAliases: dto.AllowedModelAliases,
+			AllowedA2APeers:     dto.AllowedA2APeers,
+			AllowedA2ATasks:     dto.AllowedA2ATasks,
 			Scopes:              dto.Scopes,
 			PolicyBundleRef:     dto.PolicyBundleRef,
 			ParentProfileID:     dto.ParentProfileID,
@@ -214,6 +220,8 @@ func updateAgentProfileHandler(d Deps) http.HandlerFunc {
 			AllowedTools:        dto.AllowedTools,
 			AllowedSkills:       dto.AllowedSkills,
 			AllowedModelAliases: dto.AllowedModelAliases,
+			AllowedA2APeers:     dto.AllowedA2APeers,
+			AllowedA2ATasks:     dto.AllowedA2ATasks,
 			Scopes:              dto.Scopes,
 			PolicyBundleRef:     dto.PolicyBundleRef,
 			ParentProfileID:     dto.ParentProfileID,

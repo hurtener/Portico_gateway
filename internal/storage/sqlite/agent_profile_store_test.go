@@ -22,6 +22,8 @@ func TestAgentProfileStore_RoundTrip(t *testing.T) {
 		AllowedTools:        []string{"github.list_issues", "jira.create_ticket"},
 		AllowedSkills:       []string{"skill-1", "skill-2"},
 		AllowedModelAliases: []string{"gpt-4o", "claude-3-5"},
+		AllowedA2APeers:     []string{"research-agent", "reviewer"},
+		AllowedA2ATasks:     []string{"research-agent.code-review", "reviewer.lint"},
 		Scopes:              []string{"mcp:call", "llm:invoke"},
 		PolicyBundleRef:     "policy-123",
 		ParentProfileID:     "parent-1",
@@ -47,6 +49,8 @@ func TestAgentProfileStore_RoundTrip(t *testing.T) {
 	assertSliceEqual(t, "AllowedTools", got.AllowedTools, profile.AllowedTools)
 	assertSliceEqual(t, "AllowedSkills", got.AllowedSkills, profile.AllowedSkills)
 	assertSliceEqual(t, "AllowedModelAliases", got.AllowedModelAliases, profile.AllowedModelAliases)
+	assertSliceEqual(t, "AllowedA2APeers", got.AllowedA2APeers, profile.AllowedA2APeers)
+	assertSliceEqual(t, "AllowedA2ATasks", got.AllowedA2ATasks, profile.AllowedA2ATasks)
 	assertSliceEqual(t, "Scopes", got.Scopes, profile.Scopes)
 
 	if got.CreatedAt == "" || got.UpdatedAt == "" {
@@ -67,6 +71,8 @@ func TestAgentProfileStore_Put_ReplacesAllowlists(t *testing.T) {
 		AllowedTools:        []string{"github.list_issues"},
 		AllowedSkills:       []string{"skill-1"},
 		AllowedModelAliases: []string{"gpt-4o"},
+		AllowedA2APeers:     []string{"research-agent"},
+		AllowedA2ATasks:     []string{"research-agent.code-review"},
 		Scopes:              []string{"mcp:call"},
 		Enabled:             true,
 	}
@@ -80,6 +86,8 @@ func TestAgentProfileStore_Put_ReplacesAllowlists(t *testing.T) {
 	profile.AllowedTools = []string{"jira.create_ticket"}
 	profile.AllowedSkills = []string{"skill-2", "skill-3"}
 	profile.AllowedModelAliases = []string{"claude-3-5"}
+	profile.AllowedA2APeers = []string{"reviewer"}
+	profile.AllowedA2ATasks = []string{"reviewer.lint"}
 
 	if err := store.Put(ctx, profile); err != nil {
 		t.Fatalf("second put: %v", err)
@@ -94,6 +102,8 @@ func TestAgentProfileStore_Put_ReplacesAllowlists(t *testing.T) {
 	assertSliceEqual(t, "AllowedTools", got.AllowedTools, []string{"jira.create_ticket"})
 	assertSliceEqual(t, "AllowedSkills", got.AllowedSkills, []string{"skill-2", "skill-3"})
 	assertSliceEqual(t, "AllowedModelAliases", got.AllowedModelAliases, []string{"claude-3-5"})
+	assertSliceEqual(t, "AllowedA2APeers", got.AllowedA2APeers, []string{"reviewer"})
+	assertSliceEqual(t, "AllowedA2ATasks", got.AllowedA2ATasks, []string{"reviewer.lint"})
 }
 
 func TestAgentProfileStore_List_TenantIsolated(t *testing.T) {
