@@ -567,6 +567,8 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		vkResolver  *virtualkeys.Resolver
 		budgetStore ifaces.BudgetStore
 		budgetEnf   *budgets.Enforcer
+		// Phase 16: A2A peer store (REST CRUD + future ingestion/health).
+		a2aPeers ifaces.A2APeerStore
 	)
 	llmQuotaEnforcer := quota.NewEnforcer()
 	if sqliteBackend, ok := backend.(*sqlitestorage.DB); ok {
@@ -580,6 +582,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		vkResolver = virtualkeys.NewResolver(govStore, 0)
 		budgetStore = sqliteBackend.Budgets()
 		budgetEnf = budgets.NewEnforcer(budgetStore)
+		a2aPeers = sqliteBackend.A2APeers()
 		eng, err := llmengine.Open("bifrost", nil, llmengineifaces.Deps{
 			Logger:    logger.With("component", "llm.engine"),
 			Providers: llmProviders,
@@ -676,6 +679,7 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		VKResolver:      vkResolver,
 		Budgets:         budgetStore,
 		BudgetEnforcer:  budgetEnf,
+		A2APeers:        a2aPeers,
 		Cache:           llmCache,
 		CacheScope:      cacheScope,
 		CacheTTL:        cacheTTL,
