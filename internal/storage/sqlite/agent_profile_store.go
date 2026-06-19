@@ -137,18 +137,25 @@ func (s *agentProfileStore) Put(ctx context.Context, p *ifaces.AgentProfile) err
 		return fmt.Errorf("sqlite: put agent profile: upsert: %w", err)
 	}
 
-	// Replace allowlists: delete old, insert new
-	if err := s.replaceAllowlist(ctx, tx, p.TenantID, p.ID, "agent_profile_mcp_servers", "server_name", p.AllowedMCPServers); err != nil {
-		return err
+	// Replace allowlists: delete old, insert new. The six allowlist slices are
+	// mirrored onto six (table,column) pairs; fold them into a tiny loop so the
+	// Put body stays under the gocyclo ceiling.
+	allowlists := []struct {
+		table  string
+		column string
+		items  []string
+	}{
+		{"agent_profile_mcp_servers", "server_name", p.AllowedMCPServers},
+		{"agent_profile_tools", "namespaced_id", p.AllowedTools},
+		{"agent_profile_skills", "skill_id", p.AllowedSkills},
+		{"agent_profile_models", "alias", p.AllowedModelAliases},
+		{"agent_profile_a2a_peers", "peer_name", p.AllowedA2APeers},
+		{"agent_profile_a2a_tasks", "namespaced_id", p.AllowedA2ATasks},
 	}
-	if err := s.replaceAllowlist(ctx, tx, p.TenantID, p.ID, "agent_profile_tools", "namespaced_id", p.AllowedTools); err != nil {
-		return err
-	}
-	if err := s.replaceAllowlist(ctx, tx, p.TenantID, p.ID, "agent_profile_skills", "skill_id", p.AllowedSkills); err != nil {
-		return err
-	}
-	if err := s.replaceAllowlist(ctx, tx, p.TenantID, p.ID, "agent_profile_models", "alias", p.AllowedModelAliases); err != nil {
-		return err
+	for _, al := range allowlists {
+		if err := s.replaceAllowlist(ctx, tx, p.TenantID, p.ID, al.table, al.column, al.items); err != nil {
+			return err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -285,6 +292,12 @@ func (s *agentProfileStore) scanProfile(row interface{ Scan(...any) error }) (*i
 	if p.AllowedModelAliases == nil {
 		p.AllowedModelAliases = []string{}
 	}
+	if p.AllowedA2APeers == nil {
+		p.AllowedA2APeers = []string{}
+	}
+	if p.AllowedA2ATasks == nil {
+		p.AllowedA2ATasks = []string{}
+	}
 	return &p, nil
 }
 
@@ -304,6 +317,14 @@ func (s *agentProfileStore) loadAllowlists(ctx context.Context, p *ifaces.AgentP
 		return err
 	}
 	p.AllowedModelAliases, err = s.loadStringSlice(ctx, "agent_profile_models", "alias", p.TenantID, p.ID)
+	if err != nil {
+		return err
+	}
+	p.AllowedA2APeers, err = s.loadStringSlice(ctx, "agent_profile_a2a_peers", "peer_name", p.TenantID, p.ID)
+	if err != nil {
+		return err
+	}
+	p.AllowedA2ATasks, err = s.loadStringSlice(ctx, "agent_profile_a2a_tasks", "namespaced_id", p.TenantID, p.ID)
 	if err != nil {
 		return err
 	}

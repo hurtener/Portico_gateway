@@ -6,9 +6,9 @@ import (
 )
 
 // AgentProfile is a tenant-scoped consumer-binding: which MCP servers/tools,
-// Skill Packs, and LLM aliases a logical agent may use, plus its scope set.
-// The four allowlist slices are loaded from their join tables. Timestamps are
-// RFC3339 UTC strings (matching the other stores).
+// Skill Packs, LLM aliases, and A2A peers/tasks a logical agent may use, plus
+// its scope set. The six allowlist slices are loaded from their join tables.
+// Timestamps are RFC3339 UTC strings (matching the other stores).
 type AgentProfile struct {
 	TenantID            string
 	ID                  string
@@ -18,6 +18,8 @@ type AgentProfile struct {
 	AllowedTools        []string // namespaced "server.tool"; empty = all tools in AllowedMCPServers
 	AllowedSkills       []string // Skill Pack ids
 	AllowedModelAliases []string // LLM aliases
+	AllowedA2APeers     []string // A2A peer names; empty = all peers
+	AllowedA2ATasks     []string // namespaced "peer.task"; empty = all tasks of allowed peers
 	Scopes              []string // scope set this profile grants
 	PolicyBundleRef     string
 	ParentProfileID     string // reserved for future inheritance
@@ -36,7 +38,7 @@ type AgentProfileStore interface {
 	List(ctx context.Context, tenantID string) ([]*AgentProfile, error)
 	// Get returns one profile with allowlists; ErrAgentProfileNotFound on miss.
 	Get(ctx context.Context, tenantID, id string) (*AgentProfile, error)
-	// Put upserts the profile row AND replaces its four allowlists atomically
+	// Put upserts the profile row AND replaces its six allowlists atomically
 	// (one transaction): delete the profile's existing allowlist rows, insert
 	// the new ones, upsert the agent_profiles row. Sets CreatedAt on first
 	// insert; always sets UpdatedAt. p.Scopes is stored as a JSON array column.

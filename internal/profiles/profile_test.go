@@ -10,6 +10,8 @@ func restrictive() *Profile {
 		AllowedTools:        []string{"github.list_issues"},
 		AllowedSkills:       []string{"code-review"},
 		AllowedModelAliases: []string{"gpt-4o"},
+		AllowedA2APeers:     []string{"research-agent", "reviewer"},
+		AllowedA2ATasks:     []string{"research-agent.code-review"},
 	}
 }
 
@@ -21,12 +23,18 @@ func TestDefaultProfile_AllowsEverything(t *testing.T) {
 	if !p.AllowsServer("anything") || !p.AllowsTool("x.y") || !p.AllowsSkill("z") || !p.AllowsAlias("any-model") {
 		t.Fatal("default profile must allow everything")
 	}
+	if !p.AllowsA2APeer("any-peer") || !p.AllowsA2ATask("any-peer.any-task") {
+		t.Fatal("default profile must allow every A2A peer and task")
+	}
 }
 
 func TestNilProfile_AllowsEverything(t *testing.T) {
 	var p *Profile
 	if !p.AllowsServer("x") || !p.AllowsTool("x.y") || !p.AllowsSkill("z") || !p.AllowsAlias("m") {
 		t.Fatal("a nil profile must allow everything (no middleware ran)")
+	}
+	if !p.AllowsA2APeer("peer") || !p.AllowsA2ATask("peer.task") {
+		t.Fatal("a nil profile must allow every A2A peer and task")
 	}
 }
 
@@ -81,5 +89,57 @@ func TestAllowsSkillAndAlias(t *testing.T) {
 	}
 	if !p.AllowsAlias("gpt-4o") || p.AllowsAlias("claude-3-5-sonnet") {
 		t.Error("alias allowlist wrong")
+	}
+}
+
+func TestAllowsA2APeer(t *testing.T) {
+	p := restrictive()
+	if !p.AllowsA2APeer("research-agent") || !p.AllowsA2APeer("reviewer") {
+		t.Error("allowed peers rejected")
+	}
+	if p.AllowsA2APeer("unknown-agent") {
+		t.Error("disallowed peer allowed")
+	}
+
+	// A profile with an empty AllowedA2APeers allows NOTHING (membership
+	// semantics, mirroring AllowsServer). Restricting peers via empty
+	// allowlist is a deliberate back-compat edge case, not "allow all".
+	empty := &Profile{AllowedA2ATasks: []string{"x.y"}}
+	if empty.AllowsA2APeer("anything") {
+		t.Error("empty AllowedA2APeers should not match any peer")
+	}
+}
+
+func TestAllowsA2ATask(t *testing.T) {
+	// Peer allowed + task allowlist empty → all tasks of allowed peers pass.
+	peerOnly := &Profile{AllowedA2APeers: []string{"research-agent"}}
+	if !peerOnly.AllowsA2ATask("research-agent.code-review") || !peerOnly.AllowsA2ATask("research-agent.another") {
+		t.Error("peer-only profile must allow every task of allowed peers")
+	}
+	if peerOnly.AllowsA2ATask("other.task") {
+		t.Error("task on a disallowed peer was allowed")
+	}
+
+	// Peer allowed + task listed.
+	listedP := restrictive()
+	if !listedP.AllowsA2ATask("research-agent.code-review") {
+		t.Error("allowed peer + listed task rejected")
+	}
+
+	// Peer allowed + task NOT listed (with a non-empty AllowedA2ATasks).
+	if listedP.AllowsA2ATask("research-agent.other") {
+		t.Error("allowed peer + unlisted task was allowed")
+	}
+
+	// Disallowed peer's task — even if the task id happens to be in the list,
+	// the peer gate is upstream of the task gate.
+	if listedP.AllowsA2ATask("reviewer.code-review") {
+		t.Error("disallowed peer's task was allowed")
+	}
+
+	// Non-namespaced — a bare peer name isn't a namespaced task id, so the
+	// split fails and the gate rejects it under a restrictive profile.
+	if listedP.AllowsA2ATask("notnamespaced") {
+		t.Error("non-namespaced A2A task was allowed under a restrictive profile")
 	}
 }
