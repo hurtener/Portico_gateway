@@ -52,6 +52,7 @@ func runOpenAIConformance(ctx context.Context, target, token, model string) erro
 		checkChatUnknownModel,
 		checkChatMalformed,
 		checkEmbeddings,
+		checkVKBearerForged,
 	}
 	var ok, skip, fail int
 	for _, check := range checks {
@@ -112,6 +113,30 @@ func checkChat(ctx context.Context, client *http.Client, target, token, model st
 	return classifyDispatch("chat", status, raw, func(p map[string]any) bool {
 		return p["object"] != nil && isArray(p["choices"]) && p["usage"] != nil
 	}), nil
+}
+
+// checkVKBearerForged asserts a forged Virtual Key bearer (pk-portico-*) is
+// rejected with 401, proving the VK auth path is wired (Phase 15.5). It SKIPs
+// when VK auth is not enforced in the target build/mode (the bearer then falls
+// through to the dev/JWT path). The passed token is intentionally ignored — the
+// point is to present a VK-shaped credential that must not authenticate.
+func checkVKBearerForged(ctx context.Context, client *http.Client, target, _, _ string) (verdict, error) {
+	forged := "pk-portico-vk_deadbeefdeadbeefdeadbeef.notarealsecret000000000000"
+	status, _, err := doJSON(ctx, client, "GET", target+"/v1/models", forged, nil)
+	if err != nil {
+		return verdictFail, fmt.Errorf("vk-bearer: transport error: %w", err)
+	}
+	switch status {
+	case 401:
+		fmt.Println("vk-bearer: OK (forged pk-portico-* rejected 401)")
+		return verdictOK, nil
+	case 200, 403:
+		fmt.Println("vk-bearer: SKIP (VK auth not enforced in this build/mode)")
+		return verdictSkip, nil
+	default:
+		fmt.Printf("vk-bearer: FAIL - unexpected status %d\n", status)
+		return verdictFail, nil
+	}
 }
 
 // checkEmbeddings mirrors checkChat for the embeddings surface.

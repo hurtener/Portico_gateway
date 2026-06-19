@@ -331,6 +331,16 @@ A principal (a JWT subject; in Phase 15.5, a Virtual Key) is mapped to a Profile
 
 **Intersection semantics — most-restrictive wins.** When multiple allowlist layers apply, the effective surface is their intersection. A Profile narrows; it never broadens. A Profile carrying `scopes: [mcp:call]` for a principal whose JWT carries `[mcp:call, llm:invoke]` yields an effective `[mcp:call]` — the Profile cannot grant a scope the JWT did not carry. In V2, a Virtual Key's own MCP/model allowlist intersects with the bound Profile's (most-restrictive wins). This is the cross-cutting V2 rule the later phases (15.5 VKs, 16 A2A, 17 tool-poisoning policy, 18 GitOps) all build on.
 
+### 6.8 Governance: Virtual Keys, hierarchical budgets, semantic cache (V2, Phase 15.5)
+
+On top of Agent Profiles, Phase 15.5 adds three Bifrost-shaped governance primitives. Phase plan: `docs/plans/phase-15.5-semantic-cache-and-virtual-keys.md`; concept docs under `docs/concepts/`.
+
+- **Virtual Keys** (`pk-portico-<id>.<secret>`) — a programmatic, HMAC-bound credential that sub-divides a tenant into per-app/per-environment slots. Portico stores only `salt` + `HMAC-SHA256(salt, secret)` — never the secret (returned once at create/rotate). A VK resolves (at the auth boundary, like JWT→tenant) to its tenant + scope set + provider/model/MCP-server allowlists + an optional bound Profile (intersection, §6.7) + a budget parent. It authenticates `/v1/*` and `/mcp/*`; its allowlists are enforced in the LLM handler (`403 vk_scope_violation`) and the dispatcher (inherited by Code Mode). Forged/unknown secrets return an ambiguous `401 vk_unknown` (no enumeration); revoked keys `401 vk_revoked`.
+- **Hierarchical budgets** — caps on `(scope_kind, scope_id, metric, period, alignment, limit)` nesting **VK → Team → Customer → Tenant**. The pre-call check walks most-specific → least and the lowest level that would exceed fires (`429 budget_exceeded`, `details.level`/`metric`); the post-call reconcile debits every applicable level in one transaction (no partial). Threshold crossings (80/95/100%) emit debounced audit events.
+- **Semantic cache** — an optional, pluggable (§4.4 seam) cache in front of the LLM gateway. Keys are tenant-first (cross-tenant sharing impossible by construction); a hit is served before quota/budget (it is free). Exact-hash mode ships via the `redis` (prod) and `inmem` (dev) drivers, with `Cache-Control`/`x-bf-cache-*` bypass and prefix invalidation; embedding-similarity drivers (Weaviate/Qdrant) are a config-only addition over the same seam plus the gateway-backed embedding generator.
+
+Operators drive all three via `/api/governance/*` + `/api/llm/cache/*`, the Console `/governance/*` screens, and the `portico governance` CLI. The policy DSL gains `vk.*`/`cache.*`/`budget.*` matchers and `deny_on_cache_miss`/`force_cache_bypass`/`clamp_to_customer_budget` modifier actions.
+
 ---
 
 ## 7. Security model

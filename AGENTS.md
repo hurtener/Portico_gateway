@@ -443,6 +443,10 @@ These will cause the PR to be rejected on sight.
 - ❌ Adding a second path for a Code Mode in-sandbox tool call to reach a downstream tool. The only path is the `runtime.ToolDispatcher` seam → `dispatchToolCall`; an in-sandbox call must traverse the identical governed envelope as a direct `tools/call` (Phase 13.5 acceptance #8).
 - ❌ Adding a per-consumer allowlist on any surface (server, tool, skill, model, A2A task) outside the Agent Profile schema. The Agent Profile is the single source of truth for consumer entitlement; gates read it via `profiles.FromContext(ctx)` and the `Profile.Allows*` methods — never a parallel allowlist (Phase 14).
 - ❌ Returning the synthesised default Profile from `GET /api/agent-profiles` or any other read path that lists profiles. The default is a code construct (`profiles.DefaultProfile`), never a stored row (Phase 14).
+- ❌ Storing a Virtual Key secret in plaintext, in logs, or in any non-HMAC form. Only `salt` + `HMAC-SHA256(salt, secret)` are persisted; the secret is returned once at create/rotate and never again (Phase 15.5 §7).
+- ❌ Issuing a Virtual Key without a `salt` + `HMAC` pair persisted before the secret is returned to the operator. Verification is constant-time (`crypto/subtle`).
+- ❌ Caching LLM responses across tenant boundaries, regardless of cache driver. The cache key is tenant-first by construction and the driver re-checks the stored entry's tenant on lookup (Phase 15.5 §6 / acceptance #4).
+- ❌ A budget pre-check approving a request the post-call reconcile cannot fund. The hierarchical pre-check + the atomic (single-transaction) multi-level reconcile are both mandatory; never debit one budget level without the others (Phase 15.5 acceptance #22).
 
 ---
 
