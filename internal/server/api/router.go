@@ -170,6 +170,9 @@ type Deps struct {
 	// Phase 15.5: budget store for governance budget CRUD. Optional; nil → 503.
 	Budgets ifaces.BudgetStore
 
+	// Phase 16: A2A peer store for /api/a2a/peers CRUD. Optional; nil → 503.
+	A2APeers ifaces.A2APeerStore
+
 	// Phase 15.5: hierarchical budget enforcer. Optional; nil → no budget
 	// pre-check/reconcile in the LLM gateway (back-compat).
 	BudgetEnforcer *budgets.Enforcer
@@ -462,6 +465,15 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/api/governance/budgets/{id}", getBudgetHandler(d))
 			r.Put("/api/governance/budgets/{id}", updateBudgetHandler(d))
 			r.Delete("/api/governance/budgets/{id}", deleteBudgetHandler(d))
+		}
+		// Phase 16: A2A peer CRUD (admin scope). Mounted when the peer store is
+		// wired; handlers gate on nil for 503 back-compat.
+		if d.A2APeers != nil {
+			r.Get("/api/a2a/peers", listA2APeersHandler(d))
+			r.Post("/api/a2a/peers", createA2APeerHandler(d))
+			r.Get("/api/a2a/peers/{id}", getA2APeerHandler(d))
+			r.Put("/api/a2a/peers/{id}", updateA2APeerHandler(d))
+			r.Delete("/api/a2a/peers/{id}", deleteA2APeerHandler(d))
 		}
 		// Phase 13.5: Code Mode interactive playground (admin scope). Drives the
 		// meta-tools through a synthetic Console session — list stub files, read
