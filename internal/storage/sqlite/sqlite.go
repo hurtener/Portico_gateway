@@ -179,6 +179,9 @@ func (d *DB) Budgets() ifaces.BudgetStore { return &budgetStore{db: d.sql} }
 // CacheEntries returns a CacheEntryStore backed by this DB (Phase 15.5).
 func (d *DB) CacheEntries() ifaces.CacheEntryStore { return &cacheEntryStore{db: d.sql} }
 
+// A2APeers returns an A2APeerStore backed by this DB (Phase 16).
+func (d *DB) A2APeers() ifaces.A2APeerStore { return &a2aPeerStore{db: d.sql} }
+
 // Health pings the connection.
 func (d *DB) Health(ctx context.Context) error {
 	if d == nil || d.sql == nil {
