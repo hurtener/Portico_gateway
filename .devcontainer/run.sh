@@ -16,11 +16,11 @@ DC="$REPO/.devcontainer"
 IMAGE="portico-builder"
 NAME="portico-builder"
 COMMAND="${1:-portico-build}"
-# PRIMARY model = NVIDIA NIM Nemotron-3 Ultra 550B (free, no usage cap). The
-# GLM-5.2 free window (via the HF Router) has ended; the HF provider block stays
-# in opencode.json so MODEL=huggingface/zai-org/GLM-5.2:fireworks-ai can re-select
-# it if the offer returns. The loop backs off / retries on a rate-limit signal.
-MODEL="${MODEL:-nvidia/nvidia/nemotron-3-ultra-550b-a55b}"
+# PRIMARY model = MiniMax M3 via NVIDIA NIM (free tonight, verified responsive
+# 2026-06-18). Fallback options stay wired in opencode.json: Nemotron
+# (nvidia/nvidia/nemotron-3-ultra-550b-a55b) and GLM-5.2 (huggingface/zai-org/
+# GLM-5.2:fireworks-ai). Override with MODEL=. Loop backs off on a rate-limit.
+MODEL="${MODEL:-nvidia/minimaxai/minimax-m3}"
 VARIANT="${VARIANT-}"
 
 echo "[run] preparing secrets..."
