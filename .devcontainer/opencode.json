@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "nvidia/nvidia/nemotron-3-ultra-550b-a55b",
+  "model": "nvidia/minimaxai/minimax-m3",
   "provider": {
     "huggingface": {
       "npm": "@ai-sdk/openai-compatible",
@@ -26,6 +26,10 @@
       "models": {
         "nvidia/nemotron-3-ultra-550b-a55b": {
           "name": "Nemotron-3 Ultra 550B",
+          "limit": { "context": 131072, "output": 65536 }
+        },
+        "minimaxai/minimax-m3": {
+          "name": "MiniMax M3 (NIM, free)",
           "limit": { "context": 131072, "output": 65536 }
         }
       }
