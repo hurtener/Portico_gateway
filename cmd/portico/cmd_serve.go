@@ -11,6 +11,9 @@ import (
 	"path/filepath"
 	"time"
 
+	a2adispatch "github.com/hurtener/Portico_gateway/internal/a2a/dispatch"
+	a2anb "github.com/hurtener/Portico_gateway/internal/a2a/northbound/http"
+	a2amgr "github.com/hurtener/Portico_gateway/internal/a2a/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/apps"
 	auditpkg "github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
@@ -567,8 +570,11 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		vkResolver  *virtualkeys.Resolver
 		budgetStore ifaces.BudgetStore
 		budgetEnf   *budgets.Enforcer
-		// Phase 16: A2A peer store (REST CRUD + future ingestion/health).
-		a2aPeers ifaces.A2APeerStore
+		// Phase 16: A2A peer store (REST CRUD + future ingestion/health), the
+		// southbound client pool, and the northbound transport handler.
+		a2aPeers   ifaces.A2APeerStore
+		a2aPool    *a2amgr.Pool
+		a2aHandler *a2anb.Handler
 	)
 	llmQuotaEnforcer := quota.NewEnforcer()
 	if sqliteBackend, ok := backend.(*sqlitestorage.DB); ok {
@@ -583,6 +589,11 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		budgetStore = sqliteBackend.Budgets()
 		budgetEnf = budgets.NewEnforcer(budgetStore)
 		a2aPeers = sqliteBackend.A2APeers()
+		// Phase 16: wire the southbound A2A pool (vault-backed egress auth) +
+		// the governed dispatcher + the northbound transport handler.
+		a2aPool = a2amgr.NewPool(a2aPeers, a2aClientFactory(vault, logger.With("component", "a2a.southbound")), logger.With("component", "a2a.pool"))
+		a2aDispatcher := a2adispatch.New(a2aPeers, a2aPool, auditEmitter, logger.With("component", "a2a.dispatch"))
+		a2aHandler = a2anb.NewHandler(a2aDispatcher, a2aCardProvider(version), logger.With("component", "a2a.northbound"))
 		eng, err := llmengine.Open("bifrost", nil, llmengineifaces.Deps{
 			Logger:    logger.With("component", "llm.engine"),
 			Providers: llmProviders,
@@ -680,6 +691,8 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		Budgets:         budgetStore,
 		BudgetEnforcer:  budgetEnf,
 		A2APeers:        a2aPeers,
+		A2AHandler:      a2aHandler,
+		A2APool:         a2aPool,
 		Cache:           llmCache,
 		CacheScope:      cacheScope,
 		CacheTTL:        cacheTTL,
@@ -722,6 +735,11 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 	sessions.CloseAll()
 	if err := manager.CloseAll(shutdownCtx); err != nil {
 		logger.Warn("southbound shutdown errors", "err", err)
+	}
+	if a2aPool != nil {
+		if err := a2aPool.CloseAll(shutdownCtx); err != nil {
+			logger.Warn("a2a southbound shutdown errors", "err", err)
+		}
 	}
 	reactor.Stop()
 	reg.CloseAll()

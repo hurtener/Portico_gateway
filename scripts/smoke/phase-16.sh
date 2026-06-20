@@ -46,5 +46,23 @@ if skip_if_404 201 "POST /api/a2a/peers" \
   fi
 fi
 
+# --- Northbound A2A transport (discovery + governed JSON-RPC) ---------------
+
+# Portico's agent card is served for discovery (dev mode grants tenant).
+if assert_status 200 "GET /a2a/.well-known/agent.json" \
+  -- -X GET "$(api_url /a2a/.well-known/agent.json)"; then
+  assert_json_path '.name' 'Portico' "agent card advertises Portico"
+  assert_json_truthy '.protocolVersion' "agent card carries a protocol version"
+fi
+
+# POST /a2a to an unregistered peer is a governed rejection: the JSON-RPC
+# transport succeeds (HTTP 200) but the body carries an error (unknown peer).
+if assert_status 200 "POST /a2a (unknown peer → JSON-RPC error)" \
+  -- -X POST "$(api_url /a2a)" \
+     -H 'Content-Type: application/json' \
+     -d '{"jsonrpc":"2.0","id":1,"method":"message/send","params":{"message":{"role":"user","messageId":"m1","parts":[]},"metadata":{"portico_peer":"a2a_nonexistent"}}}'; then
+  assert_json_truthy '.error.code' "unknown peer returns a JSON-RPC error"
+fi
+
 end_phase
 exit $?
