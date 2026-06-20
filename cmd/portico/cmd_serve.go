@@ -594,6 +594,9 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		a2aPool = a2amgr.NewPool(a2aPeers, a2aClientFactory(vault, logger.With("component", "a2a.southbound")), logger.With("component", "a2a.pool"))
 		a2aDispatcher := a2adispatch.New(a2aPeers, a2aPool, auditEmitter, logger.With("component", "a2a.dispatch"))
 		a2aHandler = a2anb.NewHandler(a2aDispatcher, a2aCardProvider(version), logger.With("component", "a2a.northbound"))
+		// Phase 16: MCP→A2A bridge — let the MCP dispatcher route bridged tools
+		// to A2A peers through the same governed dispatcher.
+		dispatcher.SetA2ABridge(a2aDispatcher)
 		eng, err := llmengine.Open("bifrost", nil, llmengineifaces.Deps{
 			Logger:    logger.With("component", "llm.engine"),
 			Providers: llmProviders,
