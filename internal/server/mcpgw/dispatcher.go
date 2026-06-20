@@ -36,6 +36,9 @@ type Dispatcher struct {
 	policy  *PolicyPipeline
 	emitter audit.Emitter
 
+	// Phase 16: optional MCP→A2A bridge dispatcher. nil → no tool is bridged.
+	a2aBridge A2ABridge
+
 	snapshots *SnapshotBinder
 
 	codeModeCache    *catalog.ProjectionCache
@@ -412,6 +415,13 @@ func (d *Dispatcher) dispatchToolCall(ctx context.Context, sess *Session, params
 	serverID, toolName, ok := namespace.SplitTool(params.Name)
 	if !ok {
 		return nil, protocol.NewError(protocol.ErrToolNotEnabled, "tool name must be qualified as <server>.<tool>", map[string]string{"name": params.Name})
+	}
+	// Phase 16: MCP→A2A bridge. If the caller's profile routes this tool to an
+	// A2A peer task, dispatch over A2A (governed by AllowsA2APeer/AllowsA2ATask)
+	// and translate the result — the call never reaches an MCP server, so this
+	// runs before the MCP tool-surface / VK / policy checks.
+	if res, perr, bridged := d.tryMCPToA2ABridge(ctx, sess, params, reqID); bridged {
+		return res, perr
 	}
 	// Phase 14: agent-profile surface check — reject a tool outside the caller's
 	// profile before any policy/approval/dispatch work. A nil/default profile

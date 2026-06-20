@@ -63,6 +63,24 @@ func (d *Dispatcher) SendMessage(ctx context.Context, tenantID, peerID string, p
 	return res, nil
 }
 
+// SendMessageByPeerName resolves a registered peer by NAME (tenant-scoped) and
+// dispatches a governed message/send to it. Bridges reference peers by name
+// (operator-facing), so this is their entry point; the resolved id flows through
+// SendMessage, which applies the AllowsA2APeer gate. Unknown name →
+// ErrInvalidParams.
+func (d *Dispatcher) SendMessageByPeerName(ctx context.Context, tenantID, peerName string, params a2a.MessageSendParams) (json.RawMessage, *a2a.Error) {
+	peers, err := d.store.ListPeers(ctx, tenantID)
+	if err != nil {
+		return nil, a2a.NewError(a2a.ErrInternalError, "a2a peer lookup failed")
+	}
+	for _, p := range peers {
+		if p.Name == peerName {
+			return d.SendMessage(ctx, tenantID, p.ID, params)
+		}
+	}
+	return nil, a2a.NewError(a2a.ErrInvalidParams, "unknown a2a peer: "+peerName)
+}
+
 // GetTask dispatches tasks/get to peer peerID, governed identically.
 func (d *Dispatcher) GetTask(ctx context.Context, tenantID, peerID string, params a2a.TaskQueryParams) (*a2a.Task, *a2a.Error) {
 	peer, aerr := d.resolveAndEnforce(ctx, tenantID, peerID)
