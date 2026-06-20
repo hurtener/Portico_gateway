@@ -31,7 +31,12 @@ type Profile struct {
 	AllowedModelAliases []string
 	AllowedA2APeers     []string
 	AllowedA2ATasks     []string // namespaced "peer.task"; empty = all tasks of allowed peers
-	Scopes              []string
+	// MCP<->A2A bridge routes (Phase 16): cross-protocol dispatch this profile
+	// declares. Routing, not entitlement — the bridge target is still gated by
+	// the Allows* methods.
+	MCPToA2ABridges []ifaces.MCPToA2ABridge
+	A2AToMCPBridges []ifaces.A2AToMCPBridge
+	Scopes          []string
 	// IsDefault marks the synthesised default profile (no restriction). All
 	// Allows* methods short-circuit to true for it.
 	IsDefault bool
@@ -58,8 +63,40 @@ func fromStore(p *ifaces.AgentProfile) *Profile {
 		AllowedModelAliases: p.AllowedModelAliases,
 		AllowedA2APeers:     p.AllowedA2APeers,
 		AllowedA2ATasks:     p.AllowedA2ATasks,
+		MCPToA2ABridges:     p.MCPToA2ABridges,
+		A2AToMCPBridges:     p.A2AToMCPBridges,
 		Scopes:              p.Scopes,
 	}
+}
+
+// BridgeForMCPTool returns the MCP→A2A bridge this profile declares for the
+// given namespaced MCP tool ("server.tool"), if any. Bridges are routing, not
+// entitlement: a caller dispatching through a bridge is still gated on the
+// target via AllowsA2APeer/AllowsA2ATask. A nil profile has no bridges.
+func (p *Profile) BridgeForMCPTool(namespacedTool string) (ifaces.MCPToA2ABridge, bool) {
+	if p == nil {
+		return ifaces.MCPToA2ABridge{}, false
+	}
+	for _, b := range p.MCPToA2ABridges {
+		if b.MCPTool == namespacedTool {
+			return b, true
+		}
+	}
+	return ifaces.MCPToA2ABridge{}, false
+}
+
+// BridgeForA2ATask returns the A2A→MCP bridge this profile declares for the
+// given inbound A2A task name, if any. A nil profile has no bridges.
+func (p *Profile) BridgeForA2ATask(task string) (ifaces.A2AToMCPBridge, bool) {
+	if p == nil {
+		return ifaces.A2AToMCPBridge{}, false
+	}
+	for _, b := range p.A2AToMCPBridges {
+		if b.A2ATask == task {
+			return b, true
+		}
+	}
+	return ifaces.A2AToMCPBridge{}, false
 }
 
 // AllowsServer reports whether the profile permits reaching the named MCP

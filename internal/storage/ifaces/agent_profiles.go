@@ -20,12 +20,31 @@ type AgentProfile struct {
 	AllowedModelAliases []string // LLM aliases
 	AllowedA2APeers     []string // A2A peer names; empty = all peers
 	AllowedA2ATasks     []string // namespaced "peer.task"; empty = all tasks of allowed peers
-	Scopes              []string // scope set this profile grants
-	PolicyBundleRef     string
-	ParentProfileID     string // reserved for future inheritance
-	Enabled             bool
-	CreatedAt           string
-	UpdatedAt           string
+	// MCP<->A2A bridge routes (Phase 16): cross-protocol dispatch declared on
+	// this profile. Empty = no bridging.
+	MCPToA2ABridges []MCPToA2ABridge
+	A2AToMCPBridges []A2AToMCPBridge
+	Scopes          []string // scope set this profile grants
+	PolicyBundleRef string
+	ParentProfileID string // reserved for future inheritance
+	Enabled         bool
+	CreatedAt       string
+	UpdatedAt       string
+}
+
+// MCPToA2ABridge routes an MCP tools/call to an A2A peer task: a call for
+// MCPTool ("server.tool") dispatches to peer A2APeer's task A2ATask.
+type MCPToA2ABridge struct {
+	MCPTool string
+	A2APeer string
+	A2ATask string
+}
+
+// A2AToMCPBridge routes an inbound A2A task to an MCP tool: a task named
+// A2ATask dispatches to MCP tool MCPTool ("server.tool").
+type A2AToMCPBridge struct {
+	A2ATask string
+	MCPTool string
 }
 
 // ErrAgentProfileNotFound is returned when no profile (or binding) matches.

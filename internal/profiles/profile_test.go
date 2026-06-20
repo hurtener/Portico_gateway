@@ -1,6 +1,10 @@
 package profiles
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
+)
 
 func restrictive() *Profile {
 	return &Profile{
@@ -141,5 +145,39 @@ func TestAllowsA2ATask(t *testing.T) {
 	// split fails and the gate rejects it under a restrictive profile.
 	if listedP.AllowsA2ATask("notnamespaced") {
 		t.Error("non-namespaced A2A task was allowed under a restrictive profile")
+	}
+}
+
+func TestBridgeForMCPTool(t *testing.T) {
+	p := &Profile{
+		MCPToA2ABridges: []ifaces.MCPToA2ABridge{
+			{MCPTool: "github.code-review.run", A2APeer: "research-agent", A2ATask: "code-review"},
+		},
+	}
+	b, ok := p.BridgeForMCPTool("github.code-review.run")
+	if !ok || b.A2APeer != "research-agent" || b.A2ATask != "code-review" {
+		t.Errorf("BridgeForMCPTool = %+v, ok=%v", b, ok)
+	}
+	if _, ok := p.BridgeForMCPTool("other.tool"); ok {
+		t.Error("unmapped tool reported a bridge")
+	}
+	var nilP *Profile
+	if _, ok := nilP.BridgeForMCPTool("x"); ok {
+		t.Error("nil profile reported a bridge")
+	}
+}
+
+func TestBridgeForA2ATask(t *testing.T) {
+	p := &Profile{
+		A2AToMCPBridges: []ifaces.A2AToMCPBridge{
+			{A2ATask: "billing.refund", MCPTool: "billing.refund"},
+		},
+	}
+	b, ok := p.BridgeForA2ATask("billing.refund")
+	if !ok || b.MCPTool != "billing.refund" {
+		t.Errorf("BridgeForA2ATask = %+v, ok=%v", b, ok)
+	}
+	if _, ok := p.BridgeForA2ATask("unknown.task"); ok {
+		t.Error("unmapped task reported a bridge")
 	}
 }

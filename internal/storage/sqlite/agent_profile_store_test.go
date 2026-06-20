@@ -275,3 +275,49 @@ func assertSliceEqual(t *testing.T, label string, got, want []string) {
 		}
 	}
 }
+
+func TestAgentProfileStore_Bridges_RoundTrip(t *testing.T) {
+	db := open(t)
+	store := db.AgentProfiles()
+	ctx := context.Background()
+
+	p := &ifaces.AgentProfile{
+		TenantID: "t1", ID: "ap_bridge", Name: "bridged", Enabled: true,
+		MCPToA2ABridges: []ifaces.MCPToA2ABridge{
+			{MCPTool: "github.code-review.run", A2APeer: "research-agent", A2ATask: "code-review"},
+		},
+		A2AToMCPBridges: []ifaces.A2AToMCPBridge{
+			{A2ATask: "billing.refund", MCPTool: "billing.refund"},
+		},
+	}
+	if err := store.Put(ctx, p); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	got, err := store.Get(ctx, "t1", "ap_bridge")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(got.MCPToA2ABridges) != 1 || got.MCPToA2ABridges[0] != p.MCPToA2ABridges[0] {
+		t.Errorf("mcp->a2a bridge mismatch: %+v", got.MCPToA2ABridges)
+	}
+	if len(got.A2AToMCPBridges) != 1 || got.A2AToMCPBridges[0] != p.A2AToMCPBridges[0] {
+		t.Errorf("a2a->mcp bridge mismatch: %+v", got.A2AToMCPBridges)
+	}
+
+	// Replace-on-update: a second Put with different bridges overwrites.
+	p.MCPToA2ABridges = []ifaces.MCPToA2ABridge{{MCPTool: "jira.create", A2APeer: "ticket-agent", A2ATask: "open"}}
+	p.A2AToMCPBridges = nil
+	if err := store.Put(ctx, p); err != nil {
+		t.Fatalf("second put: %v", err)
+	}
+	got, err = store.Get(ctx, "t1", "ap_bridge")
+	if err != nil {
+		t.Fatalf("get after update: %v", err)
+	}
+	if len(got.MCPToA2ABridges) != 1 || got.MCPToA2ABridges[0].MCPTool != "jira.create" {
+		t.Errorf("mcp->a2a not replaced: %+v", got.MCPToA2ABridges)
+	}
+	if len(got.A2AToMCPBridges) != 0 {
+		t.Errorf("a2a->mcp not cleared: %+v", got.A2AToMCPBridges)
+	}
+}

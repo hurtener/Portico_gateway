@@ -157,6 +157,9 @@ func (s *agentProfileStore) Put(ctx context.Context, p *ifaces.AgentProfile) err
 			return err
 		}
 	}
+	if err := s.replaceBridges(ctx, tx, p); err != nil {
+		return err
+	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("sqlite: put agent profile: commit: %w", err)
@@ -187,6 +190,80 @@ func (s *agentProfileStore) replaceAllowlist(ctx context.Context, tx *sql.Tx, te
 		}
 	}
 	return nil
+}
+
+// replaceBridges deletes and re-inserts the profile's MCP<->A2A bridge rows
+// inside the Put transaction (Phase 16). Empty-field rows are skipped.
+func (s *agentProfileStore) replaceBridges(ctx context.Context, tx *sql.Tx, p *ifaces.AgentProfile) error {
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM agent_profile_mcp_to_a2a_bridges WHERE tenant_id = ? AND profile_id = ?`,
+		p.TenantID, p.ID); err != nil {
+		return fmt.Errorf("sqlite: replace mcp_to_a2a bridges: delete: %w", err)
+	}
+	for _, b := range p.MCPToA2ABridges {
+		if b.MCPTool == "" || b.A2APeer == "" || b.A2ATask == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO agent_profile_mcp_to_a2a_bridges(tenant_id, profile_id, mcp_tool, a2a_peer, a2a_task) VALUES (?, ?, ?, ?, ?)`,
+			p.TenantID, p.ID, b.MCPTool, b.A2APeer, b.A2ATask); err != nil {
+			return fmt.Errorf("sqlite: replace mcp_to_a2a bridges: insert: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM agent_profile_a2a_to_mcp_bridges WHERE tenant_id = ? AND profile_id = ?`,
+		p.TenantID, p.ID); err != nil {
+		return fmt.Errorf("sqlite: replace a2a_to_mcp bridges: delete: %w", err)
+	}
+	for _, b := range p.A2AToMCPBridges {
+		if b.A2ATask == "" || b.MCPTool == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO agent_profile_a2a_to_mcp_bridges(tenant_id, profile_id, a2a_task, mcp_tool) VALUES (?, ?, ?, ?)`,
+			p.TenantID, p.ID, b.A2ATask, b.MCPTool); err != nil {
+			return fmt.Errorf("sqlite: replace a2a_to_mcp bridges: insert: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s *agentProfileStore) loadMCPToA2ABridges(ctx context.Context, tenantID, profileID string) ([]ifaces.MCPToA2ABridge, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT mcp_tool, a2a_peer, a2a_task FROM agent_profile_mcp_to_a2a_bridges WHERE tenant_id = ? AND profile_id = ? ORDER BY mcp_tool`,
+		tenantID, profileID)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: load mcp_to_a2a bridges: %w", err)
+	}
+	defer rows.Close()
+	var out []ifaces.MCPToA2ABridge
+	for rows.Next() {
+		var b ifaces.MCPToA2ABridge
+		if err := rows.Scan(&b.MCPTool, &b.A2APeer, &b.A2ATask); err != nil {
+			return nil, fmt.Errorf("sqlite: scan mcp_to_a2a bridge: %w", err)
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+func (s *agentProfileStore) loadA2AToMCPBridges(ctx context.Context, tenantID, profileID string) ([]ifaces.A2AToMCPBridge, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT a2a_task, mcp_tool FROM agent_profile_a2a_to_mcp_bridges WHERE tenant_id = ? AND profile_id = ? ORDER BY a2a_task`,
+		tenantID, profileID)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: load a2a_to_mcp bridges: %w", err)
+	}
+	defer rows.Close()
+	var out []ifaces.A2AToMCPBridge
+	for rows.Next() {
+		var b ifaces.A2AToMCPBridge
+		if err := rows.Scan(&b.A2ATask, &b.MCPTool); err != nil {
+			return nil, fmt.Errorf("sqlite: scan a2a_to_mcp bridge: %w", err)
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
 }
 
 func (s *agentProfileStore) Delete(ctx context.Context, tenantID, id string) error {
@@ -298,6 +375,12 @@ func (s *agentProfileStore) scanProfile(row interface{ Scan(...any) error }) (*i
 	if p.AllowedA2ATasks == nil {
 		p.AllowedA2ATasks = []string{}
 	}
+	if p.MCPToA2ABridges == nil {
+		p.MCPToA2ABridges = []ifaces.MCPToA2ABridge{}
+	}
+	if p.A2AToMCPBridges == nil {
+		p.A2AToMCPBridges = []ifaces.A2AToMCPBridge{}
+	}
 	return &p, nil
 }
 
@@ -325,6 +408,14 @@ func (s *agentProfileStore) loadAllowlists(ctx context.Context, p *ifaces.AgentP
 		return err
 	}
 	p.AllowedA2ATasks, err = s.loadStringSlice(ctx, "agent_profile_a2a_tasks", "namespaced_id", p.TenantID, p.ID)
+	if err != nil {
+		return err
+	}
+	p.MCPToA2ABridges, err = s.loadMCPToA2ABridges(ctx, p.TenantID, p.ID)
+	if err != nil {
+		return err
+	}
+	p.A2AToMCPBridges, err = s.loadA2AToMCPBridges(ctx, p.TenantID, p.ID)
 	if err != nil {
 		return err
 	}
