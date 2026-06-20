@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/hurtener/Portico_gateway/internal/a2a/ingest"
 	"github.com/hurtener/Portico_gateway/internal/auth/tenant"
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
@@ -223,6 +224,38 @@ func deleteA2APeerHandler(d Deps) http.HandlerFunc {
 			d.A2APool.Invalidate(r.Context(), id.TenantID, chi.URLParam(r, "id"))
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// refreshA2APeerCardHandler: POST /api/a2a/peers/{id}/refresh-card. Fetches the
+// peer's agent card from its well-known URL and persists it; 200 + updated DTO.
+// 404 unknown peer; 502 when the peer is unreachable / returns a bad card.
+func refreshA2APeerCardHandler(d Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !a2aPeersConfigured(d, w) {
+			return
+		}
+		if d.A2ACardRefresher == nil {
+			writeJSONError(w, http.StatusServiceUnavailable, "a2a_not_configured", "a2a card refresher not configured", nil)
+			return
+		}
+		id := tenant.MustFrom(r.Context())
+		if !requireGovernanceAdmin(w, id) {
+			return
+		}
+		peer, err := d.A2ACardRefresher.RefreshCard(r.Context(), id.TenantID, chi.URLParam(r, "id"))
+		if err != nil {
+			switch {
+			case errors.Is(err, ifaces.ErrA2APeerNotFound):
+				writeJSONError(w, http.StatusNotFound, "not_found", "a2a peer not found", nil)
+			case errors.Is(err, ingest.ErrCardFetch):
+				writeJSONError(w, http.StatusBadGateway, "a2a_card_fetch_failed", err.Error(), nil)
+			default:
+				writeJSONError(w, http.StatusInternalServerError, "refresh_failed", err.Error(), nil)
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, toA2APeerDTO(peer))
 	}
 }
 

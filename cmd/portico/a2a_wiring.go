@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -39,12 +40,13 @@ func a2aClientFactory(vault secrets.Vault, log *slog.Logger) a2amgr.ClientFactor
 }
 
 // a2aCardProvider returns the agent card Portico advertises at
-// /a2a/.well-known/agent.json. Skills aggregate from the tenant's registered
-// peers once agent-card ingestion lands; for now the card advertises Portico's
-// identity + protocol version + (no) capabilities.
-func a2aCardProvider(version string) a2anb.CardProvider {
-	return func(_ context.Context, _ string) a2aproto.AgentCard {
-		return a2aproto.AgentCard{
+// /a2a/.well-known/agent.json. It aggregates the discovered skills of the
+// tenant's enabled, ingested peers (each skill id namespaced "peer.skill") so an
+// A2A client sees the surface Portico can route to. A nil store (or no ingested
+// cards) yields just Portico's identity.
+func a2aCardProvider(version string, store ifaces.A2APeerStore) a2anb.CardProvider {
+	return func(ctx context.Context, tenantID string) a2aproto.AgentCard {
+		card := a2aproto.AgentCard{
 			Name:            "Portico",
 			Description:     "Portico A2A gateway",
 			URL:             "/a2a",
@@ -52,5 +54,30 @@ func a2aCardProvider(version string) a2anb.CardProvider {
 			ProtocolVersion: a2aproto.SpecVersion,
 			Capabilities:    a2aproto.AgentCapabilities{Streaming: false},
 		}
+		if store == nil {
+			return card
+		}
+		peers, err := store.ListPeers(ctx, tenantID)
+		if err != nil {
+			return card
+		}
+		for _, p := range peers {
+			if !p.Enabled || p.AgentCardJSON == "" {
+				continue
+			}
+			var pc a2aproto.AgentCard
+			if json.Unmarshal([]byte(p.AgentCardJSON), &pc) != nil {
+				continue
+			}
+			for _, sk := range pc.Skills {
+				card.Skills = append(card.Skills, a2aproto.AgentSkill{
+					ID:          p.Name + "." + sk.ID,
+					Name:        sk.Name,
+					Description: sk.Description,
+					Tags:        sk.Tags,
+				})
+			}
+		}
+		return card
 	}
 }

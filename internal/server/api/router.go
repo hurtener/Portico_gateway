@@ -61,6 +61,12 @@ type a2aPoolInvalidator interface {
 	Invalidate(ctx context.Context, tenantID, peerID string)
 }
 
+// a2aCardRefresher fetches + persists a peer's agent card on demand. Satisfied
+// by *a2a/ingest.Refresher; an interface so this package stays decoupled.
+type a2aCardRefresher interface {
+	RefreshCard(ctx context.Context, tenantID, peerID string) (*ifaces.A2APeer, error)
+}
+
 // Deps bundles the runtime objects every route handler needs.
 type Deps struct {
 	Logger      *slog.Logger
@@ -187,6 +193,9 @@ type Deps struct {
 	// Invalidate on update/delete so a changed endpoint/credential is rebuilt.
 	// Optional; nil → no cache invalidation (no consumer wired).
 	A2APool a2aPoolInvalidator
+	// Phase 16: agent-card refresher for POST /api/a2a/peers/{id}/refresh-card.
+	// Optional; nil → that endpoint returns 503.
+	A2ACardRefresher a2aCardRefresher
 
 	// Phase 15.5: hierarchical budget enforcer. Optional; nil → no budget
 	// pre-check/reconcile in the LLM gateway (back-compat).
@@ -489,6 +498,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/api/a2a/peers/{id}", getA2APeerHandler(d))
 			r.Put("/api/a2a/peers/{id}", updateA2APeerHandler(d))
 			r.Delete("/api/a2a/peers/{id}", deleteA2APeerHandler(d))
+			r.Post("/api/a2a/peers/{id}/refresh-card", refreshA2APeerCardHandler(d))
 		}
 		// Phase 13.5: Code Mode interactive playground (admin scope). Drives the
 		// meta-tools through a synthetic Console session — list stub files, read
