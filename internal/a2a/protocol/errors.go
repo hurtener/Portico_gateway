@@ -17,6 +17,9 @@ const (
 	ErrUnsupportedOperation         = -32004 // requested operation is not supported by this peer
 	ErrContentTypeNotSupported      = -32005 // Part.contentType is not acceptable to this peer
 	ErrInvalidAgentResponse         = -32006 // agent returned a response that could not be parsed/validated
+
+	// Portico-defined (impl-reserved -32010..-32099, outside the A2A spec range).
+	ErrProfileViolation = -32010 // caller's Agent Profile does not permit this peer/task (Phase 16)
 )
 
 // NewError builds an *Error with the given code and message. Data is left
