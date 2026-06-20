@@ -37,9 +37,12 @@ const (
 	// EventVKScopeViolation marks an MCP tool call rejected because its server
 	// fell outside the Virtual Key's MCP-server allowlist (Phase 15.5).
 	EventVKScopeViolation = "vk.scope_violation"
-	EventApprovalPending  = "approval.pending"
-	EventApprovalDecided  = "approval.decided"
-	EventApprovalExpired  = "approval.expired"
+	// EventA2ADispatch marks a governed outbound A2A call to a registered peer
+	// (Phase 16): payload carries peer_id, method, and (for tasks) the task id.
+	EventA2ADispatch     = "a2a.dispatch"
+	EventApprovalPending = "approval.pending"
+	EventApprovalDecided = "approval.decided"
+	EventApprovalExpired = "approval.expired"
 	// EventApprovalReplayed marks a tool call that reused a prior-granted
 	// approval within the replay window (same tenant + tool + args) instead of
 	// re-prompting (CLAUDE.md §7.4). The Code Mode continuation flow drives this
