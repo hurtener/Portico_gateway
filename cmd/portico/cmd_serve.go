@@ -12,6 +12,7 @@ import (
 	"time"
 
 	a2adispatch "github.com/hurtener/Portico_gateway/internal/a2a/dispatch"
+	a2aingest "github.com/hurtener/Portico_gateway/internal/a2a/ingest"
 	a2anb "github.com/hurtener/Portico_gateway/internal/a2a/northbound/http"
 	a2amgr "github.com/hurtener/Portico_gateway/internal/a2a/southbound/manager"
 	"github.com/hurtener/Portico_gateway/internal/apps"
@@ -572,9 +573,10 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		budgetEnf   *budgets.Enforcer
 		// Phase 16: A2A peer store (REST CRUD + future ingestion/health), the
 		// southbound client pool, and the northbound transport handler.
-		a2aPeers   ifaces.A2APeerStore
-		a2aPool    *a2amgr.Pool
-		a2aHandler *a2anb.Handler
+		a2aPeers     ifaces.A2APeerStore
+		a2aPool      *a2amgr.Pool
+		a2aHandler   *a2anb.Handler
+		a2aRefresher *a2aingest.Refresher
 	)
 	llmQuotaEnforcer := quota.NewEnforcer()
 	if sqliteBackend, ok := backend.(*sqlitestorage.DB); ok {
@@ -593,7 +595,8 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		// the governed dispatcher + the northbound transport handler.
 		a2aPool = a2amgr.NewPool(a2aPeers, a2aClientFactory(vault, logger.With("component", "a2a.southbound")), logger.With("component", "a2a.pool"))
 		a2aDispatcher := a2adispatch.New(a2aPeers, a2aPool, auditEmitter, logger.With("component", "a2a.dispatch"))
-		a2aHandler = a2anb.NewHandler(a2aDispatcher, a2aCardProvider(version), logger.With("component", "a2a.northbound"))
+		a2aHandler = a2anb.NewHandler(a2aDispatcher, a2aCardProvider(version, a2aPeers), logger.With("component", "a2a.northbound"))
+		a2aRefresher = a2aingest.NewRefresher(a2aPeers, a2aPool, logger.With("component", "a2a.ingest"))
 		// Phase 16: MCP→A2A bridge — let the MCP dispatcher route bridged tools
 		// to A2A peers through the same governed dispatcher.
 		dispatcher.SetA2ABridge(a2aDispatcher)
@@ -679,29 +682,30 @@ func runWithConfig(ctx context.Context, cfg *config.Config, configPath string) e
 		AuditSearch:    auditStore,
 
 		// Phase 13: LLM gateway.
-		LLMProviders:    llmProviders,
-		LLMModels:       llmModels,
-		LLMEngine:       llmEngine,
-		LLMQuotas:       llmQuotas,
-		LLMQuota:        llmQuotaEnforcer,
-		LLMCosts:        llmCosts,
-		LLMSessions:     llmSessions,
-		CodeMode:        codeModeStore,
-		AgentProfiles:   backend.AgentProfiles(),
-		Governance:      govStore,
-		VKService:       vkService,
-		VKResolver:      vkResolver,
-		Budgets:         budgetStore,
-		BudgetEnforcer:  budgetEnf,
-		A2APeers:        a2aPeers,
-		A2AHandler:      a2aHandler,
-		A2APool:         a2aPool,
-		Cache:           llmCache,
-		CacheScope:      cacheScope,
-		CacheTTL:        cacheTTL,
-		CacheThreshold:  cfg.Cache.Threshold,
-		ProfileResolver: profileResolver,
-		Redactor:        auditpkg.NewDefaultRedactor(),
+		LLMProviders:     llmProviders,
+		LLMModels:        llmModels,
+		LLMEngine:        llmEngine,
+		LLMQuotas:        llmQuotas,
+		LLMQuota:         llmQuotaEnforcer,
+		LLMCosts:         llmCosts,
+		LLMSessions:      llmSessions,
+		CodeMode:         codeModeStore,
+		AgentProfiles:    backend.AgentProfiles(),
+		Governance:       govStore,
+		VKService:        vkService,
+		VKResolver:       vkResolver,
+		Budgets:          budgetStore,
+		BudgetEnforcer:   budgetEnf,
+		A2APeers:         a2aPeers,
+		A2AHandler:       a2aHandler,
+		A2APool:          a2aPool,
+		A2ACardRefresher: a2aRefresher,
+		Cache:            llmCache,
+		CacheScope:       cacheScope,
+		CacheTTL:         cacheTTL,
+		CacheThreshold:   cfg.Cache.Threshold,
+		ProfileResolver:  profileResolver,
+		Redactor:         auditpkg.NewDefaultRedactor(),
 	}
 
 	handler := api.NewRouter(deps)

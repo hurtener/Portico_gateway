@@ -64,5 +64,20 @@ if assert_status 200 "POST /a2a (unknown peer → JSON-RPC error)" \
   assert_json_truthy '.error.code' "unknown peer returns a JSON-RPC error"
 fi
 
+# refresh-card endpoint is mounted: against an unreachable peer it returns 502
+# (fetch failed) rather than 404 — proves the route + ingestion wiring exist.
+if skip_if_404 201 "POST /api/a2a/peers (refresh target)" \
+  -- -X POST "$(api_url /api/a2a/peers)" \
+     -H 'Content-Type: application/json' \
+     -d '{"name":"refresh-peer","endpoint":"http://127.0.0.1:1/a2a"}'; then
+  RP_ID=$(printf '%s' "$RESPONSE_BODY" | jq -r '.id' 2>/dev/null || true)
+  if [ -n "${RP_ID:-}" ] && [ "$RP_ID" != "null" ]; then
+    assert_status 502 "POST /api/a2a/peers/{id}/refresh-card (unreachable → 502)" \
+      -- -X POST "$(api_url "/api/a2a/peers/$RP_ID/refresh-card")"
+    assert_status 204 "DELETE refresh target" \
+      -- -X DELETE "$(api_url "/api/a2a/peers/$RP_ID")"
+  fi
+fi
+
 end_phase
 exit $?
