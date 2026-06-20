@@ -14,23 +14,70 @@ import (
 	"github.com/hurtener/Portico_gateway/internal/storage/ifaces"
 )
 
+// MCPToA2ABridgeDTO is the JSON view of an MCP→A2A bridge route.
+type MCPToA2ABridgeDTO struct {
+	MCPTool string `json:"mcp_tool"`
+	A2APeer string `json:"a2a_peer"`
+	A2ATask string `json:"a2a_task"`
+}
+
+// A2AToMCPBridgeDTO is the JSON view of an A2A→MCP bridge route.
+type A2AToMCPBridgeDTO struct {
+	A2ATask string `json:"a2a_task"`
+	MCPTool string `json:"mcp_tool"`
+}
+
 // AgentProfileDTO is the JSON representation for REST API.
 type AgentProfileDTO struct {
-	ID                  string   `json:"id"`
-	Name                string   `json:"name"`
-	Description         string   `json:"description,omitempty"`
-	AllowedMCPServers   []string `json:"allowed_mcp_servers"`
-	AllowedTools        []string `json:"allowed_tools"`
-	AllowedSkills       []string `json:"allowed_skills"`
-	AllowedModelAliases []string `json:"allowed_model_aliases"`
-	AllowedA2APeers     []string `json:"allowed_a2a_peers"`
-	AllowedA2ATasks     []string `json:"allowed_a2a_tasks"`
-	Scopes              []string `json:"scopes"`
-	PolicyBundleRef     string   `json:"policy_bundle_ref,omitempty"`
-	ParentProfileID     string   `json:"parent_profile_id,omitempty"`
-	Enabled             bool     `json:"enabled"`
-	CreatedAt           string   `json:"created_at,omitempty"`
-	UpdatedAt           string   `json:"updated_at,omitempty"`
+	ID                  string              `json:"id"`
+	Name                string              `json:"name"`
+	Description         string              `json:"description,omitempty"`
+	AllowedMCPServers   []string            `json:"allowed_mcp_servers"`
+	AllowedTools        []string            `json:"allowed_tools"`
+	AllowedSkills       []string            `json:"allowed_skills"`
+	AllowedModelAliases []string            `json:"allowed_model_aliases"`
+	AllowedA2APeers     []string            `json:"allowed_a2a_peers"`
+	AllowedA2ATasks     []string            `json:"allowed_a2a_tasks"`
+	MCPToA2ABridges     []MCPToA2ABridgeDTO `json:"mcp_to_a2a_bridges"`
+	A2AToMCPBridges     []A2AToMCPBridgeDTO `json:"a2a_to_mcp_bridges"`
+	Scopes              []string            `json:"scopes"`
+	PolicyBundleRef     string              `json:"policy_bundle_ref,omitempty"`
+	ParentProfileID     string              `json:"parent_profile_id,omitempty"`
+	Enabled             bool                `json:"enabled"`
+	CreatedAt           string              `json:"created_at,omitempty"`
+	UpdatedAt           string              `json:"updated_at,omitempty"`
+}
+
+func bridgesMCPToA2AToDTO(in []ifaces.MCPToA2ABridge) []MCPToA2ABridgeDTO {
+	out := make([]MCPToA2ABridgeDTO, 0, len(in))
+	for _, b := range in {
+		out = append(out, MCPToA2ABridgeDTO{MCPTool: b.MCPTool, A2APeer: b.A2APeer, A2ATask: b.A2ATask})
+	}
+	return out
+}
+
+func bridgesA2AToMCPToDTO(in []ifaces.A2AToMCPBridge) []A2AToMCPBridgeDTO {
+	out := make([]A2AToMCPBridgeDTO, 0, len(in))
+	for _, b := range in {
+		out = append(out, A2AToMCPBridgeDTO{A2ATask: b.A2ATask, MCPTool: b.MCPTool})
+	}
+	return out
+}
+
+func bridgesMCPToA2AFromDTO(in []MCPToA2ABridgeDTO) []ifaces.MCPToA2ABridge {
+	out := make([]ifaces.MCPToA2ABridge, 0, len(in))
+	for _, b := range in {
+		out = append(out, ifaces.MCPToA2ABridge{MCPTool: b.MCPTool, A2APeer: b.A2APeer, A2ATask: b.A2ATask})
+	}
+	return out
+}
+
+func bridgesA2AToMCPFromDTO(in []A2AToMCPBridgeDTO) []ifaces.A2AToMCPBridge {
+	out := make([]ifaces.A2AToMCPBridge, 0, len(in))
+	for _, b := range in {
+		out = append(out, ifaces.A2AToMCPBridge{A2ATask: b.A2ATask, MCPTool: b.MCPTool})
+	}
+	return out
 }
 
 // toAgentProfileDTO converts an ifaces.AgentProfile to AgentProfileDTO.
@@ -45,6 +92,8 @@ func toAgentProfileDTO(p *ifaces.AgentProfile) AgentProfileDTO {
 		AllowedModelAliases: p.AllowedModelAliases,
 		AllowedA2APeers:     p.AllowedA2APeers,
 		AllowedA2ATasks:     p.AllowedA2ATasks,
+		MCPToA2ABridges:     bridgesMCPToA2AToDTO(p.MCPToA2ABridges),
+		A2AToMCPBridges:     bridgesA2AToMCPToDTO(p.A2AToMCPBridges),
 		Scopes:              p.Scopes,
 		PolicyBundleRef:     p.PolicyBundleRef,
 		ParentProfileID:     p.ParentProfileID,
@@ -154,6 +203,8 @@ func createAgentProfileHandler(d Deps) http.HandlerFunc {
 			AllowedModelAliases: dto.AllowedModelAliases,
 			AllowedA2APeers:     dto.AllowedA2APeers,
 			AllowedA2ATasks:     dto.AllowedA2ATasks,
+			MCPToA2ABridges:     bridgesMCPToA2AFromDTO(dto.MCPToA2ABridges),
+			A2AToMCPBridges:     bridgesA2AToMCPFromDTO(dto.A2AToMCPBridges),
 			Scopes:              dto.Scopes,
 			PolicyBundleRef:     dto.PolicyBundleRef,
 			ParentProfileID:     dto.ParentProfileID,
@@ -222,6 +273,8 @@ func updateAgentProfileHandler(d Deps) http.HandlerFunc {
 			AllowedModelAliases: dto.AllowedModelAliases,
 			AllowedA2APeers:     dto.AllowedA2APeers,
 			AllowedA2ATasks:     dto.AllowedA2ATasks,
+			MCPToA2ABridges:     bridgesMCPToA2AFromDTO(dto.MCPToA2ABridges),
+			A2AToMCPBridges:     bridgesA2AToMCPFromDTO(dto.A2AToMCPBridges),
 			Scopes:              dto.Scopes,
 			PolicyBundleRef:     dto.PolicyBundleRef,
 			ParentProfileID:     dto.ParentProfileID,
