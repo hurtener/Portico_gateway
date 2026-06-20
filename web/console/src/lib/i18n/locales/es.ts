@@ -1404,6 +1404,8 @@ export default {
   'nav.playground': 'Playground',
   'nav.code_mode': 'Code Mode',
   'nav.agents': 'Agent Profiles',
+  'nav.section.a2a': 'A2A',
+  'nav.a2a_peers': 'Pares',
   'playground.title': 'Playground',
   'playground.subtitle':
     'Ejecuta tool calls, prompts y lecturas de recursos contra el catálogo en vivo.',

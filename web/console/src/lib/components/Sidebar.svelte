@@ -30,6 +30,7 @@
   import IconCloud from 'lucide-svelte/icons/cloud';
   import IconChevronLeft from 'lucide-svelte/icons/chevron-left';
   import IconChevronRight from 'lucide-svelte/icons/chevron-right';
+  import IconShare2 from 'lucide-svelte/icons/share-2';
 
   type Item = { labelKey: string; href: string; Icon: typeof IconHome };
   type Group = { labelKey?: string; items: Item[] };
@@ -98,6 +99,10 @@
         { labelKey: 'nav.secrets', href: '/admin/secrets', Icon: IconKey },
         { labelKey: 'nav.tenants', href: '/admin/tenants', Icon: IconUsers }
       ]
+    },
+    {
+      labelKey: 'nav.section.a2a',
+      items: [{ labelKey: 'nav.a2a_peers', href: '/a2a/peers', Icon: IconShare2 }]
     }
   ];
 
