@@ -191,6 +191,11 @@ func updateA2APeerHandler(d Deps) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "get_after_update_failed", err.Error(), nil)
 			return
 		}
+		// Drop any cached southbound client so the next dispatch rebuilds with
+		// the new endpoint/credentials.
+		if d.A2APool != nil {
+			d.A2APool.Invalidate(r.Context(), id.TenantID, peerID)
+		}
 		writeJSON(w, http.StatusOK, toA2APeerDTO(updated))
 	}
 }
@@ -213,6 +218,9 @@ func deleteA2APeerHandler(d Deps) http.HandlerFunc {
 			}
 			writeJSONError(w, http.StatusInternalServerError, "delete_failed", err.Error(), nil)
 			return
+		}
+		if d.A2APool != nil {
+			d.A2APool.Invalidate(r.Context(), id.TenantID, chi.URLParam(r, "id"))
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}

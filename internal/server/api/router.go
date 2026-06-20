@@ -14,6 +14,7 @@ import (
 
 	"errors"
 
+	a2anb "github.com/hurtener/Portico_gateway/internal/a2a/northbound/http"
 	"github.com/hurtener/Portico_gateway/internal/apps"
 	"github.com/hurtener/Portico_gateway/internal/audit"
 	"github.com/hurtener/Portico_gateway/internal/auth/jwt"
@@ -51,6 +52,13 @@ type GatewayInfo struct {
 	JWTJWKSURL     string
 	JWTTenantClaim string
 	JWTScopeClaim  string
+}
+
+// a2aPoolInvalidator is the slice of the southbound A2A pool the peers CRUD
+// handlers need: drop a cached client when its peer's endpoint/credentials
+// change. Kept as an interface so this package doesn't import the manager.
+type a2aPoolInvalidator interface {
+	Invalidate(ctx context.Context, tenantID, peerID string)
 }
 
 // Deps bundles the runtime objects every route handler needs.
@@ -172,6 +180,13 @@ type Deps struct {
 
 	// Phase 16: A2A peer store for /api/a2a/peers CRUD. Optional; nil → 503.
 	A2APeers ifaces.A2APeerStore
+	// Phase 16: northbound A2A transport (GET agent card + POST JSON-RPC).
+	// Optional; nil → /a2a is not mounted.
+	A2AHandler *a2anb.Handler
+	// Phase 16: southbound A2A client pool. The peers CRUD handlers call
+	// Invalidate on update/delete so a changed endpoint/credential is rebuilt.
+	// Optional; nil → no cache invalidation (no consumer wired).
+	A2APool a2aPoolInvalidator
 
 	// Phase 15.5: hierarchical budget enforcer. Optional; nil → no budget
 	// pre-check/reconcile in the LLM gateway (back-compat).
@@ -510,6 +525,14 @@ func NewRouter(d Deps) http.Handler {
 			r.Method("POST", "/mcp", h)
 			r.Method("GET", "/mcp", h)
 			r.Method("DELETE", "/mcp", h)
+		}
+
+		// Phase 16: northbound A2A transport. Mounted under the auth group like
+		// /mcp so tenant + Agent Profile are in context (A2A never bypasses the
+		// envelope). GET serves Portico's agent card; POST is the JSON-RPC endpoint.
+		if d.A2AHandler != nil {
+			r.Get("/a2a/.well-known/agent.json", d.A2AHandler.AgentCard)
+			r.Method("POST", "/a2a", http.HandlerFunc(d.A2AHandler.RPC))
 		}
 
 		// Admin endpoints
