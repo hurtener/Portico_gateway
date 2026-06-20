@@ -528,6 +528,19 @@ export interface CacheStats {
   driver: string;
 }
 
+// ── Phase 16: A2A Peers ────────────────────────────────────────────────────
+export interface A2APeer {
+  id: string;
+  name: string;
+  endpoint: string;
+  egress_auth_ref?: string;
+  /** Read-only. Populated automatically via A2A handshake. */
+  agent_card_json?: string;
+  enabled: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export const api = {
   health: () => request<{ status: string }>('/healthz'),
   ready: () => request<{ status: string }>('/readyz'),
@@ -1147,7 +1160,20 @@ export const api = {
     request<{ removed: number }>('/api/llm/cache/invalidate', {
       method: 'POST',
       body: JSON.stringify(body)
-    })
+    }),
+
+  // ── Phase 16: A2A Peers ─────────────────────────────────────────────────
+  listA2APeers: () => request<A2APeer[]>('/api/a2a/peers'),
+  getA2APeer: (id: string) => request<A2APeer>(`/api/a2a/peers/${encodeURIComponent(id)}`),
+  createA2APeer: (p: Partial<A2APeer>) =>
+    request<A2APeer>('/api/a2a/peers', { method: 'POST', body: JSON.stringify(p) }),
+  updateA2APeer: (id: string, p: Partial<A2APeer>) =>
+    request<A2APeer>(`/api/a2a/peers/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(p)
+    }),
+  deleteA2APeer: (id: string) =>
+    request<void>(`/api/a2a/peers/${encodeURIComponent(id)}`, { method: 'DELETE' })
 };
 
 // ── Phase 10: Playground types ──────────────────────────────────────

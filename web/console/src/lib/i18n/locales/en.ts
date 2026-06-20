@@ -1406,6 +1406,8 @@ export default {
   'nav.playground': 'Playground',
   'nav.code_mode': 'Code Mode',
   'nav.agents': 'Agent Profiles',
+  'nav.section.a2a': 'A2A',
+  'nav.a2a_peers': 'Peers',
   'playground.title': 'Playground',
   'playground.subtitle': 'Run tool calls, prompts, and resource reads against the live catalog.',
   'playground.session.start': 'Start session',
