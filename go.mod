@@ -12,7 +12,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/maximhq/bifrost/core v1.4.0
 	github.com/oklog/ulid/v2 v2.1.1
-	github.com/redis/go-redis/v9 v9.20.1
+	github.com/redis/go-redis/v9 v9.21.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.44.0
