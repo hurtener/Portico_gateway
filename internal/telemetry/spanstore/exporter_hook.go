@@ -273,10 +273,11 @@ func stringValue(v attribute.Value) string {
 	}
 	// Fall through: best-effort string representation for non-string
 	// types. Tenant/session IDs are always strings on the writer side.
-	return v.Emit()
+	return v.String()
 }
 
 func anyValue(v attribute.Value) any {
+	//nolint:exhaustive // the default branch handles any attribute.Type not modelled explicitly (e.g. BYTESLICE/SLICE added in otel 1.44) via the string fallback
 	switch v.Type() {
 	case attribute.STRING:
 		return v.AsString()
@@ -299,7 +300,7 @@ func anyValue(v attribute.Value) any {
 		// uninitialised attribute slot and the explicit-empty case.
 		return nil
 	default:
-		return v.Emit()
+		return v.String()
 	}
 }
 
