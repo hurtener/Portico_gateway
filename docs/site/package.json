@@ -1,0 +1,17 @@
+{
+  "name": "@portico/docs-site",
+  "version": "0.1.0",
+  "description": "Portico's published technical-documentation site. Static site built with VitePress from the in-repo docs and deployed to GitHub Pages by .github/workflows/docs.yml.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "gate": "vitepress build"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}
