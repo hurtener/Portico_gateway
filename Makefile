@@ -10,7 +10,7 @@ COVER_OUT := coverage.out
 
 GO_PRESENT := $(shell test -f go.mod && echo yes || echo no)
 
-.PHONY: help build mockmcp test vet lint clean docker preflight install-hooks check-mirror frontend frontend-check
+.PHONY: help build mockmcp test vet lint clean docker preflight install-hooks check-mirror frontend frontend-check docs docs-install
 
 help:
 	@echo "Targets:"
@@ -25,6 +25,8 @@ help:
 	@echo "  install-hooks   Install git hooks from .githooks/"
 	@echo "  check-mirror    Verify AGENTS.md == CLAUDE.md (verbatim invariant)"
 	@echo "  docker          Build Docker image"
+	@echo "  docs            Build the published tech-docs site (VitePress under docs/site/)"
+	@echo "  docs-install    Install the docs/site/ npm dependencies"
 	@echo "  clean           Remove build artifacts"
 
 build:
@@ -104,6 +106,33 @@ frontend-check:
 		echo "frontend-check: web/console/package.json absent — skipping"; \
 	fi
 
+# docs — build Portico's published technical-documentation site (VitePress
+# under docs/site/, deployed to GitHub Pages by .github/workflows/docs.yml).
+# Skips gracefully where docs/site/package.json or npm are absent so the
+# target is safe to call from aggregate gates.
+docs:
+	@if [ ! -d docs/site ]; then \
+		echo "skip docs: docs/site/ not present"; \
+	elif [ ! -f docs/site/package.json ]; then \
+		echo "skip docs: docs/site/package.json missing"; \
+	elif ! command -v npm >/dev/null 2>&1; then \
+		echo "skip docs: npm not installed"; \
+	else \
+		echo "== docs: build VitePress site =="; \
+		( cd docs/site && \
+			if [ ! -d node_modules ]; then npm ci --no-audit --no-fund; fi && \
+			npm run build ) || exit 1; \
+	fi
+
+docs-install:
+	@if [ ! -f docs/site/package.json ]; then \
+		echo "skip docs-install: docs/site/package.json missing"; \
+	elif ! command -v npm >/dev/null 2>&1; then \
+		echo "skip docs-install: npm not installed"; \
+	else \
+		( cd docs/site && npm install --no-audit --no-fund ) || exit 1; \
+	fi
+
 clean:
-	rm -rf bin $(COVER_OUT) coverage.html web/console/build/_app web/console/build/index.html web/console/build/favicon.svg
+	rm -rf bin $(COVER_OUT) coverage.html web/console/build/_app web/console/build/index.html web/console/build/favicon.svg docs/site/.vitepress/dist docs/site/.vitepress/cache
 	@find web/console/build -type f ! -name '.gitkeep' -delete 2>/dev/null || true

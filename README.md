@@ -1,49 +1,68 @@
-# Portico
+<p align="center">
+  <img src="./docs/Design/portico-logo-assets-v2/portico-logo-transparent-512.png" alt="Portico" width="180" />
+</p>
 
-> Multi-tenant MCP gateway and Skill runtime — single static Go binary, MCP-first.
+<h1 align="center">Portico</h1>
 
-Portico lets AI clients connect to many MCP servers through one governed, multi-tenant, session-aware control plane — and packages those servers with **Skill Packs** that turn raw tools into reliable workflows.
+<p align="center">
+  <strong>One governed gateway for all your agentic traffic.</strong>
+</p>
 
-The gateway is the substrate. The Skill Pack runtime binds the open Skills spec to specific MCP servers, tools, policies, entitlements, and UI resources, and exposes the result through native MCP primitives so any compliant client benefits.
+<p align="center">
+  MCP, A2A, and LLM under a single multi-tenant control plane — with Agent Profiles,<br/>
+  Virtual Keys, budgets, an encrypted vault, and a full audit trail built in.<br/>
+  One CGo-free Go binary. Open source.
+</p>
 
-## What works today
+<p align="center">
+  <a href="https://github.com/hurtener/Portico_gateway/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache 2.0" /></a>
+  <a href="https://github.com/hurtener/Portico_gateway/actions/workflows/ci.yml"><img src="https://github.com/hurtener/Portico_gateway/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://hurtener.github.io/Portico_gateway/"><img src="https://img.shields.io/badge/docs-online-success.svg" alt="Docs" /></a>
+  <img src="https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg" alt="Go 1.22+" />
+  <img src="https://img.shields.io/badge/protocols-MCP%20%C2%B7%20A2A%20%C2%B7%20LLM-6f42c1.svg" alt="MCP · A2A · LLM" />
+</p>
 
-- **Multi-tenant from the ground up.** JWT auth (RS256/ES256 family only) flows tenant + user identity through every layer; every tenant-scoped table is filtered by `tenant_id`. Dev mode synthesizes a `dev` tenant for local work.
-- **Full MCP northbound (spec `2025-11-25`).** Streamable HTTP + SSE transport, JSON-RPC 2.0, capability negotiation, list-changed notifications, cancellation, progress, `_meta`, Origin 403 enforcement, SSE event IDs.
-- **MCP southbound fleet.** Per-tenant client manager over stdio and HTTP downstream MCP servers; idle timeouts; crash recovery; namespaced tool/resource/prompt aggregation (`{server}.{name}`).
-- **Server registry + lifecycle.** REST CRUD at `/v1/servers/*`, hot reconfiguration, list-changed propagation; servers persisted in SQLite.
-- **Resources, prompts, MCP Apps.** Aggregated `resources/list`, `resources/read`, `prompts/list`, `prompts/get` across the fleet; `ui://` MCP Apps wrapped with the configured CSP.
-- **Skill Pack runtime.** Manifest schema (`skills/v1`) with JSON Schema 2020-12 validation; `LocalDir` source with `fsnotify` hot-reload (200ms debounce); per-tenant/session enablement; synthetic `skill://` resources + namespaced prompts so vanilla MCP clients can consume skills directly. Four reference packs ship in `examples/skills/`.
-- **Skill sources first-class (Phase 8).** Add Git/HTTP feeds or compose authored Skill Packs from the Console at runtime — no rebuild, no restart. Per-tenant `tenant_skill_sources` rows materialize through a driver registry (`internal/skills/source/{git,http,authored}`); authored packs land in SQLite with versioning + content checksums + draft/publish lifecycle. Console screens at `/skills/sources` and `/skills/authored` cover the full CRUD; the validation pipeline returns JSON-Pointer-tagged violations for inline highlighting.
-- **Console CRUD (Phase 9).** Servers, tenants, secrets, and policy rules are first-class operator surfaces — the operator runs Portico once and manages the system from the browser. `/api/servers/*` adds `PATCH`, `restart`, `logs` (SSE), `health`, `activity`; `/api/admin/tenants/*` adds full create/update/archive/purge with runtime mode + JWT issuer fields; `/api/admin/secrets/*` covers CRUD plus a two-step reveal flow with one-shot, single-use, 60-second tokens; `/api/policy/rules/*` ships a SQL-backed editor with a dry-run evaluator. Every write emits an audit event with redacted before/after, lands in the `entity_activity` projection, and triggers hot-reload everywhere (no binary restarts). Named scopes (`servers:write`, `secrets:write`, `policy:write`, `tenants:admin`) gate writes; the umbrella `admin` scope is a wildcard for back-compat.
-- **Interactive Playground (Phase 10).** A first-class operator surface at `/playground` for running MCP tool calls, prompts, and resource reads against the live catalog. Each session opens with a synthetic RS256 JWT (capped to read-only + `playground:execute`), binds to a Phase 6 catalog snapshot, and streams the JSON-RPC response over SSE while a right-rail correlator fetches spans, audit events, policy decisions, and drift events for the call. Saved cases (per-tenant) and one-click replays drive pre-flight validation of new servers / new skills / policy edits; replays against a drifted snapshot detect the change and emit a `schema.drift` audit. The supervisor's per-process log ring buffer feeds `/api/servers/{id}/logs` SSE for the same Console surface.
-- **Console.** SvelteKit SPA (`adapter-static`, embedded via `//go:embed`). Pages for servers, sessions, resources, prompts, MCP Apps, skills, tenants, secrets, and the policy editor. Design tokens centralized in `web/console/src/lib/tokens.css`; typed API client at `web/console/src/lib/api.ts`.
-- **Storage.** SQLite (`modernc.org/sqlite`, CGo-free) behind a `Backend` interface so future drivers slot in without touching callers.
-- **Telemetry.** Structured `slog` everywhere with `tenant_id` / `request_id` / `session_id` / `server_id` attributes; OpenTelemetry hooks wired but tracing instrumentation expands in the next milestone.
-- **Quality gates.** `gofmt`/`goimports`, `golangci-lint`, `go vet`, `go test -race`, `govulncheck`, secret scan, YAML/Markdown lint, frontend `svelte-check + build`, and a live preflight that boots the binary and runs HTTP smoke checks against every implemented surface — all enforced by CI and the local pre-commit hook.
+<p align="center">
+  <a href="https://hurtener.github.io/Portico_gateway/">Docs</a>
+  ·
+  <a href="#portico-in-5-minutes">Quickstart</a>
+  ·
+  <a href="#what-portico-does">What it does</a>
+  ·
+  <a href="#the-ecosystem">Ecosystem</a>
+  ·
+  <a href="#contributing">Contributing</a>
+</p>
 
-## What's next
+---
 
-- **Telemetry replay (Phase 11).** Per-session time-travel inspector that scrubs through every span, audit event, and drift event in a session and lets the operator one-click replay any tool call within it. Builds on Phase 10's `SpanTree`, correlation bundle, and synthetic-JWT pattern.
+AI agents reach tools over **MCP**, talk to each other over **A2A**, and call models
+over an **OpenAI-compatible API**. Each of those is a wire format. None of them is a
+control plane. Production needs the layer in between — the one that decides **who** is
+allowed to do **what**, injects credentials without ever handing an agent a broad token,
+meters spend, and records everything that happened.
 
-## Quickstart
+**Portico is that layer.** It speaks MCP, A2A, and LLM both outward (to AI clients) and
+inward (to your servers and providers), and puts every single call through one governance
+envelope:
+
+```text
+tenant  →  JWT / Virtual Key  →  Agent Profile  →  policy  →  audit  →  tracing
+```
+
+It runs as a single static binary with SQLite by default — no Postgres, no Redis, no
+Kubernetes required to start — and it is multi-tenant from the first line of code.
+
+## Portico in 5 minutes
 
 ```bash
-# One-time
-make install-hooks
-
-# Build the static binary (CGO_ENABLED=0)
+# 1. Build the binary (CGO_ENABLED=0, single static artifact)
+git clone https://github.com/hurtener/Portico_gateway
+cd Portico_gateway
 make build
 
-# Run in dev mode (binds 127.0.0.1:8080, synthesizes the `dev` tenant, no JWT required)
+# 2. Boot dev mode — binds 127.0.0.1:8080, synthesizes a `dev` tenant, no JWT needed
 ./bin/portico dev
-
-# Run with a real config
-./bin/portico serve --config portico.yaml
-
-# Validate config / skills
-./bin/portico validate --config portico.yaml
-./bin/portico validate-skills ./examples/skills/...
 ```
 
 A successful boot logs:
@@ -52,73 +71,110 @@ A successful boot logs:
 {"time":"...","level":"INFO","msg":"listening","bind":"127.0.0.1:8080","tenant_id":"dev"}
 ```
 
-The Console is at <http://localhost:8080/> and shows registered servers, sessions, resources, prompts, MCP Apps, and skills.
+Now you have, on one port:
 
-## Tests, lint, preflight
+- **The operator Console** at <http://localhost:8080/> — servers, sessions, skills, tenants, secrets, policy, playground, Agent Profiles, and the LLM screens.
+- **The MCP endpoint** at `POST /mcp` — register a downstream MCP server and its tools are aggregated, namespaced, and governed.
+- **The LLM gateway** at `POST /v1/chat/completions` — an OpenAI-compatible surface over many providers, behind your Virtual Keys and budgets.
+- **The A2A endpoint** at `POST /a2a` — discover agent cards and dispatch tasks to peers, through the same envelope.
+
+Point any MCP client, OpenAI SDK, or A2A peer at it and every request is authenticated,
+entitlement-checked, credential-injected, metered, and audited.
+
+> **Full walkthrough:** the [5-minute quickstart](https://hurtener.github.io/Portico_gateway/getting-started/) registers a server, makes a governed tool call, and runs your first LLM completion.
+
+## What Portico does
+
+| | |
+|---|---|
+| **Agent Profiles** | The primitive operators actually think in. One named, tenant-scoped object binds a consumer to a curated set of MCP servers, tools, Skill Packs, LLM aliases, scopes, and Virtual Keys — the single source of truth for *who sees what*. |
+| **MCP Gateway** | Full MCP northbound (Streamable HTTP + SSE, JSON-RPC 2.0, capability negotiation, list-changed, cancellation, progress). A per-tenant southbound fleet over stdio and HTTP servers with namespaced aggregation, hot reconfiguration, and crash recovery. |
+| **LLM Gateway** | An OpenAI-compatible API over many providers, with model aliases, weighted routing, and provider fallback. Drop it in front of your apps and govern every call. |
+| **A2A** | Speak the Agent-to-Agent protocol on the same listener as MCP, through the same governance envelope. Discover agent cards, dispatch tasks, and bridge MCP tools to A2A peers. |
+| **Virtual Keys & Budgets** | Sub-divide a tenant into per-app / per-developer / per-environment keys, each with its own scopes, allowlists, and audit lineage. Hierarchical budgets nest Virtual Key → Team → Customer → Tenant. |
+| **Credentials behind the gate** | Agents never receive broad downstream tokens. An encrypted vault (AES-256-GCM), OAuth 2.0 token exchange (RFC 8693), and credential injectors keep secrets on Portico's side of the line. |
+| **Skill Packs** | Bind the open Skills spec to specific servers, tools, policies, and UI resources — turning raw tools into reliable, governed workflows any compliant MCP client can consume. |
+| **Code Mode** | Let MCP clients orchestrate tools by writing sandboxed Starlark instead of shipping a 150-tool catalog into context — fewer round trips, fewer tokens, every call still fully governed. |
+| **Semantic Cache** | Put a cache in front of the LLM gateway so repeated or near-repeated requests skip the upstream call entirely. Tenant-isolated by construction. |
+| **Observability & Audit** | Structured logs, OpenTelemetry tracing, a redacting audit trail, and schema-drift detection across the fleet. Every governed decision is recorded and queryable. |
+
+All of it is open source, and all of it is multi-tenant — tenant identity flows from the
+JWT to every row of storage, with per-tenant process isolation, vault, and audit.
+
+## Why a gateway, and why this one
+
+Enterprises don't rip out their HTTP gateway to adopt agents — they keep Kong / Envoy /
+Istio / their ALB, and **consolidate their *agentic* traffic** somewhere it can be governed.
+That somewhere needs to be protocol-aware about MCP sessions, A2A tasks, and LLM calls; it
+needs a consumer model richer than a flat API key; and it needs the enterprise controls —
+audit, governance, a vault, budgets, multi-tenancy — to be table stakes rather than an
+upsell.
+
+Portico is built for exactly that consolidation, and ships those controls as open source
+from day one. The **Agent Profile** is the piece that ties it together: instead of an
+allowlist smeared across scopes, snapshots, skill enablement, and key configuration, an
+operator describes a consumer once — *"this agent talks to github, jira, and slack, uses
+the `code-review` Skill, and may call `gpt-4o`"* — and every gate reads from that one object.
+
+## The ecosystem
+
+Portico is one product in a three-part family:
+
+```text
+Portico  — the MCP / A2A / LLM gateway   (connects and governs)
+Harbor   — the agent framework           (builds and runs agents; owns the MCP client)
+Dockyard — the MCP Apps framework        (builds the MCP servers and apps users touch)
+```
+
+> Portico connects. Harbor reasons. Dockyard presents.
+
+## Documentation
+
+The full documentation site covers getting started, every concept in depth, task-oriented
+guides, and the complete configuration / CLI / REST / protocol reference.
+
+**Start here:** **https://hurtener.github.io/Portico_gateway/**
+
+- [Get started](https://hurtener.github.io/Portico_gateway/getting-started/) — build, boot, and make your first governed call.
+- [Concepts](https://hurtener.github.io/Portico_gateway/concepts/) — the full map of what Portico does and how the pieces fit.
+- [Guides](https://hurtener.github.io/Portico_gateway/guides/) — deploy with a real config, manage providers and keys, turn on Code Mode.
+- [Reference](https://hurtener.github.io/Portico_gateway/reference/configuration) — configuration schema, CLI, REST API, and protocol methods.
+
+## Build, test, run
 
 ```bash
-make vet test build       # core gates
-make lint                 # golangci-lint v1.64.x
+make build                # CGo-free static binary -> ./bin/portico
+make vet test             # go vet + go test -race
+make lint                 # golangci-lint
 make preflight            # build + boot + HTTP smoke against every implemented surface
+make docs                 # build the VitePress documentation site
+
+./bin/portico dev                          # local dev (loopback, synthetic `dev` tenant)
+./bin/portico serve --config portico.yaml  # run with a real config
+./bin/portico validate --config portico.yaml
 ```
 
-`make preflight` is the live gate: it builds `./bin/portico`, boots `./bin/portico dev` on `127.0.0.1:18080`, waits for `/healthz`, then runs each `scripts/smoke/*.sh`. The same gate runs in CI and from the pre-commit hook. Smoke scripts auto-skip surfaces that aren't implemented yet, so adding a new endpoint without a smoke check is a rejection-on-sight reason.
+`make preflight` is the live gate: it builds the binary, boots `portico dev`, waits for
+`/healthz`, then runs each `scripts/smoke/*.sh`. The same gate runs in CI and from the
+pre-commit hook (`make install-hooks`).
 
-## V1 scope
+## Contributing
 
-- Multi-tenant by JWT, dev-mode bypass for local.
-- Full MCP spec including resources, prompts, sampling, roots, elicitation, list-changed, cancellation, progress, `_meta`, plus MCP Apps (`ui://`) with CSP enforcement.
-- Skill Pack runtime — manifest + JSON Schema validator; virtual-directory loader (`LocalDir` in V1; Git/OCI/HTTP post-V1); skills exposed as `skill://` resources and namespaced prompts.
-- Headless approval flow — elicitation when host supports it, structured error otherwise.
-- Process supervisor with five runtime modes: `shared_global`, `per_tenant`, `per_user`, `per_session`, `remote_static`.
-- Credential vault — file-encrypted (AES-256-GCM, HKDF per value), OAuth 2.0 token exchange (RFC 8693), env / header injection.
-- Catalog snapshots stable per session; live updates opt-in.
-- OpenTelemetry tracing across gateway, runtime, skills, southbound calls.
-- SQLite by default; Postgres post-V1.
+Portico is built doc-first. The RFC, phase plans, and architectural decisions live in the
+repository — if you change the shape of the system, update the design record in the same PR.
 
-## What it explicitly is not (V1)
+Human and AI contributors should read:
 
-- Not a hosted SaaS — local and self-hosted only.
-- Not Kubernetes-native — deployment artifacts post-V1.
-- Not a sandboxed runtime — V1 uses plain subprocesses with optional Linux seccomp/landlock; container/microVM isolation is post-V1.
-- Not a replacement for MCP or Skills — Portico extends both.
+- [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md) — binding contributor and agent normatives (multi-tenant invariants, security rules, lint policy, the preflight contract).
+- [`RFC-001-Portico.md`](RFC-001-Portico.md) — product intent and locked-in design decisions.
+- [`docs/plans/`](docs/plans/) — implementation specs; acceptance criteria are binding.
 
-## Repo layout
+Before opening a PR:
 
+```bash
+make preflight
 ```
-portico/
-  cmd/portico/             # main binary, subcommands (dev/serve/validate/validate-skills)
-  internal/
-    auth/                  # JWT, tenant, scope
-    config/                # schema + loader
-    mcp/{protocol,northbound,southbound}/
-    registry/              # MCP server registry
-    runtime/               # process supervisor, sessions
-    catalog/{namespace,resolver,snapshots}/
-    skills/{manifest,source,loader,runtime}/
-    apps/                  # ui:// indexer + CSP
-    secrets/               # vault scaffolding (full impl in next milestone)
-    server/{api,mcpgw,ui}/
-    storage/{ifaces,sqlite}/
-    telemetry/
-  web/console/             # SvelteKit SPA, embedded via //go:embed
-  examples/
-    servers/mock/          # in-process + standalone mock MCP servers
-    skills/                # 4 reference Skill Packs
-  scripts/smoke/           # phase-N HTTP smoke checks
-  test/integration/
-  docs/
-    plans/                 # implementation plans
-  RFC-001-Portico.md
-  AGENTS.md / CLAUDE.md    # contributor + agent normatives (verbatim mirrors)
-```
-
-## Authoritative sources
-
-1. [`RFC-001-Portico.md`](RFC-001-Portico.md) — design intent and locked-in decisions.
-2. [`docs/plans/`](docs/plans/) — implementation specs; acceptance criteria are binding.
-3. [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md) — contributor and agent normatives (multi-tenant invariants, security rules, lint policy, preflight contract).
 
 ## License
 
-TBD (open source intent).
+[Apache-2.0](LICENSE). See [`NOTICE`](NOTICE) for attribution.

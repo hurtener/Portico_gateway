@@ -69,6 +69,12 @@ web/console/.playwright/
 # Playwright MCP session artifacts (local-only)
 .playwright-mcp/
 
+# Docs site (VitePress under docs/site/) — node_modules + build output.
+# package-lock.json IS committed (CI uses `npm ci`); the rest is generated.
+docs/site/node_modules/
+docs/site/.vitepress/dist/
+docs/site/.vitepress/cache/
+
 .claude/
 
 # opencode session scratch (autonomous build harness)
