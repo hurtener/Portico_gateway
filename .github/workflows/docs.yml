@@ -38,7 +38,7 @@ jobs:
       # from the environment.
       DOCS_BASE: /Portico_gateway/
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
