@@ -48,7 +48,7 @@ jobs:
       # A dead site-internal link is a build failure (config sets
       # ignoreDeadLinks: false).
       - run: make docs
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/site/.vitepress/dist
 
